@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pkl
+*.egg-info/
+.env
+.venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Data
+data/processed/
+*.csv
+*.xlsx
+
+# VSCode / IDE
+.vscode/
+.idea/
