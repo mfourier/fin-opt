@@ -1,4 +1,4 @@
-# `goals.py` — Philosophy and Role in FinOpt
+# `goals` — Philosophy and Role in FinOpt
 
 > **Core idea:** translate **financial goals** (target amount and deadline) into **verifiable criteria** over simulated wealth trajectories.  
 > `goals.py` connects what the user **wants to achieve** (e.g., “20M CLP in 24 months”) with what the simulation engine **produces** (`wealth` series), and outputs clear evaluations: **success**, **shortfall**, and **attainment ratio**.
@@ -91,21 +91,21 @@ The multiple-goal version returns a **DataFrame** ordered by priority (if availa
 `required_constant_contribution(target_amount, start_wealth, returns_path) -> float`
 
 - **Dynamics:**
-  $$
-  W_{t+1} = (W_t + a)\,(1 + r_t), \quad t=0,\dots,T-1
-  $$
+$$
+W_{t+1} = (W_t + a)\,(1 + r_t), \quad t=0,\dots,T-1
+$$
 
 - **Closed form for time-varying \(r_t\):**  
-  Define 
-  $$
-  G_t = \prod_{u=t}^{T-1}(1+r_u), \quad
-  AF = \sum_{t=0}^{T-1} G_{t+1}
-  $$
-  Then:
-  $$
-  W_T = W_0\,G_0 + a\,AF \;\;\Rightarrow\;\;
-  a^* = \max\!\left(0, \frac{B - W_0 G_0}{AF}\right)
-  $$
+Define 
+$$
+G_t = \prod_{u=t}^{T-1}(1+r_u), \quad
+AF = \sum_{t=0}^{T-1} G_{t+1}
+$$
+Then:
+$$
+W_T = W_0\,G_0 + a\,AF \;\;\Rightarrow\;\;
+a^* = \max\!\left(0, \frac{B - W_0 G_0}{AF}\right)
+$$
 
 - **Interpretation:**  
   `a*` is the minimum constant monthly contribution required to **guarantee** reaching the target amount `B` at horizon `T`, under the given return path.

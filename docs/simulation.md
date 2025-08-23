@@ -1,4 +1,4 @@
-# `simulation.py` — Philosophy and Role in FinOpt
+# `simulation` — Philosophy and Role in FinOpt
 
 > **Core idea:** orchestrate the entire simulation flow by connecting **income generation** (`income.py`) with **capital accumulation** (`investment.py`).  
 > `simulation.py` acts as the **scenario engine**: it builds contribution paths, generates return scenarios, and produces wealth trajectories with performance metrics.

@@ -1,4 +1,4 @@
-# `investment.py` — Philosophy and Role in FinOpt
+# `investment` — Philosophy and Role in FinOpt
 
 > **Core idea:** model **how capital grows** when you make monthly contributions and face returns (constant, scenario-based, or simulated).  
 > `investment.py` is the **accumulation engine**: it takes monthly contributions (from `income.py` or contribution rules) and return paths, and produces the **wealth trajectory** and **key metrics**.
@@ -37,9 +37,9 @@ Separating *cash-in* from *capital growth* allows for:
 **Function:** `simulate_capital(contributions, returns, start_value=0.0, ...)`
 
 Monthly dynamics:
-\[
+$$
 W_{t+1} = (W_t + a_t)\,(1 + r_t)
-\]
+$$
 - `contributions`: vector \(a_t\) (negatives allowed for withdrawals).
 - `returns`: either a scalar (constant rate) or a path \((r_t)\) (arithmetic returns).
 - Optional safeguard: `clip_negative_wealth=True` to prevent negative wealth paths.
@@ -51,10 +51,10 @@ W_{t+1} = (W_t + a_t)\,(1 + r_t)
 ### 2) Multi-asset portfolios
 **Function:** `simulate_portfolio(contributions, asset_returns, weights, rebalance=True, ...)`
 
-- `asset_returns`: \(T \times N\) matrix of arithmetic returns.
+- `asset_returns`: $T \times N$ matrix of arithmetic returns.
 - `weights`:
-  - Vector \(N\): constant target weights.  
-  - Matrix \(T \times N\): **schedule** of weights (implicit monthly rebalancing).
+  - Vector $N$: constant target weights.  
+  - Matrix $T \times N$: **schedule** of weights (implicit monthly rebalancing).
 - `rebalance=True` with constant weights ⇒ realign monthly to targets.  
 - `rebalance=False` ⇒ buy-and-hold style: weights drift with returns; contributions added **pro-rata** to avoid cash bias.
 
@@ -75,11 +75,11 @@ W_{t+1} = (W_t + a_t)\,(1 + r_t)
 **Class/Function:** `PortfolioMetrics` and `compute_metrics(wealth, contributions=None, periods_per_year=12)`
 
 Returns:
-- `final_wealth`: \(W_T\)  
-- `total_contributions`: \(\sum_t a_t\)  
-- `cagr`: robust CAGR (avoids division by zero if \(W_0=0\))  
+- `final_wealth`: $W_T$
+- `total_contributions`: $\sum_t a_t$  
+- `cagr`: robust CAGR (avoids division by zero if $W_0=0$)  
 - `vol`: standard deviation of simple returns on wealth (approximate)  
-- `max_drawdown`: minimum of drawdown series \((W_t - \max_{u\le t} W_u)/\max_{u\le t} W_u\)
+- `max_drawdown`: minimum of drawdown series $(W_t - \max_{u\le t} W_u)/\max_{u\le t} W_u$
 
 **Interpretation:**  
 - `cagr` contextualizes annualized growth.  
@@ -89,8 +89,8 @@ Returns:
 
 ## Integration in the FinOpt workflow
 
-1. **`income.py`** produces monthly contributions \(a_t\) (e.g., \(\alpha\) of fixed income + \(\beta\) of variable).  
-2. **`investment.py`** combines \(a_t\) with **returns** (constant, scenario-based, or Monte Carlo) to produce the **wealth path**.  
+1. **`income.py`** produces monthly contributions $a_t$ (e.g., $\alpha$ of fixed income + $\beta$ of variable).  
+2. **`investment.py`** combines $a_t$ with **returns** (constant, scenario-based, or Monte Carlo) to produce the **wealth path**.  
 3. **`simulation.py`** orchestrates both (builds return paths, runs scenarios/Monte Carlo, computes metrics, returns results for reporting/optimization).
 
 ---

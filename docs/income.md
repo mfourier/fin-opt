@@ -1,4 +1,4 @@
-# `income.py` — Philosophy & Role in FinOpt
+# `income` — Philosophy & Role in FinOpt
 
 > **Purpose:** Model **where the money comes from** (and how it evolves) so the rest of FinOpt can decide **how to allocate and invest it**.  
 > In FinOpt’s pipeline, `income.py` is the **entry point of cash flows**: it turns assumptions about salary and variable earnings into a clean, reproducible **monthly series** that downstream modules consume for contributions and simulations.
@@ -59,9 +59,9 @@ A variable stream with optional **seasonality**, **noise**, **floor/cap**, and *
 A façade that **combines streams** and produces:
 - `project_monthly(months, start, as_dataframe)`: total income (and optionally the fixed/variable breakdown) for the horizon.
 - `contributions_from_proportions(months, alpha_fixed, beta_variable, start)`: turns income into **monthly investment contributions**:
-  \[
-  a_t = \alpha \cdot y^{\text{fixed}}_t + \beta \cdot y^{\text{variable}}_t,\quad \alpha,\beta \in [0,1].
-  \]
+$$
+a_t = \alpha \cdot y^{\text{fixed}}_t + \beta \cdot y^{\text{variable}}_t,\quad \alpha,\beta \in [0,1].
+$$
   Any negative values are **floored at zero** to keep contributions feasible.
 
 **Interpretation:** a clean bridge from “what I earn” to “what I can invest every month”.
@@ -74,9 +74,9 @@ A façade that **combines streams** and produces:
   Uses `IncomeModel.contributions_from_proportions(...)` to generate the **contribution series** aligned to the simulation calendar, then combines it with deterministic or Monte Carlo **returns** to simulate wealth.
 - **`investment.py`**  
   Receives the contributions from `income.py` and applies **capital accumulation**:
-  \[
-  W_{t+1}=(W_t+a_t)(1+R_t).
-  \]
+$$
+W_{t+1}=(W_t+a_t)(1+R_t).
+$$
   Metrics (CAGR, drawdown, volatility) are computed downstream on the resulting wealth path.
 - **`utils.py`**  
   Provides shared helpers used by `income.py` (e.g., **rate conversions** annual↔monthly, **month index** construction, **validation**).

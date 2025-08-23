@@ -96,9 +96,9 @@ $$
 - **Stochastic (Monte Carlo):**
   - IID lognormal returns
 
-  $$
-  R_t \sim \text{LogNormal}(\mu,\sigma).
-  $$
+$$
+R_t \sim \text{LogNormal}(\mu,\sigma).
+$$
 
 - Reproducibility via explicit RNG seeds.
 
@@ -111,16 +111,16 @@ For a wealth path $\{W_t\}$:
 - Total contributions $\sum_t a_t$.  
 - CAGR:
 
-  $$
-  \text{CAGR} = \Big(\tfrac{W_T}{W_0}\Big)^{1/\text{years}}-1.
-  $$
+$$
+\text{CAGR} = \Big(\tfrac{W_T}{W_0}\Big)^{1/\text{years}}-1.
+$$
 
 - Volatility of increments.  
 - Max drawdown:
 
-  $$
-  \max_t \frac{W_t - \max_{u\le t} W_u}{\max_{u\le t} W_u}.
-  $$
+$$
+\max_t \frac{W_t - \max_{u\le t} W_u}{\max_{u\le t} W_u}.
+$$
 
 ---
 
@@ -181,15 +181,15 @@ Output: $w$, efficient frontier.
 
 - Maximize 
 
-  $$
-  \Pr(W_{m,T_m}\ge B_m)
-  $$ 
+$$
+\Pr(W_{m,T_m}\ge B_m)
+$$ 
 
-  or enforce 
+or enforce 
 
-  $$
-  \Pr(W_{m,T_m}\ge B_m) \ge 1-\varepsilon.
-  $$  
+$$
+\Pr(W_{m,T_m}\ge B_m) \ge 1-\varepsilon.
+$$  
 
 - Implemented via scenario counting or CVaR surrogates.  
 
@@ -203,9 +203,9 @@ Output: success probability per goal.
 - **Lexicographic:** prioritize high-priority goals first.  
 - **Shortfall-penalized:**  
 
-  $$
-  \min \sum_m \alpha_m \xi_m \quad \text{s.t. } W_{m,T_m}+\xi_m \ge B_m
-  $$  
+$$
+\min \sum_m \alpha_m \xi_m \quad \text{s.t. } W_{m,T_m}+\xi_m \ge B_m
+$$  
 
 - **Utility-based:** maximize $\sum_m u_m(\text{attainment}_m)$.  
 
@@ -214,9 +214,9 @@ Output: success probability per goal.
 ### (6) Dynamic programming / RL
 - State:  
 
-  $$
-  x_t = (W_t,\{W_{m,t}\},y_t,g_t).
-  $$  
+$$
+x_t = (W_t,\{W_{m,t}\},y_t,g_t).
+$$  
 
 - Action: $a_{m,t},w_{i,t}$.  
 - Transition: wealth recurrence with stochastic returns.  
