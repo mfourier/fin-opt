@@ -236,3 +236,105 @@ def summary_metrics(results: Mapping[str, object]) -> pd.DataFrame:
         ])
     df = pd.DataFrame(rows).set_index("scenario").sort_index()
     return df
+
+# ---------------------------------------------------------------------------
+# Return-path generators
+# ---------------------------------------------------------------------------
+
+def fixed_rate_path(months: int, r_monthly: float) -> np.ndarray:
+    """Return a constant arithmetic monthly return path of length `months`."""
+    if months <= 0:
+        return np.zeros(0, dtype=float)
+    return np.full(int(months), float(r_monthly), dtype=float)
+
+
+def lognormal_iid(
+    months: int,
+    *,
+    mu: float,
+    sigma: float,
+    seed: Optional[int] = None,
+) -> np.ndarray:
+    """IID arithmetic returns derived from lognormal gross returns.
+
+    We sample gross returns G_t ~ LogNormal(mu, sigma) and map to arithmetic:
+        r_t = G_t - 1
+    This guarantees r_t > -1 (no quiebres imposibles).
+    Note: (mu, sigma) son los parámetros de la normal en el log-gross, no media/vol aritmética.
+    """
+    if months <= 0:
+        return np.zeros(0, dtype=float)
+    rng = np.random.default_rng(seed)
+    gross = rng.lognormal(mean=float(mu), sigma=float(sigma), size=int(months))
+    r = gross - 1.0
+    return r.astype(float, copy=False)
+
+
+# ---------------------------------------------------------------------------
+# Metrics
+# ---------------------------------------------------------------------------
+
+from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class PortfolioMetrics:
+    final_wealth: float
+    total_contributions: float
+    cagr: float
+    vol: float
+    max_drawdown: float
+
+
+def compute_metrics(
+    wealth: pd.Series,
+    *,
+    contributions: Optional[pd.Series | np.ndarray] = None,
+    periods_per_year: int = 12,
+) -> PortfolioMetrics:
+    """Compute key metrics for a simulated wealth path.
+
+    - final_wealth: W_T
+    - total_contributions: sum(a_t) si se entrega; en caso contrario infiere 0
+    - cagr: usa utils.compute_cagr (evita división por 0 cuando W0=0)
+    - vol: desviación estándar de los rendimientos mensuales aproximados
+           a partir de cambios de riqueza (robusta a W[t]==0)
+    - max_drawdown: min(drawdown(W))
+
+    Nota: cuando W incluye aportes, la 'vol' basada en ΔW/W_{t-1} es aproximada.
+    Para análisis de riesgo puro, usar los retornos exógenos r_t.
+    """
+    if not isinstance(wealth, pd.Series) or wealth.empty:
+        return PortfolioMetrics(0.0, 0.0, 0.0, 0.0, 0.0)
+
+    W = wealth.astype(float)
+    final_w = float(W.iloc[-1])
+
+    # Total contributions (si se proveen)
+    if contributions is None:
+        total_contrib = 0.0
+    else:
+        a = np.asarray(contributions, dtype=float)
+        total_contrib = float(np.nansum(a))
+
+    # CAGR
+    cagr_val = compute_cagr(W, periods_per_year=periods_per_year)
+
+    # Vol de “retornos” aproximados usando cambios relativos de W
+    # Maneja ceros evitando divisiones inválidas.
+    W_prev = W.shift(1)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        pseudo_r = (W - W_prev) / W_prev
+    pseudo_r = pseudo_r.replace([np.inf, -np.inf], np.nan).dropna()
+    vol_val = float(pseudo_r.std(ddof=1)) if not pseudo_r.empty else 0.0
+
+    # Máximo drawdown
+    dd = drawdown(W)
+    max_dd = float(dd.min()) if not dd.empty else 0.0
+
+    return PortfolioMetrics(
+        final_wealth=final_w,
+        total_contributions=total_contrib,
+        cagr=cagr_val,
+        vol=vol_val,
+        max_drawdown=max_dd,
+    )

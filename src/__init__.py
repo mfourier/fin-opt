@@ -29,10 +29,6 @@ from .income import FixedIncome, VariableIncome, IncomeModel
 from .investment import (
     simulate_capital,
     simulate_portfolio,
-    fixed_rate_path,
-    lognormal_iid,
-    PortfolioMetrics,
-    compute_metrics,
 )
 from .simulation import ScenarioConfig, ScenarioResult, SimulationEngine
 from . import utils
