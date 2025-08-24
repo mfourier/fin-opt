@@ -12,7 +12,8 @@ Typical usage
 -------------
 >>> from datetime import date
 >>> from .income import FixedIncome, VariableIncome, IncomeModel
->>> from .investment import simulate_capital, fixed_rate_path, lognormal_iid, compute_metrics
+>>> from .investment import simulate_capital
+>>> from .utils import fixed_rate_path, lognormal_iid, compute_metrics
 >>> cfg = ScenarioConfig(
 ...     months=36,
 ...     start=date(2025, 9, 1),
@@ -40,19 +41,20 @@ import numpy as np
 import pandas as pd
 
 from .income import IncomeModel
-from .investment import (
-    simulate_capital,
-    fixed_rate_path,
-    lognormal_iid,
-    compute_metrics,
-    PortfolioMetrics,
-)
+from .investment import simulate_capital
 from .utils import (
+    # arrays / indexing
     ensure_1d,
     to_series,
     month_index,
     align_index_like,
+    # randomness / scenarios
     set_random_seed,
+    fixed_rate_path,
+    lognormal_iid,
+    # metrics
+    compute_metrics,
+    PortfolioMetrics,
 )
 
 __all__ = [
@@ -111,7 +113,7 @@ class SimulationEngine:
     # -------------------- Contributions --------------------
     def build_contributions(self) -> pd.Series:
         """Compute monthly contributions from income proportions."""
-        return self.income.contributions_from_proportions(
+        return self.income.contributions(
             months=self.cfg.months,
             alpha_fixed=self.cfg.alpha_fixed,
             beta_variable=self.cfg.beta_variable,
@@ -130,11 +132,19 @@ class SimulationEngine:
         contrib = self.build_contributions()
         r_path = self._returns_path(r)
         # Ensure alignment and pass arrays to the simulator
-        wealth = simulate_capital(ensure_1d(contrib.values, name="contributions"),
-                                  ensure_1d(r_path.values, name="returns"),
-                                  index_like=contrib.index)
+        wealth = simulate_capital(
+            ensure_1d(contrib.values, name="contributions"),
+            ensure_1d(r_path.values, name="returns"),
+            index_like=contrib.index,
+        )
         metrics = compute_metrics(wealth, contributions=contrib.values)
-        return ScenarioResult(name=name, contributions=contrib, returns=r_path, wealth=wealth, metrics=metrics)
+        return ScenarioResult(
+            name=name,
+            contributions=contrib,
+            returns=r_path,
+            wealth=wealth,
+            metrics=metrics,
+        )
 
     def run_three_cases(self) -> Dict[str, ScenarioResult]:
         """Run base/optimistic/pessimistic scenarios using fixed monthly rates."""
@@ -160,7 +170,6 @@ class SimulationEngine:
                 mu=self.cfg.mc_mu,
                 sigma=self.cfg.mc_sigma,
                 seed=seed_k,
-                drift_in_logs=False,
             )
             r_series = to_series(r_path, contrib.index, name="returns")
             wealth = simulate_capital(contrib.values, r_path, index_like=contrib.index)
@@ -179,7 +188,7 @@ class SimulationEngine:
         """Return the calendar index to be used across series."""
         # Prefer the income model's contribution index for consistency.
         try:
-            contrib = self.income.contributions_from_proportions(
+            contrib = self.income.contributions(
                 months=self.cfg.months,
                 alpha_fixed=self.cfg.alpha_fixed,
                 beta_variable=self.cfg.beta_variable,
