@@ -13,7 +13,7 @@ The goal is to connect **user objectives** (housing fund, emergency reserve, ret
 FinOpt consists of **modular components**, each with a clear role:
 
 - [`income.py`] → **Cash inflows** (fixed salary, variable income with seasonality/noise).  
-- [`investment.py`] → **Capital accumulation** under return paths (single or multi-asset).  
+- [`investment.py`] → **Capital accumulation** under return paths.
 - [`simulation.py`] → **Scenario orchestration** (base/optimistic/pessimistic, Monte Carlo).  
 - [`goals.py`] → **Goal evaluation** (success/shortfall ratios, required contributions, contribution splitting).  
 - [`utils.py`] → **Shared helpers** (validation, rate conversion, index handling, drawdown, CAGR).  
@@ -61,6 +61,26 @@ $$
 
 ---
 
+## Investment Dynamics
+
+- **Single asset (MVP):**
+
+$$
+W_{t+1} = (W_t + a_t)\,(1+r_t).
+$$
+
+- **Multiple independent portfolios/accounts** $k=1,\dots,K$:
+
+$$
+W^{(k)}_{t+1} = \big(W^{(k)}_{t} + a^{(k)}_{t}\big)\,(1 + r^{(k)}_{t}),
+$$
+
+$$
+W_{t} = \sum_{k=1}^{K} W^{(k)}_{t}, \quad \sum_{k=1}^{K} a^{(k)}_{t} = a_t.
+$$
+
+---
+
 ## Goals
 
 A set $\mathcal{M}$ of goals $m$, each defined by:
@@ -73,21 +93,7 @@ Tracking:
 
 ---
 
-## Investment Dynamics
 
-- Single asset (MVP):
-
-$$
-W_{t+1} = (W_t + a_t)\,(1+r_t).
-$$
-
-- Multi-asset portfolio:
-
-$$
-W_{t+1} = \big(W_t + a_t\big)\,(1+ R_{p,t}), \quad R_{p,t} = \sum_i w_{i,t}R_{i,t}.
-$$
-
----
 
 ## Scenarios
 
