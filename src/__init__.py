@@ -30,7 +30,7 @@ from .investment import (
     simulate_capital,
     simulate_portfolio,
 )
-from .simulation import ScenarioConfig, ScenarioResult, SimulationEngine
+from .scenario import ScenarioConfig, ScenarioResult, SimulationEngine
 from . import utils
 
 __all__ = [
