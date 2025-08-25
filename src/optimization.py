@@ -1,392 +1,588 @@
 """
-optimization.py — Optimization solvers for FinOpt
+optimization.py — Min-Time Feasibility with Allocation Matrix C[t,k]
 
-This module defines *problem-oriented* solvers that integrate with:
-- income.py (IncomeModel)
-- investment.py (simulate_capital, fixed_rate_path, lognormal_iid, compute_metrics)
-- simulation.py (ScenarioConfig, SimulationEngine, ScenarioResult)
-- goals.py (Goal, evaluate_goals)
-- utils.py (ensure_1d, check_non_negative)
+Goal
+----
+Find the smallest horizon T and a contribution allocation matrix C (T×K)
+such that each account/goal k attains its target B_k by its deadline.
 
-Design principles
------------------
-- Problem-first API: clear dataclasses for inputs/outputs.
-- Deterministic by default (stochasticity only via provided seeds/paths).
-- No external solver dependencies in the MVP (closed-form + search + MC wrappers).
-- Extensible via a registry of solvers.
+Core idea (deterministic returns)
+---------------------------------
+Wealth dynamics per account k:
+    W_{t+1}^{(k)} = (W_t^{(k)} + a_t C_{t,k}) (1 + r_t^{(k)})
+
+With arithmetic returns, terminal wealth is affine in contributions:
+    W_T^{(k)} = W_0^{(k)} G_0^{(k)} + sum_{t=0}^{T-1} (a_t C_{t,k}) * H_{t+1}^{(k)},
+where:
+    G_t^{(k)} = Π_{u=t}^{T-1} (1 + r_u^{(k)}),    G_T^{(k)} = 1
+    H_{t+1}^{(k)} = Π_{u=t+1}^{T-1} (1 + r_u^{(k)})    (future value factor)
+
+Hence, for fixed T, feasibility reduces to a Linear Program in the variables
+x_{t,k} := a_t C_{t,k} (the peso amount allocated to account k in month t):
+
+Variables: x_{t,k} ≥ 0
+Row sums:  sum_k x_{t,k} = a_t,   ∀t
+Targets:   sum_t x_{t,k} * H_{t+1}^{(k)} ≥ B_k - W_0^{(k)} G_0^{(k)},   ∀k
+
+We search T = 1..T_max and return the smallest feasible T and a C*.
+
+Backends
+--------
+- "scipy": LP feasibility via scipy.optimize.linprog (objective 0).
+- "greedy": deterministic greedy on marginal FV weights H_{t+1}^{(k)} while
+            tracking remaining deficits; no external dependencies.
+
+Outputs
+-------
+- T_star: smallest feasible horizon
+- C_star: DataFrame (T×K) row-stochastic allocation matrix
+- A_df:   DataFrame (T×K) allocated contributions (x_{t,k})
+- wealth_by_account: DataFrame (T×K [+ "total"]) simulated with simulate_portfolio
+- diagnostics (per-account deficit, t_hit, margins)
+
+Notes
+-----
+- Supports either explicit contributions Series, or an IncomeModel + (alpha, beta).
+- Returns may be scalar, length-T vector, (T×K) matrix, or dict per account.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Dict, Iterable, Optional, Sequence, Tuple
+from typing import Dict, Mapping, Optional, Sequence, Tuple, Union, Literal
 
 import numpy as np
 import pandas as pd
 
+# Project imports
 from .income import IncomeModel
-from .investment import (
-    simulate_capital,
-    fixed_rate_path,
-    lognormal_iid,
-    compute_metrics,
-)
-from .scenario import ScenarioConfig, SimulationEngine, ScenarioResult
-from .goals import Goal, evaluate_goals
-from .utils import ensure_1d, check_non_negative
+from .investment import allocate_contributions, simulate_portfolio
+from .utils import ensure_1d, align_index_like, month_index
 
+
+ArrayLike = Sequence[float] | np.ndarray | pd.Series
+MatrixLike = np.ndarray | pd.DataFrame
 
 __all__ = [
-    # Inputs/Outputs
-    "MinContributionInput",
-    "MinContributionResult",
-    "MinTimeInput",
-    "MinTimeResult",
-    "ChanceConstraintsInput",
-    "ChanceConstraintsResult",
-    # Facades
-    "min_constant_contribution",
-    "min_time_given_contribution",
-    "chance_constraints",
-    # Registry utilities
-    "register_solver",
-    "get_solver",
+    "MinTimeAllocationInput",
+    "MinTimeAllocationResult",
+    "min_time_with_allocation",
 ]
 
-# ---------- Time-varying allocation builders (C[t,k]) ----------
 
-def _normalize_rows(C: np.ndarray) -> np.ndarray:
-    rs = C.sum(axis=1, keepdims=True)
-    Cn = C.copy()
-    mask = (rs.squeeze() > 0.0)
-    Cn[mask] = C[mask] / rs[mask]
-    return Cn
+# ---------------------------------------------------------------------------
+# Dataclasses
+# ---------------------------------------------------------------------------
 
-def make_glidepath_C(
-    index: pd.Index,
+@dataclass(frozen=True)
+class MinTimeAllocationInput:
+    # Accounts & targets
+    accounts: Sequence[str]                                 # length K
+    targets_by_account: Mapping[str, float]                 # B_k per account
+    start_wealth_by_account: Union[float, Mapping[str, float]] = 0.0
+
+    # Contributions source (choose one)
+    contributions: Optional[pd.Series] = None               # a_t (indexed monthly)
+    income_model: Optional[IncomeModel] = None              # alternatively...
+    start: Optional[pd.Timestamp] = None                    # ...calendar start
+    alpha_fixed: float = 0.35
+    beta_variable: float = 1.0
+
+    # Returns per account (deterministic)
+    returns_by_account: Union[
+        float, ArrayLike, MatrixLike, Mapping[str, Union[float, ArrayLike]]
+    ] = 0.0
+
+    # Search settings
+    T_max: int = 120                                        # months
+    t_min: Union[int, Literal["auto"]] = "auto"             # <-- NUEVO
+    backend: str = "scipy"                                  # "scipy" | "greedy"
+    seed: Optional[int] = 42                                # for greedy tie-breaks
+    equality_rows: bool = True                              # enforce sum_k x_{t,k} == a_t
+
+@dataclass(frozen=True)
+class MinTimeAllocationResult:
+    T_star: int
+    C_star: pd.DataFrame
+    A_df: pd.DataFrame
+    contributions_total: pd.Series
+    returns_by_account: pd.DataFrame
+    wealth_by_account: pd.DataFrame
+    t_hit_by_account: pd.Series
+    margin_at_T: pd.Series   # W_T^{(k)} - B_k
+    feasible: bool           # True if feasibility was achieved within T_max
+
+
+# ---------------------------------------------------------------------------
+# Helpers — broadcasting, factors, building specs
+# ---------------------------------------------------------------------------
+
+def _as_index(T: int, start: Optional[pd.Timestamp]) -> pd.DatetimeIndex:
+    return month_index(start, T)  # first-of-month index
+
+def _broadcast_returns(
+    R_spec: Union[float, ArrayLike, MatrixLike, Mapping[str, Union[float, ArrayLike]]],
+    T: int,
     accounts: Sequence[str],
-    w_start: Sequence[float],
-    w_end: Sequence[float],
 ) -> pd.DataFrame:
-    """
-    Linear glidepath from w_start to w_end across T=len(index) months.
-    """
-    T = len(index)
     K = len(accounts)
-    w0 = np.asarray(w_start, dtype=float).reshape(1, K)
-    wT = np.asarray(w_end, dtype=float).reshape(1, K)
-    if w0.shape != (1, K) or wT.shape != (1, K):
-        raise ValueError("w_start and w_end must have length = len(accounts).")
-    ramp = np.linspace(0.0, 1.0, T).reshape(T, 1)
-    C = (1.0 - ramp) * w0 + ramp * wT
-    C = _normalize_rows(C)
-    return pd.DataFrame(C, index=index, columns=list(accounts))
+    # dict{name -> scalar/array}
+    if isinstance(R_spec, Mapping):
+        cols = []
+        for name in accounts:
+            v = R_spec[name]
+            if np.isscalar(v):
+                cols.append(np.full(T, float(v), dtype=float))
+            else:
+                v1 = ensure_1d(v, name=f"returns[{name}]")
+                if v1.shape[0] != T:
+                    raise ValueError(f"returns[{name}] length {v1.shape[0]} must equal T={T}.")
+                cols.append(v1)
+        R = np.column_stack(cols)
+        return pd.DataFrame(R, columns=list(accounts), index=_as_index(T, None))
+    # DataFrame
+    if isinstance(R_spec, pd.DataFrame):
+        Rdf = R_spec.copy()
+        if Rdf.shape[0] != T or Rdf.shape[1] != K:
+            raise ValueError(f"returns DataFrame must be (T,K) = ({T},{K}).")
+        Rdf.columns = list(accounts)
+        return Rdf
+    # ndarray
+    if isinstance(R_spec, np.ndarray):
+        if R_spec.ndim == 1:
+            if R_spec.shape[0] != T:
+                raise ValueError(f"returns length {R_spec.shape[0]} must equal T={T}.")
+            R = np.repeat(R_spec.reshape(T, 1), K, axis=1)
+            return pd.DataFrame(R, columns=list(accounts), index=_as_index(T, None))
+        if R_spec.ndim == 2:
+            if R_spec.shape != (T, K):
+                raise ValueError(f"returns must be shape (T,K)=({T},{K}).")
+            return pd.DataFrame(R_spec, columns=list(accounts), index=_as_index(T, None))
+        raise ValueError("returns ndarray must be 1-D or 2-D.")
+    # scalar or 1-D listlike
+    if np.isscalar(R_spec):
+        R = np.full((T, K), float(R_spec), dtype=float)
+        return pd.DataFrame(R, columns=list(accounts), index=_as_index(T, None))
+    r1 = ensure_1d(R_spec, name="returns")
+    if r1.shape[0] != T:
+        raise ValueError(f"returns length {r1.shape[0]} must equal T={T}.")
+    R = np.repeat(r1.reshape(T, 1), K, axis=1)
+    return pd.DataFrame(R, columns=list(accounts), index=_as_index(T, None))
 
-def make_piecewise_C(
-    index: pd.Index,
-    accounts: Sequence[str],
-    buckets: Sequence[tuple],
-) -> pd.DataFrame:
-    """
-    Piecewise policy over time.
-    buckets: list of tuples (end_t_exclusive, weights_vector)
-      - end_t_exclusive: int, last t (0-based) *excluded* for this bucket
-      - weights_vector: sequence length K (non-negative; will be row-normalized)
-    Example:
-        buckets = [
-          (T//3,      [0.75, 0.20, 0.05]),
-          (2*T//3,    [0.55, 0.35, 0.10]),
-          (T,         [0.40, 0.35, 0.25]),
-        ]
-    """
-    T = len(index)
-    K = len(accounts)
-    C = np.zeros((T, K), dtype=float)
-    start = 0
-    for end, w in buckets:
-        end = int(end)
-        if end < start or end > T:
-            raise ValueError(f"Bucket end {end} out of range [start={start}, T={T}].")
-        w = np.asarray(w, dtype=float)
-        if w.shape != (K,):
-            raise ValueError("Each weights_vector must have length = len(accounts).")
-        C[start:end, :] = w.reshape(1, K)
-        start = end
-    C = _normalize_rows(C)
-    return pd.DataFrame(C, index=index, columns=list(accounts))
 
-def make_seasonal_C(
-    index: pd.Index,
-    accounts: Sequence[str],
-    base: Sequence[float],
-    amplitudes: Sequence[float],
-    phases: Sequence[float],
-    period: int = 12,
-) -> pd.DataFrame:
+def _growth_and_annuity_factors(R_df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
     """
-    Smooth seasonal tilt per account:
-        C[:,k] = base_k + amp_k * sin(2π*(t + phase_k)/period)
-    Then rows are clipped to >=0 and row-normalized.
+    For each account k, compute:
+      G0[k] = Π_{u=0}^{T-1} (1+r_{u,k})
+      H[t+1, k] = Π_{u=t+1}^{T-1} (1+r_{u,k})   (with H[T, k] = 1)
+    Returns:
+      G0: shape (K,)
+      H:  shape (T+1, K)  (we will use H[1:, :] for the LP)
     """
-    T = len(index)
-    K = len(accounts)
-    base = np.asarray(base, dtype=float)
-    amps = np.asarray(amplitudes, dtype=float)
-    ph = np.asarray(phases, dtype=float)
-    if any(x.shape != (K,) for x in (base, amps, ph)):
-        raise ValueError("base, amplitudes, phases must have length = len(accounts).")
+    R = np.asarray(R_df.values, dtype=float)
+    T, K = R.shape
+    one_plus = 1.0 + R
+    # G0
+    G0 = np.prod(one_plus, axis=0).astype(float)  # (K,)
+    # H (future value factors)
+    H = np.empty((T + 1, K), dtype=float)
+    H[T, :] = 1.0
+    acc = np.ones(K, dtype=float)
+    for t in range(T - 1, -1, -1):
+        acc *= one_plus[t, :]
+        H[t, :] = acc
+    # H[t+1,:] is FV factor from month t to T
+    return G0, H
 
-    t = np.arange(T, dtype=float).reshape(T, 1)
-    C = np.zeros((T, K), dtype=float)
+
+def _get_contributions_series(inp: MinTimeAllocationInput, T: int) -> pd.Series:
+    if inp.contributions is not None:
+        a = inp.contributions
+        if len(a) < T:
+            raise ValueError(f"Provided contributions length {len(a)} < T={T}.")
+        a = a.iloc[:T].astype(float)
+        return a
+    if inp.income_model is None or inp.start is None:
+        raise ValueError("Provide either `contributions` Series or an IncomeModel + (months, start).")
+    # Build from income model for the requested horizon T
+    a = inp.income_model.contributions(
+        months=T,
+        alpha_fixed=inp.alpha_fixed,
+        beta_variable=inp.beta_variable,
+        start=inp.start,
+    )
+    return a.astype(float)
+
+
+def _init_starts(inp: MinTimeAllocationInput) -> np.ndarray:
+    K = len(inp.accounts)
+    if np.isscalar(inp.start_wealth_by_account):
+        return np.full(K, float(inp.start_wealth_by_account), dtype=float)
+    arr = np.zeros(K, dtype=float)
+    for i, name in enumerate(inp.accounts):
+        arr[i] = float(inp.start_wealth_by_account.get(name, 0.0))  # type: ignore
+    return arr
+
+
+def _targets_vector(inp: MinTimeAllocationInput) -> np.ndarray:
+    K = len(inp.accounts)
+    return np.array([float(inp.targets_by_account[name]) for name in inp.accounts], dtype=float)
+
+def _build_full_paths(inp: MinTimeAllocationInput) -> tuple[pd.Series, pd.DataFrame]:
+    """
+    Build contributions and returns up to horizon T_max.
+    Useful to compute a lower bound t_min 'auto'.
+    """
+    T = int(inp.T_max)
+    # a_full
+    if inp.contributions is not None:
+        if len(inp.contributions) < T:
+            raise ValueError(f"Provided contributions length {len(inp.contributions)} < T_max={T}.")
+        a_full = inp.contributions.iloc[:T].astype(float).copy()
+    else:
+        if inp.income_model is None or inp.start is None:
+            raise ValueError("For t_min='auto', need contributions Series or (income_model + start).")
+        a_full = inp.income_model.contributions(
+            months=T,
+            alpha_fixed=inp.alpha_fixed,
+            beta_variable=inp.beta_variable,
+            start=inp.start,
+        ).astype(float)
+
+    if not isinstance(a_full.index, pd.DatetimeIndex):
+        a_full.index = month_index(inp.start, T)
+
+    # R_full (T×K)
+    R_full = _broadcast_returns(inp.returns_by_account, T, inp.accounts)
+    R_full.index = a_full.index
+    return a_full, R_full
+
+
+def _auto_t_min(
+    a_full: pd.Series,
+    R_full: pd.DataFrame,
+    W0: np.ndarray,
+    B: np.ndarray,
+) -> int:
+    """
+    Compute t_min (lower bound) such that, for each account k,
+    the accumulated 'capacity' up to T in future value (if you dedicated ALL to k)
+    is enough to cover the deficit in future value at T.
+
+    Definitions:
+      cp_k[T] = Prod_{u=0..T-1} (1 + r_{u,k})       (growth prefix)
+      deficit_k(T) = max(0, B_k - W0_k * cp_k[T])   (in future value)
+      H_{t+1}^{(k)}(T) = Prod_{u=t+1..T-1} (1 + r_{u,k})
+      Cap_k(T) = sum_{t=0..T-1} a_t * H_{t+1}^{(k)}(T)
+
+    Key observation (O(1) update):
+      Cap_k(T) = Cap_k(T-1) * (1 + r_{T-1,k}) + a_{T-1}
+    """
+    T, K = R_full.shape
+    one_plus = 1.0 + R_full.to_numpy(dtype=float)  # (T,K)
+
+    # Prefixes cp_k[T] with cumulative product per column
+    cp = np.ones((T + 1, K), dtype=float)
+    for t in range(1, T + 1):
+        cp[t, :] = cp[t - 1, :] * one_plus[t - 1, :]
+
+    # Incremental capacity Cap_k(T)
+    cap = np.zeros((T + 1, K), dtype=float)  # cap[0,:] = 0
+    a_vals = a_full.to_numpy(dtype=float)
+    for t in range(1, T + 1):
+        # Cap(T) = Cap(T-1) * (1 + r_{t-1}) + a_{t-1}
+        cap[t, :] = cap[t - 1, :] * one_plus[t - 1, :] + a_vals[t - 1]
+
+    # Find the minimum T such that Cap_k(T) >= deficit_k(T) for all k
+    for t in range(1, T + 1):
+        deficit = np.maximum(B - (W0 * cp[t, :]), 0.0)
+        # Note: cap[t,:] is already in "t=0 weight units" transformed to the end (FV at T),
+        # because each step multiplies by (1+r) and adds a_{t-1} (equivalent to H=1 in that month).
+        if np.all(cap[t, :] + 1e-9 >= deficit):
+            return t
+    return 1  # if never satisfied, start at 1 (outer loop will find actual feasibility)
+
+
+# ---------------------------------------------------------------------------
+# Feasibility at fixed T — backends
+# ---------------------------------------------------------------------------
+
+def _feasible_LP(a: pd.Series, R_df: pd.DataFrame, W0: np.ndarray, B: np.ndarray, equality_rows: bool = True):
+    """
+    LP feasibility:
+        variables x[t,k] >= 0
+        Row sums: sum_k x[t,k] = a[t]  (or <= a[t] if equality_rows=False)
+        Targets:  sum_t x[t,k] * H[t+1,k] >= B_k - W0_k * G0_k
+    Returns (feasible: bool, X: ndarray T×K)
+    """
+    try:
+        from scipy.optimize import linprog
+    except Exception:
+        return (False, None)
+
+    T, K = R_df.shape
+    idx = a.index
+    G0, H = _growth_and_annuity_factors(R_df)
+    rhs = B - (W0 * G0)
+    rhs = np.maximum(rhs, 0.0)  # if already above target, require 0 additional FV
+
+    # Flatten variables x[t,k] row-major
+    nvar = T * K
+
+    # Objective: 0 (pure feasibility)
+    c = np.zeros(nvar, dtype=float)
+
+    # Row-sum equalities/inequalities
+    A_eq, b_eq, A_ub, b_ub = [], [], [], []
+    for t in range(T):
+        row = np.zeros(nvar, dtype=float)
+        row[t * K : (t + 1) * K] = 1.0
+        if equality_rows:
+            A_eq.append(row)
+            b_eq.append(float(a.iloc[t]))
+        else:
+            A_ub.append(row)
+            b_ub.append(float(a.iloc[t]))
+
+    # Target inequalities per account k:
+    # sum_t x[t,k] * H[t+1,k] >= rhs[k]  →  -sum_t (...) <= -rhs[k]
     for k in range(K):
-        C[:, k] = base[k] + amps[k] * np.sin(2.0 * np.pi * (t[:, 0] + ph[k]) / float(period))
-    C = np.clip(C, 0.0, None)
-    C = _normalize_rows(C)
-    return pd.DataFrame(C, index=index, columns=list(accounts))
+        row = np.zeros(nvar, dtype=float)
+        for t in range(T):
+            row[t * K + k] = -float(H[t + 1, k])
+        A_ub.append(row)
+        b_ub.append(-float(rhs[k]))
 
-# ===========================================================================
-# Dataclasses (Inputs / Outputs)
-# ===========================================================================
+    bounds = [(0.0, None)] * nvar
 
-@dataclass(frozen=True)
-class MinContributionInput:
-    """Input for the minimum constant contribution problem.
-    Given target B, start wealth W0 and a returns_path r[0..T-1],
-    find the smallest constant a (optionally clamped at 0).
+    res = linprog(
+        c,
+        A_ub=np.array(A_ub) if A_ub else None,
+        b_ub=np.array(b_ub) if A_ub else None,
+        A_eq=np.array(A_eq) if A_eq else None,
+        b_eq=np.array(b_eq) if A_eq else None,
+        bounds=bounds,
+        method="highs",
+    )
+    if not res.success:
+        return (False, None)
+
+    x = res.x.reshape(T, K)
+    # If we allowed <= rows, normalize tiny slack into the last positive column for exactness
+    if not equality_rows:
+        row_sums = x.sum(axis=1)
+        target = a.to_numpy(dtype=float)
+        diff = target - row_sums
+        for t in range(T):
+            if abs(diff[t]) > 1e-9 and target[t] > 0:
+                k = int(np.argmax(x[t, :]))
+                x[t, k] += diff[t]
+    return (True, x)
+
+
+def _feasible_greedy(a: pd.Series, R_df: pd.DataFrame, W0: np.ndarray, B: np.ndarray, seed: Optional[int] = 42):
     """
-    target_amount: float              # B
-    start_wealth: float               # W0
-    returns_path: Sequence[float] | np.ndarray | pd.Series  # r[0..T-1]
-    non_negative: bool = True         # clamp a >= 0
+    Greedy feasibility:
+      - Compute FV weights H[t+1,k].
+      - Track remaining FV deficits d_k = max(0, B_k - W0_k*G0_k).
+      - For each t, allocate a[t] to argmax (H[t+1,k]) among k with d_k > 0,
+        but cap by what is still needed in FV space (a[t]*H contributes to d_k).
+      - Break ties deterministically (np.argmax) or with RNG if provided.
+
+    Returns (feasible: bool, X: ndarray T×K)
+    """
+    T, K = R_df.shape
+    rng = np.random.default_rng(seed)
+    G0, H = _growth_and_annuity_factors(R_df)
+    deficits = np.maximum(B - (W0 * G0), 0.0)  # FV units at T
+    X = np.zeros((T, K), dtype=float)
+
+    for t in range(T):
+        at = float(a.iloc[t])
+        if at <= 0.0:
+            continue
+        # While we have contribution to place and unmet deficits:
+        remaining = at
+        # Build preference order by H[t+1,k] (higher FV per peso first)
+        order = np.argsort(-H[t + 1, :])  # descending
+        for k in order:
+            if remaining <= 1e-12:
+                break
+            if deficits[k] <= 1e-12:
+                continue
+            # Max FV we can contribute to k this month if we give all remaining pesos:
+            fv_from_all = remaining * H[t + 1, k]
+            if fv_from_all <= deficits[k] + 1e-12:
+                # Allocate all remaining to k
+                X[t, k] += remaining
+                deficits[k] -= fv_from_all
+                remaining = 0.0
+                break
+            else:
+                # Allocate just enough to cover k's deficit
+                need_pesos = deficits[k] / max(H[t + 1, k], 1e-18)
+                give = min(remaining, need_pesos)
+                X[t, k] += give
+                deficits[k] -= give * H[t + 1, k]
+                remaining -= give
+
+        # If still remaining (all deficits ~0), dump to best H (doesn't harm feasibility)
+        if remaining > 1e-12:
+            k_best = int(np.argmax(H[t + 1, :]))
+            X[t, k_best] += remaining
+
+        # Early exit if all deficits are cleared
+        if np.all(deficits <= 1e-9):
+            # Fill any subsequent rows (t+1..T-1) with zeros (already zeros)
+            break
+
+    feasible = bool(np.all(deficits <= 1e-6))
+    return (feasible, X)
 
 
-@dataclass(frozen=True)
-class MinContributionResult:
-    """Output for the minimum constant contribution problem."""
-    a_star: float
-    annuity_factor: float             # AF = sum_{t=0}^{T-1} G_{t+1}
-    growth_W0: float                  # W0 * G0
-    T: int
+# ---------------------------------------------------------------------------
+# Public solver — outer loop over T
+# ---------------------------------------------------------------------------
 
+def min_time_with_allocation(inp: MinTimeAllocationInput) -> MinTimeAllocationResult:
+    """Min-Time Feasibility with Allocation Matrix C[t,k]
+    Goal
+    ----
+    Find the smallest horizon T and a contribution allocation matrix C (T×K)
+    such that each account/goal k attains its target B_k by its deadline.
 
-@dataclass(frozen=True)
-class MinTimeInput:
-    """Input for the minimum time problem (given a constant contribution)."""
-    contribution: float                              # a
-    start_wealth: float                              # W0
-    returns_path: Sequence[float] | np.ndarray | pd.Series  # r[0..T-1]
-    success_threshold: float                         # B
-    search_lo_hi: Optional[Tuple[int, int]] = None   # (lo, hi) in months
+    Core idea (deterministic returns)
+    ---------------------------------
+    Wealth dynamics per account k:
+        W_{t+1}^{(k)} = (W_t^{(k)} + a_t C_{t,k}) (1 + r_t^{(k)})
 
+    With arithmetic returns, terminal wealth is affine in contributions:
+        W_T^{(k)} = W_0^{(k)} G_0^{(k)} + sum_{t=0}^{T-1} (a_t C_{t,k}) * H_{t+1}^{(k)},
+    where:
+        G_t^{(k)} = Π_{u=t}^{T-1} (1 + r_u^{(k)}),    G_T^{(k)} = 1
+        H_{t+1}^{(k)} = Π_{u=t+1}^{T-1} (1 + r_u^{(k)})    (future value factor)
 
-@dataclass(frozen=True)
-class MinTimeResult:
-    """Output for the minimum time problem."""
-    T_hat: int
-    wealth_path: pd.Series
+    Hence, for fixed T, feasibility reduces to a Linear Program in the variables
+    x_{t,k} := a_t C_{t,k} (the peso amount allocated to account k in month t):
 
+    Variables: x_{t,k} ≥ 0
+    Row sums:  sum_k x_{t,k} = a_t,   ∀t
+    Targets:   sum_t x_{t,k} * H_{t+1}^{(k)} ≥ B_k - W_0^{(k)} G_0^{(k)},   ∀k
 
-@dataclass(frozen=True)
-class ChanceConstraintsInput:
-    """Input for chance-constraints (probability of meeting goals).
+    We search T = 1..T_max and return the smallest feasible T and a C*.
+
+    Backends
+    --------
+    - "scipy": LP feasibility via scipy.optimize.linprog (objective 0).
+    - "greedy": deterministic greedy on marginal FV weights H_{t+1}^{(k)} while
+                tracking remaining deficits; no external dependencies.
+
+    Outputs
+    -------
+    - T_star: smallest feasible horizon
+    - C_star: DataFrame (T×K) row-stochastic allocation matrix
+    - A_df:   DataFrame (T×K) allocated contributions (x_{t,k})
+    - wealth_by_account: DataFrame (T×K [+ "total"]) simulated with simulate_portfolio
+    - diagnostics (per-account deficit, t_hit, margins)
 
     Notes
     -----
-    - Provide an IncomeModel and a ScenarioConfig with mc_paths > 0.
-    - Goals are evaluated on each Monte Carlo wealth path using goals.evaluate_goals.
+    - Supports either explicit contributions Series, or an IncomeModel + (alpha, beta).
+    - Returns may be scalar, length-T vector, (T×K) matrix, or dict per account.
     """
-    goals: Iterable[Goal]
-    income_model: IncomeModel
-    scen_cfg: ScenarioConfig
-    mc_paths: int = 1000             # number of MC paths (overrides scen_cfg.mc_paths if >0)
+    accounts = list(inp.accounts)
+    K = len(accounts)
 
+    # We will reuse the calendar from contributions if provided; otherwise build per T.
+    W0 = _init_starts(inp)
+    B = _targets_vector(inp)
+    if inp.t_min == "auto":
+            a_full, R_full = _build_full_paths(inp)
+            T_start = max(1, _auto_t_min(a_full, R_full, W0, B))
+    else:
+        T_start = max(1, int(inp.t_min))
 
-@dataclass(frozen=True)
-class ChanceConstraintsResult:
-    """Output for chance-constraints."""
-    success_prob_by_goal: pd.Series  # index = goal names
-    summary: Dict[str, float]        # e.g., {"joint_success": ... , "paths": N}
+    best = None  # (T, A (T×K), a_series, R_df_T)
+    for T in range(T_start, int(inp.T_max) + 1):
+        # Build contributions and returns for this T
+        a = _get_contributions_series(inp, T)  # Series length T
+        # Ensure monthly DatetimeIndex
+        if not isinstance(a.index, pd.DatetimeIndex):
+            a.index = _as_index(T, inp.start)
 
+        R_df = _broadcast_returns(inp.returns_by_account, T, accounts)
+        R_df.index = a.index  # align calendar
 
-# ===========================================================================
-# Scenario Provider (adapter over SimulationEngine)
-# ===========================================================================
-
-class EngineScenarioProvider:
-    """Adapter around SimulationEngine to expose scenario runs uniformly."""
-
-    def __init__(self, income: IncomeModel, cfg: ScenarioConfig):
-        self.eng = SimulationEngine(income, cfg)
-
-    def three_cases(self) -> Dict[str, ScenarioResult]:
-        return self.eng.run_three_cases()
-
-    def monte_carlo(self) -> Optional[Dict[str, ScenarioResult]]:
-        return self.eng.run_monte_carlo()
-
-
-# ===========================================================================
-# Solver Registry (extensibility point)
-# ===========================================================================
-
-_SOLVERS: Dict[str, Callable[..., object]] = {}
-
-def register_solver(name: str, fn: Callable[..., object]) -> None:
-    """Register a solver function under a name."""
-    _SOLVERS[name] = fn
-
-def get_solver(name: str) -> Callable[..., object]:
-    """Retrieve a solver function by name."""
-    if name not in _SOLVERS:
-        raise KeyError(f"Solver '{name}' not registered.")
-    return _SOLVERS[name]
-
-
-# ===========================================================================
-# Core Solvers (MVP)
-# ===========================================================================
-
-def _solve_min_constant_contribution_closed_form(inp: MinContributionInput) -> MinContributionResult:
-    """Closed-form minimum constant contribution under arithmetic returns.
-
-    Dynamics:
-        W_{t+1} = (W_t + a) * (1 + r_t),  t = 0..T-1
-
-    Let G_t = Π_{u=t}^{T-1}(1+r_u), with G_T=1.
-    Terminal wealth:
-        W_T = W_0 * G_0 + a * AF,  where AF = Σ_{t=0}^{T-1} G_{t+1}.
-    Hence:
-        a* = max(0, (B - W0*G0) / AF) if AF > 0 else +inf (when clamped).
-    """
-    check_non_negative("target_amount", float(inp.target_amount))
-    r = ensure_1d(inp.returns_path, name="returns_path")
-    T = int(r.shape[0])
-    if T <= 0:
-        raise ValueError("returns_path must have positive length.")
-    one_plus_r = 1.0 + r
-
-    # Backward cumulative products G_t
-    G = np.empty(T + 1, dtype=float)
-    G[T] = 1.0
-    acc = 1.0
-    for t in range(T - 1, -1, -1):
-        acc *= one_plus_r[t]
-        G[t] = acc
-
-    AF = float(np.sum(G[1:]))                 # annuity factor
-    growth_W0 = float(inp.start_wealth) * float(G[0])
-    if AF <= 0:
-        return MinContributionResult(a_star=float("inf"), annuity_factor=AF, growth_W0=growth_W0, T=T)
-
-    a_star = (float(inp.target_amount) - growth_W0) / AF
-    if inp.non_negative:
-        a_star = max(0.0, a_star)
-    return MinContributionResult(a_star=a_star, annuity_factor=AF, growth_W0=growth_W0, T=T)
-
-
-def _solve_min_time_given_contribution(inp: MinTimeInput) -> MinTimeResult:
-    """Binary search over T for the smallest horizon achieving the target B."""
-    r = ensure_1d(inp.returns_path, name="returns_path")
-    T_max = len(r)
-    lo, hi = inp.search_lo_hi or (1, T_max)
-    if lo < 1 or hi > T_max or lo > hi:
-        raise ValueError("Invalid search range.")
-
-    def feasible(T: int) -> Tuple[bool, pd.Series]:
-        contrib = np.full(T, float(inp.contribution), dtype=float)
-        wealth = simulate_capital(contrib, r[:T], start_value=float(inp.start_wealth))
-        return (float(wealth.iloc[-1]) >= float(inp.success_threshold)), wealth
-
-    best_T, best_path = None, None
-    L, R = lo, hi
-    while L <= R:
-        mid = (L + R) // 2
-        ok, w = feasible(mid)
-        if ok:
-            best_T, best_path = mid, w
-            R = mid - 1
+        # Backend feasibility at fixed T
+        if inp.backend == "scipy":
+            ok, X = _feasible_LP(a, R_df, W0, B, equality_rows=inp.equality_rows)
+            if not ok:
+                ok, X = _feasible_greedy(a, R_df, W0, B, seed=inp.seed)
+        elif inp.backend == "greedy":
+            ok, X = _feasible_greedy(a, R_df, W0, B, seed=inp.seed)
         else:
-            L = mid + 1
+            raise ValueError("backend must be 'scipy' or 'greedy'.")
 
-    if best_T is None:
-        # Not feasible within given horizon → return horizon hi and the last path
-        _, w = feasible(hi)
-        return MinTimeResult(T_hat=hi, wealth_path=w)
+        if ok:
+            best = (T, X, a, R_df)
+            break
 
-    return MinTimeResult(T_hat=best_T, wealth_path=best_path)
+    if best is None:
+        # Not feasible within T_max — return informative artifact at T_max using greedy allocation
+        T = int(inp.T_max)
+        a = _get_contributions_series(inp, T)
+        if not isinstance(a.index, pd.DatetimeIndex):
+            a.index = _as_index(T, inp.start)
+        R_df = _broadcast_returns(inp.returns_by_account, T, accounts)
+        R_df.index = a.index
+        _, X = _feasible_greedy(a, R_df, W0, B, seed=inp.seed)
+        feas = False
+    else:
+        T, X, a, R_df = best
+        feas = True
 
+    # Build DataFrames
+    A_df = pd.DataFrame(X, index=a.index, columns=accounts)                # pesos allocated
+    # Guard: if a[t] == 0, leave C[t,*] = 0
+    with np.errstate(divide="ignore", invalid="ignore"):
+        C_arr = np.where(a.values.reshape(-1, 1) > 0, X / a.values.reshape(-1, 1), 0.0)
+    C_df = pd.DataFrame(C_arr, index=a.index, columns=accounts)
 
-def _solve_chance_constraints(inp: ChanceConstraintsInput) -> ChanceConstraintsResult:
-    """Monte Carlo wrapper to estimate per-goal and joint success probabilities."""
-    # Ensure MC paths
-    cfg = inp.scen_cfg
-    if inp.mc_paths and inp.mc_paths > 0 and inp.mc_paths != cfg.mc_paths:
-        cfg = ScenarioConfig(
-            months=cfg.months,
-            start=cfg.start,
-            alpha_fixed=cfg.alpha_fixed,
-            beta_variable=cfg.beta_variable,
-            base_r=cfg.base_r,
-            optimistic_r=cfg.optimistic_r,
-            pessimistic_r=cfg.pessimistic_r,
-            mc_mu=cfg.mc_mu,
-            mc_sigma=cfg.mc_sigma,
-            mc_paths=inp.mc_paths,
-            seed=cfg.seed,
-        )
-
-    provider = EngineScenarioProvider(inp.income_model, cfg)
-    mc = provider.monte_carlo()
-    if not mc:
-        return ChanceConstraintsResult(
-            success_prob_by_goal=pd.Series(dtype=float),
-            summary={"joint_success": np.nan, "paths": 0},
-        )
-
-    goals_list = list(inp.goals)
-    counts = np.zeros(len(goals_list), dtype=int)
-    joint_success = 0
-    total = len(mc)
-
-    for _, res in mc.items():
-        df = evaluate_goals(res.wealth, goals_list, start=cfg.start)
-        flags = df["success"].values.astype(bool)
-        counts += flags
-        if flags.all():
-            joint_success += 1
-
-    probs = counts / total
-    return ChanceConstraintsResult(
-        success_prob_by_goal=pd.Series(probs, index=[g.name for g in goals_list]),
-        summary={"joint_success": joint_success / total, "paths": total},
+    # Simulate wealth-by-account for diagnostics and plots
+    wealth_df = simulate_portfolio(
+        contributions_matrix=A_df,
+        returns_matrix=R_df,
+        start_values=_init_starts(inp),
+        index_like=a.index,
+        column_names=accounts,
+        include_total_col=True,
     )
 
+    # Compute t_hit per account and margins
+    t_hit = []
+    margins = []
+    for k, name in enumerate(accounts):
+        target = float(inp.targets_by_account[name])
+        serie = wealth_df[name]
+        # first month where wealth >= target
+        where = np.where(serie.values >= target)[0]
+        hit = int(where[0]) if where.size > 0 else None
+        t_hit.append(hit if hit is not None else -1)
+        margins.append(float(serie.iloc[-1]) - target)
+    t_hit_ser = pd.Series(t_hit, index=accounts, name="t_hit_index")
+    margin_ser = pd.Series(margins, index=accounts, name="margin_at_T")
 
-# Register default solvers
-register_solver("min_contribution.closed_form", _solve_min_constant_contribution_closed_form)
-register_solver("min_time.binary_search", _solve_min_time_given_contribution)
-register_solver("chance_constraints.monte_carlo", _solve_chance_constraints)
-
-
-# ===========================================================================
-# Facade (public API)
-# ===========================================================================
-
-def min_constant_contribution(inp: MinContributionInput, *, solver: str = "min_contribution.closed_form") -> MinContributionResult:
-    """Public API: minimum constant contribution for a fixed horizon.
-    You may specify a different solver via `solver` if registered.
-    """
-    return get_solver(solver)(inp)
-
-
-def min_time_given_contribution(inp: MinTimeInput, *, solver: str = "min_time.binary_search") -> MinTimeResult:
-    """Public API: minimum time to reach a target given a constant contribution."""
-    return get_solver(solver)(inp)
-
-
-def chance_constraints(inp: ChanceConstraintsInput, *, solver: str = "chance_constraints.monte_carlo") -> ChanceConstraintsResult:
-    """Public API: chance-constraint estimation via Monte Carlo."""
-    return get_solver(solver)(inp)
-
+    return MinTimeAllocationResult(
+        T_star=T,
+        C_star=C_df,
+        A_df=A_df,
+        contributions_total=a,
+        returns_by_account=R_df,
+        wealth_by_account=wealth_df,
+        t_hit_by_account=t_hit_ser,
+        margin_at_T=margin_ser,
+        feasible=feas,
+    )
 
 # ===========================================================================
 # Manual quick test (integration smoke tests)
@@ -396,74 +592,35 @@ if __name__ == "__main__":
     import numpy as np
     import pandas as pd
 
-    from .investment import fixed_rate_path, simulate_capital
     from .income import FixedIncome, VariableIncome, IncomeModel
-    from .scenario import ScenarioConfig
+    from .investment import simulate_portfolio
     from .goals import Goal
+    from .optimization import MinTimeAllocationInput, min_time_with_allocation
 
-    # ---------------- 1) Closed-form sanity check + verification ----------------
-    T = 24
-    r = fixed_rate_path(T, 0.004)  # 0.4% monthly
-    B = 20_000_000.0
-    W0 = 0.0
-
-    mc_inp = MinContributionInput(target_amount=B, start_wealth=W0, returns_path=r)
-    mc_res = min_constant_contribution(mc_inp)
-    print("[min_constant_contribution] a* (CLP):", round(mc_res.a_star))
-
-    # Verificar por simulación directa que W_T >= B (tolerancia numérica)
-    contrib_series = np.full(T, mc_res.a_star, dtype=float)
-    wealth_series = simulate_capital(contrib_series, r, start_value=W0)
-    WT = float(wealth_series.iloc[-1])
-    print("[min_constant_contribution] W_T:", round(WT), ">= B?", WT + 1e-6 >= B)
-
-    # ---------------- 2) Min time given contribution (binary search) -----------
-    a_fixed = 700_000.0
-    B2 = 6_000_000.0
-    mt_inp = MinTimeInput(
-        contribution=a_fixed,
-        start_wealth=0.0,
-        returns_path=r,
-        success_threshold=B2,
-    )
-    mt_res = min_time_given_contribution(mt_inp)
-    print("[min_time_given_contribution] T_hat (months):", mt_res.T_hat)
-
-    # Chequeos de borde: en T_hat-1 no debería alcanzar; en T_hat sí debería
-    if mt_res.T_hat > 1:
-        wealth_Tm1 = simulate_capital(np.full(mt_res.T_hat - 1, a_fixed), r[: mt_res.T_hat - 1], start_value=0.0)
-        WTm1 = float(wealth_Tm1.iloc[-1])
-        print("[min_time_given_contribution] W_{T_hat-1}:", round(WTm1), "< B?", WTm1 < B2)
-    WT_hat = float(mt_res.wealth_path.iloc[-1])
-    print("[min_time_given_contribution] W_{T_hat}:", round(WT_hat), ">= B?", WT_hat >= B2)
-
-    # ---------------- 3) Chance constraints with SimulationEngine --------------
-    # Income model (matches your project defaults)
+    # Example: 2 goals (housing + emergency), 24 months horizon
+    accounts = ["housing", "emergency"]
     income = IncomeModel(
         fixed=FixedIncome(base=1_400_000.0, annual_growth=0.00),
         variable=VariableIncome(base=200_000.0, sigma=0.00),
     )
-    cfg = ScenarioConfig(
-        months=24,
+
+    inp = MinTimeAllocationInput(
+        accounts=accounts,
+        targets_by_account={"housing": 20_000_000.0, "emergency": 6_000_000.0},
+        start_wealth_by_account=0.0,
+        income_model=income,
         start=date(2025, 9, 1),
         alpha_fixed=0.35,
         beta_variable=1.0,
-        base_r=0.004,
-        optimistic_r=0.007,
-        pessimistic_r=0.001,
-        mc_mu=0.004,
-        mc_sigma=0.02,
-        mc_paths=200,       # pequeño para prueba rápida
-        seed=42,
+        returns_by_account={"housing": 0.004, "emergency": 0.002},
+        T_max=36,
+        t_min="auto",        # <-- test new feature
+        backend="greedy",    # try greedy backend
     )
 
-    goals = [
-        Goal(name="housing", target_amount=20_000_000.0, target_month_index=23),
-        Goal(name="emergency", target_amount=6_000_000.0, target_month_index=11),
-    ]
-
-    cc_inp = ChanceConstraintsInput(goals=goals, income_model=income, scen_cfg=cfg, mc_paths=200)
-    cc_res = chance_constraints(cc_inp)
-    print("[chance_constraints] success_prob_by_goal:")
-    print(cc_res.success_prob_by_goal)
-    print("[chance_constraints] summary:", cc_res.summary)
+    res = min_time_with_allocation(inp)
+    print("[MinTimeAllocation] T_star:", res.T_star)
+    print("[MinTimeAllocation] feasible:", res.feasible)
+    print("[MinTimeAllocation] margins:")
+    print(res.margin_at_T)
+    print(res.C_star.head())

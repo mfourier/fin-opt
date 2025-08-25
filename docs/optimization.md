@@ -1,238 +1,166 @@
-# FinOpt — `optimization` Module (Design & Philosophy)
+# `optimization` — Philosophy and Role in FinOpt
 
-> **Tagline:** *Simulation- and optimization‑driven personal finance planning.*
-
-This document explains the **philosophy**, **problem‑first API design**, and **mathematical formulations** implemented in `optimization.py`. The module provides small, composable solvers that integrate tightly with FinOpt’s simulation stack to answer practical questions such as:
-
-- *What is the **minimum constant monthly contribution** I need to reach a target by a fixed date?*
-- *Given a constant contribution, **how many months** do I need to reach a target?*
-- *Under uncertainty, **what is the probability** of achieving one or more goals (chance‑constraints)?*
-
-The module favors **closed‑form solutions**, **search**, and **Monte Carlo wrappers** over heavy external solver dependencies, keeping the MVP simple, fast, and deterministic by default.
+> **Core idea:** turn **financial goals** into **optimization problems**, searching over time horizons and allocation strategies to determine if, when, and how they can be satisfied.  
+> `optimization.py` acts as the **decision layer**: while `scenario.py` simulates wealth paths, `optimization.py` asks *what allocations make goals feasible, and in the shortest time possible?*
 
 ---
 
-## 1) Design Principles
+## Why a dedicated optimization module?
 
-- **Problem‑first API**: Each optimization task has explicit `@dataclass` inputs and outputs (clarity, testability).
-- **Deterministic by default**: Stochasticity only appears when you provide random paths or seeds.
-- **Tight integration**: Solvers compose with:
-  - `income.py` (`IncomeModel` → contribution paths),
-  - `investment.py` (`simulate_capital`, `fixed_rate_path`, `lognormal_iid`, `compute_metrics`),
-  - `simulation.py` (`ScenarioConfig`, `SimulationEngine`),
-  - `goals.py` (`Goal`, `evaluate_goals`),
-  - `utils.py` (`ensure_1d`, `check_non_negative`).
-- **Extensible**: A lightweight **solver registry** allows registering alternatives (e.g., MILP/QP versions later).
+- **Separation of roles**
+  - `income.py` → how much money is available.  
+  - `investment.py` → how capital grows given contributions and returns.  
+  - `scenario.py` → generates possible wealth paths.  
+  - `goals.py` → defines success criteria.  
+  - `optimization.py` → searches over *time* and *allocations* to satisfy goals.
 
----
+- **Factoring feasibility**  
+  Not all targets are attainable. Optimization starts with feasibility checks, then minimizes time or resources.
 
-## 2) Core Optimization Problems
-
-### 2.1 Minimum Constant Contribution for a Fixed Horizon
-
-**Question.** Given:
-- target \( B \) at month \( T \),
-- initial wealth \( W_0 \),
-- monthly (arithmetic) returns path \( r_0,\dots,r_{T-1} \),
-
-find the smallest **constant** contribution \( a \) such that final wealth \( W_T \ge B \).
-
-**Dynamics.**
-$$
-W_{t+1} = (W_t + a)\,(1 + r_t),\quad t = 0,\dots,T-1.
-$$
-
-Define the backward growth factors
-$$
-G_t = \prod_{u=t}^{T-1} (1 + r_u),\quad G_T = 1.
-$$
-
-Then terminal wealth is
-$$
-W_T = W_0\,G_0 + a \sum_{t=0}^{T-1} G_{t+1}.
-$$
-
-Let the **annuity factor** be
-$$
-\mathrm{AF} = \sum_{t=0}^{T-1} G_{t+1}.
-$$
-
-The **closed‑form solution** is
-
-$$
-a^* = \max\!\Big(0,\; \frac{B - W_0\,G_0}{\mathrm{AF}}\Big) \quad \text{(when AF \(> 0\)).}
-$$
-
-The solver `_solve_min_constant_contribution_closed_form` computes $ G_t $, returns $ a^* $, $ \mathrm{AF} $, $ W_0G_0 $, and $ T $. A non‑negativity clamp is applied by default (configurable).
+- **Extensibility**  
+  The module is designed to grow: from MVP feasibility solvers to more advanced optimization routines (linear programming, stochastic optimization, dynamic programming).
 
 ---
 
-### 2.2 Minimum Time Given a Constant Contribution
+## Problem 1 — Minimum Time Multi-Goal Feasibility
 
-**Question.** Given a **fixed contribution** \( a \), find the **smallest horizon** \( T \) such that \( W_T \ge B \).
+**Question:**  
+Find the *smallest horizon* \(T\) and a contribution allocation matrix  
+\(C \in \mathbb{R}^{T \times K}\) such that every goal is satisfied:
 
-We keep the same dynamics
 $$
-W_{t+1} = (W_t + a)\,(1 + r_t),
+W^{(k)}_{T} \;\;\ge\;\; B_k, \quad \forall k \in \{1,\dots,K\}.
 $$
-but now we **search** over \( T \) using a **binary search** on the prefix of the provided return path \( r_{0:(T-1)} \). For a candidate \( T \), we simulate wealth via `simulate_capital` with length \( T \); if the target is met, we try a smaller \( T \); otherwise, we try a larger one. The solver returns the minimal feasible \( T_{\hat{}} \) and its wealth path. If no \( T \) within the allowed range meets \( B \), the solver returns the upper bound and its path (useful diagnostics).
 
 ---
 
-### 2.3 Chance‑Constraints (Success Probabilities Across Goals)
+### Dynamics
 
-**Question.** With **uncertain returns** and **income variability**, what is the probability of meeting **each** goal and **all jointly** by their deadlines?
+Each account \(k\) evolves as:
 
-We use `SimulationEngine` to generate **Monte Carlo** scenarios (IID lognormal monthly returns in the MVP). For each simulated wealth path, we evaluate a set of `Goal`s via `evaluate_goals` and count successes.
-
-Let \( \mathcal{G} = \{g_1,\dots,g_M\} \) be the goals set and simulate \( K \) wealth paths \( \{W^{(k)}\}_{k=1}^K \). Define indicators
 $$
-I_m^{(k)} = \mathbf{1}\{W^{(k)}_{T_m} \ge B_m\},
-$$
-then the **per‑goal success probability** estimator is
-$$
-\hat{p}_m = \frac{1}{K}\sum_{k=1}^K I_m^{(k)},
-$$
-and the **joint success probability** estimator is
-$$
-\hat{p}_{\text{joint}} = \frac{1}{K}\sum_{k=1}^K \prod_{m=1}^M I_m^{(k)}.
+W^{(k)}_{t+1} = \big(W^{(k)}_{t} + a_t C_{t,k}\big)(1 + r^{(k)}_t).
 $$
 
-The solver returns a `pd.Series` with \( \hat{p}_m \) (indexed by goal name) and a `summary` dict with `{"joint_success": \hat{p}_{joint}, "paths": K}`.
+Here:
+- $a_t$ = total contribution at time $t$ (from `income.py`).  
+- $C_{t,k}$ = fraction allocated to account $k$.  
+- $r^{(k)}_t$ = return of account $k$ at time $t$.  
+- $W^{(k)}_0$ = initial wealth of account $k$ (not necessarily zero).
 
 ---
 
-## 3) Public Facade
+### Change of variables
 
-- `min_constant_contribution(inp: MinContributionInput) -> MinContributionResult`  
-- `min_time_given_contribution(inp: MinTimeInput) -> MinTimeResult`  
-- `chance_constraints(inp: ChanceConstraintsInput) -> ChanceConstraintsResult`
+Define decision variables in **peso space**:
 
-Each facade dispatches to a registered solver (default names below).
+$$
+x_{t,k} := a_t C_{t,k}, \quad \sum_{k} x_{t,k} = a_t.
+$$
 
-```python
-register_solver("min_contribution.closed_form", _solve_min_constant_contribution_closed_form)
-register_solver("min_time.binary_search", _solve_min_time_given_contribution)
-register_solver("chance_constraints.monte_carlo", _solve_chance_constraints)
-```
+The recursion unrolls into a **closed form**:
 
-You can plug in alternatives by registering your own function under a new key.
+$$
+W^{(k)}_{T} = W^{(k)}_0 \, G^{(k)}_0 \;+\; \sum_{t=0}^{T-1} x_{t,k} \, H^{(k)}_{t+1},
+$$
 
----
+where:
 
-## 4) Types (Inputs/Outputs)
+- **Growth factor of initial wealth**:
+  $$
+  G^{(k)}_0 = \prod_{u=0}^{T-1} (1+r^{(k)}_u).
+  $$
+- **Future value factor of contributions**:
+  $$
+  H^{(k)}_{t+1} = \prod_{u=t+1}^{T-1} (1+r^{(k)}_u).
+  $$
 
-### 4.1 Minimum Constant Contribution
-- **Input** `MinContributionInput`  
-  `target_amount: float`, `start_wealth: float`, `returns_path: Sequence[float]`, `non_negative: bool = True`
-- **Output** `MinContributionResult`  
-  `a_star: float`, `annuity_factor: float`, `growth_W0: float`, `T: int`
-
-### 4.2 Minimum Time
-- **Input** `MinTimeInput`  
-  `contribution: float`, `start_wealth: float`, `returns_path: Sequence[float]`, `success_threshold: float`, `search_lo_hi: Optional[Tuple[int,int]]`
-- **Output** `MinTimeResult`  
-  `T_hat: int`, `wealth_path: pd.Series`
-
-### 4.3 Chance‑Constraints
-- **Input** `ChanceConstraintsInput`  
-  `goals: Iterable[Goal]`, `income_model: IncomeModel`, `scen_cfg: ScenarioConfig`, `mc_paths: int = 1000`
-- **Output** `ChanceConstraintsResult`  
-  `success_prob_by_goal: pd.Series`, `summary: Dict[str, float]`
+Thus, terminal wealth is **affine in contributions**: a linear combination of peso allocations plus the scaled starting wealth.
 
 ---
 
-## 5) Integration with the Simulation Stack
+### Feasibility as Linear Program
 
-- **Income**: `IncomeModel.contributions_from_proportions(...)` turns fixed/variable income into contribution paths, parameterized by `alpha_fixed` and `beta_variable`.
-- **Returns**: Deterministic cases use `fixed_rate_path`. Stochastic cases use `lognormal_iid` configured by `ScenarioConfig (mc_mu, mc_sigma, mc_paths, seed)`.
-- **Wealth**: `simulate_capital` implements the fundamental wealth recursion and returns a time‑indexed series.
-- **Metrics**: `compute_metrics` produces `final_wealth`, `total_contributions`, `cagr`, `vol`, and `max_drawdown` for reporting.
+For a fixed \(T\), the feasibility problem becomes:
 
-This modular separation lets you replace any piece (income model, returns generator, metrics) without touching the optimization solver logic.
+- **Variables:** $x_{t,k} \ge 0$.  
+- **Row sums:**  
+  $$
+  \sum_k x_{t,k} = a_t .
+  $$
+- **Target constraints:**  
+  $$
+  \sum_t x_{t,k} \, H^{(k)}_{t+1} \;\;\ge\;\; B_k - W^{(k)}_0 G^{(k)}_0, 
+  \quad \forall k.
+  $$
 
----
+If a feasible solution exists, we can reconstruct a normalized allocation matrix \(C\) from \(x\).
 
-## 6) Usage Snippets
-
-### 6.1 Minimum Contribution (Closed Form)
-
-```python
-from fin_opt.src.optimization import MinContributionInput, min_constant_contribution
-from fin_opt.src.investment import fixed_rate_path
-
-T = 24
-r = fixed_rate_path(T, 0.004)  # 0.4% monthly
-inp = MinContributionInput(target_amount=20_000_000.0, start_wealth=0.0, returns_path=r)
-res = min_constant_contribution(inp)
-print(res.a_star, res.annuity_factor, res.growth_W0, res.T)
-```
-
-### 6.2 Minimum Time (Binary Search)
-
-```python
-from fin_opt.src.optimization import MinTimeInput, min_time_given_contribution
-from fin_opt.src.investment import fixed_rate_path
-
-r = fixed_rate_path(60, 0.004)  # up to 60 months available
-inp = MinTimeInput(contribution=700_000.0, start_wealth=0.0,
-                   returns_path=r, success_threshold=6_000_000.0)
-res = min_time_given_contribution(inp)
-print(res.T_hat)
-print(res.wealth_path.tail())
-```
-
-### 6.3 Chance‑Constraints with Monte Carlo
-
-```python
-from datetime import date
-from fin_opt.src.optimization import ChanceConstraintsInput, chance_constraints
-from fin_opt.src.income import FixedIncome, VariableIncome, IncomeModel
-from fin_opt.src.simulation import ScenarioConfig
-from fin_opt.src.goals import Goal
-
-income = IncomeModel(
-    fixed=FixedIncome(base=1_400_000.0, annual_growth=0.00),
-    variable=VariableIncome(base=200_000.0, sigma=0.00),
-)
-cfg = ScenarioConfig(
-    months=24, start=date(2025, 9, 1),
-    alpha_fixed=0.35, beta_variable=1.0,
-    base_r=0.004, optimistic_r=0.007, pessimistic_r=0.001,
-    mc_mu=0.004, mc_sigma=0.02, mc_paths=500, seed=42
-)
-goals = [
-    Goal(name="housing", target_amount=20_000_000.0, target_month_index=23),
-    Goal(name="emergency", target_amount=6_000_000.0, target_month_index=11),
-]
-inp = ChanceConstraintsInput(goals=goals, income_model=income, scen_cfg=cfg, mc_paths=500)
-res = chance_constraints(inp)
-print(res.success_prob_by_goal)
-print(res.summary)
-```
+- **Objective:** minimize $T$.  
+- **Search:** increase $T=t_{\min}, t_{\min}+1, \dots, T_{\max}$ until feasibility holds.  
+  - `t_min` can be set manually or `"auto"`, in which case a lower bound is computed by checking whether dedicating *all* contributions to each goal could theoretically meet its deficit.
 
 ---
 
-## 7) Extensibility & Future Directions
+## Backends
 
-- **Alternative return models**: regime‑switching, historical bootstraps, factor models.
-- **Glidepaths and schedules**: replace the constant \( a \) with time‑varying \( a_t \) and solve via LP/MILP.
-- **Multi‑asset allocation**: couple with `simulate_portfolio` and introduce decision variables for weights (QP/SOCP).
-- **Taxes, fees, and constraints**: transaction costs, contribution caps, and goal priorities.
-- **Risk‑aware objectives**: e.g., minimize \( a \) subject to \( \mathbb{P}(W_T \ge B) \ge \tau \), or minimize time subject to chance‑constraints.
+1. **Scipy LP backend**  
+   Uses `scipy.optimize.linprog` with objective = 0 (pure feasibility).  
 
-The **solver registry** makes it simple to provide parallel implementations (e.g. `min_contribution.lp`, `min_time.dp`) while preserving a stable public facade.
-
----
-
-## 8) Testing Philosophy
-
-- **Unit tests** for closed‑form and binary search with controlled paths.
-- **Property‑based tests** (optional) to check monotonicity: larger \( B \) → larger \( a^\* \); larger \( a \) → smaller \( T_{\hat{}} \).
-- **Integration smoke tests**: run the manual block to verify end‑to‑end consistency with `SimulationEngine` and `goals`.
+2. **Greedy backend**  
+   Heuristic that:
+   - Computes remaining deficits in future-value space.  
+   - At each month $t$, allocates $a_t$ to the account with the highest multiplier $H^{(k)}_{t+1}$.  
+   - Caps allocations once a goal’s deficit is covered.  
+   - Resolves ties deterministically (or with RNG seed if provided).  
 
 ---
 
-## 9) Summary
+## Outputs
 
-`optimization.py` delivers **clean, minimal solvers** that answer key personal‑finance questions with **transparent math** and **reproducible simulations**. Problems are framed so that they can scale from MVP (closed form + search + Monte Carlo) to advanced formulations (LP/QP/MILP/SOCP) without changing the user‑facing API.
+Both backends return:
+
+- $T^*$: the minimal feasible horizon.  
+- $C^*$: row-stochastic allocation matrix (fractions).  
+- $A$: allocation in pesos per account and month.  
+- `wealth_by_account`: simulated wealth trajectories per account (plus total).  
+- **Diagnostics**:  
+  - `t_hit_by_account`: first month each goal is reached (or -1 if never).  
+  - `margin_at_T`: wealth minus target at horizon $T$.  
+  - `feasible`: whether a solution was found within $T_{\max}$.
+
+---
+
+## Roadmap of Extensions
+
+1. **Phase I — Feasibility search**
+   - Incremental search of $T$.  
+   - LP and greedy backends as implemented.  
+
+2. **Phase II — Structured allocations**
+   - Restrict $C$ to special forms:  
+     - Constant weights.  
+     - Glidepaths (linear tilts).  
+     - Piecewise constant policies.  
+
+3. **Phase III — Optimization under uncertainty**
+   - Stochastic returns (Monte Carlo).  
+   - Chance-constrained feasibility:  
+     $\Pr(W^{(k)}_{T} \ge B_k) \ge 1-\varepsilon$.  
+
+4. **Phase IV — Advanced methods**
+   - Convex optimization (LP/QP).  
+   - Approximate Dynamic Programming / RL for state-dependent policies.  
+   - Multi-objective formulations (lexicographic, utility-based).
+
+---
+
+## Integration with FinOpt
+
+1. **Income generation** (`income.py`) → contributions $a_t$.  
+2. **Scenario orchestration** (`scenario.py`) → build return paths + allocation candidate $C$.  
+3. **Investment accumulation** (`investment.py`) → simulate per-account wealth.  
+4. **Goal evaluation** (`goals.py`) → check feasibility.  
+5. **Optimization loop** (`optimization.py`) → search over $T, C$ until feasible.  
+
+---
