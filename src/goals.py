@@ -231,46 +231,6 @@ def evaluate_goals(
         pass
     return df
 
-
-# ---------------------------------------------------------------------------
-# Contribution splitting (MVP)
-# ---------------------------------------------------------------------------
-
-def allocate_contributions_proportional(
-    contributions: pd.Series,
-    weights_by_goal: Mapping[str, float],
-) -> pd.DataFrame:
-    """Split the aggregate contribution series into per-goal series.
-
-    Parameters
-    ----------
-    contributions : pd.Series (length T)
-        Aggregate monthly contributions (from `IncomeModel.contributions_from_proportions`).
-    weights_by_goal : dict[str, float]
-        Non-negative weights per goal name, summing to 1 (will be normalized).
-
-    Returns
-    -------
-    pd.DataFrame with one column per goal (same index as `contributions`).
-    """
-    if not isinstance(contributions, pd.Series) or contributions.empty:
-        raise ValueError("contributions must be a non-empty pd.Series.")
-    if not weights_by_goal:
-        raise ValueError("weights_by_goal cannot be empty.")
-    # Normalize weights (ignore goals with zero/negative weights).
-    items = [(k, float(v)) for k, v in weights_by_goal.items() if float(v) > 0]
-    if not items:
-        raise ValueError("At least one positive weight is required.")
-    keys, vals = zip(*items)
-    w = np.array(vals, dtype=float)
-    w = w / w.sum()
-    # Broadcast
-    data = {k: contributions.values * w[i] for i, k in enumerate(keys)}
-    df = pd.DataFrame(data, index=contributions.index)
-    df.index.name = contributions.index.name
-    return df
-
-
 # ---------------------------------------------------------------------------
 # Manual quick test
 # ---------------------------------------------------------------------------
