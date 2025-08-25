@@ -41,8 +41,8 @@ True
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, Sequence
-
+from typing import Mapping, Sequence, Optional, Union
+import warnings
 import numpy as np
 import pandas as pd
 
@@ -52,7 +52,7 @@ from .utils import (
 
 )
 
-__all__ = ["simulate_capital", "simulate_portfolio"]
+__all__ = ["simulate_capital", "simulate_portfolio", "allocate_contributions", "allocate_contributions_proportional"]
 
 
 
@@ -276,3 +276,233 @@ def simulate_portfolio(
         df["total"] = df.sum(axis=1)
     return df
 
+# ---------------------------------------------------------------------------
+# Contribution allocation (matrix form)
+# ---------------------------------------------------------------------------
+
+from .utils import ensure_1d, align_index_like
+
+
+def allocate_contributions(
+    contributions: Union[pd.Series, np.ndarray, Sequence[float]],
+    C: Union[pd.DataFrame, np.ndarray, Sequence[Sequence[float]]],
+    *,
+    column_names: Optional[Sequence[str]] = None,
+    normalize_rows: bool = True,
+    rowsum_tol: float = 1e-6,
+) -> pd.DataFrame:
+    """
+    Allocate a monthly contribution series `a[t]` across K accounts using a
+    (time‑varying) weight matrix `C` of shape (T, K), where each row represents
+    the fraction assigned to each account at month t.
+
+    Parameters
+    ----------
+    contributions : Union[pd.Series, np.ndarray, Sequence[float]]
+        Monthly contributions `a[t]`, length T. Negative values are allowed
+        (withdrawals) and will be split according to the same row weights.
+        If a pandas Series is provided, its index is propagated to the output.
+    C : Union[pd.DataFrame, np.ndarray, Sequence[Sequence[float]]]
+        Weight matrix of shape (T, K) with non‑negative entries. If a
+        DataFrame is provided and `contributions` is a Series, an attempt is
+        made to align by index; otherwise lengths must match.
+    column_names : Optional[Sequence[str]], default None
+        Names for the K account columns. If None and `C` is a DataFrame,
+        uses `C.columns`; otherwise falls back to `["acct_1", ..., "acct_K"]`.
+    normalize_rows : bool, default True
+        If True, each row of `C` with positive sum is normalized to sum to 1.
+        Rows whose sum is exactly 0 are left as all‑zeros (i.e., no allocation).
+        If False, rows must already sum to 1 within `rowsum_tol` (rows with
+        sum==0 are still permitted and left as zeros).
+    rowsum_tol : float, default 1e-6
+        Tolerance to validate that row sums are 1 when `normalize_rows=False`.
+
+    Returns
+    -------
+    pd.DataFrame
+        Allocation matrix `A` of shape (T, K) with entries
+        `A[t, k] = a[t] * C[t, k]` and index aligned to `contributions` when
+        available.
+
+    Raises
+    ------
+    ValueError
+        If shapes are inconsistent, arrays contain non‑finite values,
+        any entry of `C` is negative, or row‑sum validation fails.
+
+    Notes
+    -----
+    - If a row sum is 0 and `a[t] != 0`, the entire row of allocations is 0.
+      This is intentional to represent "no allocation rule for this month".
+    - When `normalize_rows=True`, numeric stability is handled by normalizing
+      only rows with strictly positive sums.
+    - This function does **not** cap allocations when `a[t] < 0`; negative
+      contributions (withdrawals) are split proportionally by the same weights.
+
+    Examples
+    --------
+    >>> import numpy as np, pandas as pd
+    >>> a = pd.Series(np.full(3, 1000.0), index=pd.date_range("2025-01-01", periods=3, freq="MS"))
+    >>> C = pd.DataFrame([[0.2, 0.8], [0.5, 0.5], [0.0, 0.0]], index=a.index, columns=["goal_A", "goal_B"])
+    >>> allocate_contributions(a, C)
+                goal_A  goal_B
+    2025-01-01   200.0   800.0
+    2025-02-01   500.0   500.0
+    2025-03-01     0.0     0.0
+    """
+    # ---- contributions → 1-D ndarray (+ keep index if Series) ----
+    if isinstance(contributions, pd.Series):
+        a_ser = contributions.astype(float)
+        idx = a_ser.index
+        a = ensure_1d(a_ser.values, name="contributions")
+    else:
+        a = ensure_1d(contributions, name="contributions")
+        idx = None
+
+    T = a.shape[0]
+
+    # ---- C → (T, K) ndarray (+ try index alignment if DataFrame) ----
+    colnames_from_df: Optional[Sequence[str]] = None
+    if isinstance(C, pd.DataFrame):
+        C_df = C.copy()
+        # Try to align by index if contributions provided an index
+        if idx is not None and not C_df.index.equals(idx):
+            try:
+                C_df = C_df.reindex(idx)
+            except Exception:
+                # Fall back silently; shape validation will catch mismatches
+                pass
+        C_arr = np.asarray(C_df.values, dtype=float)
+        colnames_from_df = list(C_df.columns)
+    else:
+        C_arr = np.asarray(C, dtype=float)
+
+    if C_arr.ndim != 2:
+        raise ValueError(f"C must be 2-D (T, K); got shape {C_arr.shape}.")
+    if C_arr.shape[0] != T:
+        raise ValueError(f"C rows ({C_arr.shape[0]}) must match contributions length T={T}.")
+    if not np.isfinite(C_arr).all():
+        raise ValueError("C must contain only finite values.")
+    if (C_arr < 0).any():
+        raise ValueError("C must be non-negative (percentages/fractions).")
+
+    # ---- Row normalization / validation ----
+    row_sums = C_arr.sum(axis=1)
+    if normalize_rows:
+        C_norm = C_arr.copy()
+        mask = row_sums > 0.0
+        # Normalize only rows with positive sum
+        C_norm[mask] = C_arr[mask] / row_sums[mask][:, None]
+        # Rows with sum==0 remain exactly as provided (zeros recommended)
+    else:
+        # Allow rows that sum to 0 (treated as zero-allocation rows)
+        bad = (row_sums > 0.0) & (np.abs(row_sums - 1.0) > rowsum_tol)
+        if np.any(bad):
+            t_bad = np.where(bad)[0][:5]  # show only first few in error message
+            raise ValueError(
+                f"Each positive-sum row of C must sum to 1 within tol={rowsum_tol}. "
+                f"First bad rows (0-based): {t_bad.tolist()}."
+            )
+        C_norm = C_arr
+
+    # ---- Compute A[t, k] = a[t] * C[t, k] ----
+    A = (a.reshape(T, 1) * C_norm).astype(float)
+
+    # ---- Build output index and column names ----
+    out_idx = idx if idx is not None else align_index_like(T, None)
+
+    if column_names is not None:
+        if len(column_names) != A.shape[1]:
+            raise ValueError("`column_names` length must match number of accounts K.")
+        cols = list(column_names)
+    elif colnames_from_df is not None:
+        cols = list(colnames_from_df)
+    else:
+        cols = [f"acct_{k+1}" for k in range(A.shape[1])]
+
+    df = pd.DataFrame(A, index=out_idx, columns=cols)
+    if isinstance(contributions, pd.Series):
+        df.index.name = contributions.index.name
+    return df
+
+
+def allocate_contributions_proportional(
+    contributions: pd.Series,
+    weights_by_account: Mapping[str, float],
+) -> pd.DataFrame:
+    """
+    Convenience wrapper for constant allocation proportions over time.
+
+    Builds a constant row-stochastic matrix C of shape (T, K) from
+    `weights_by_account` and delegates to `allocate_contributions(...)`.
+
+    Parameters
+    ----------
+    contributions : pd.Series
+        Monthly contributions a[t], length T. The index (ideally a
+        monthly DatetimeIndex) is preserved in the output.
+    weights_by_account : Mapping[str, float]
+        Non-negative weights per account (key → weight). Only strictly
+        positive weights are kept; the remaining vector is normalized to
+        sum exactly to 1. Column order follows the mapping's insertion
+        order.
+
+    Returns
+    -------
+    pd.DataFrame
+        Allocation matrix A of shape (T, K) with columns equal to the
+        account names and rows aligned to `contributions.index`.
+        By construction, for each t: sum_k A[t, k] == contributions[t].
+
+    Raises
+    ------
+    ValueError
+        If `contributions` is not a non-empty Series, if the mapping is
+        empty or if all weights are non-positive.
+
+    Notes
+    -----
+    - Negative contributions (withdrawals) are split using the same
+      proportions.
+    - Rows with a[t] == 0 yield all-zeros for that month (as expected).
+
+    Example
+    -------
+    >>> import numpy as np, pandas as pd
+    >>> a = pd.Series(np.full(3, 1000.0),
+    ...               index=pd.date_range("2025-01-01", periods=3, freq="MS"))
+    >>> w = {"housing": 0.1, "emergency": 0.9}
+    >>> allocate_contributions_proportional(a, w)
+                housing  emergency
+    2025-01-01    100.0      900.0
+    2025-02-01    100.0      900.0
+    2025-03-01    100.0      900.0
+    """
+    # --- Validate inputs ---
+    if not isinstance(contributions, pd.Series) or contributions.empty:
+        raise ValueError("contributions must be a non-empty pandas Series.")
+    if not weights_by_account:
+        raise ValueError("weights_by_account cannot be empty.")
+
+    # Keep strictly positive weights, preserve insertion order
+    filtered = [(str(k), float(v)) for k, v in weights_by_account.items() if float(v) > 0.0]
+    if not filtered:
+        raise ValueError("At least one strictly positive weight is required.")
+
+    names, vals = zip(*filtered)
+    w = np.asarray(vals, dtype=float)
+    w = w / w.sum()  # make it exactly row-stochastic
+
+    # Build constant C (T, K) and column labels
+    T = len(contributions)
+    C = np.repeat(w.reshape(1, -1), T, axis=0)
+    C_df = pd.DataFrame(C, index=contributions.index, columns=list(names))
+
+    # Delegate to the general allocator.
+    # We already normalized rows exactly ⇒ no need to renormalize.
+    return allocate_contributions(
+        contributions=contributions,
+        C=C_df,
+        normalize_rows=False,
+        rowsum_tol=1e-12,
+    )

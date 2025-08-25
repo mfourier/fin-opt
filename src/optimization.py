@@ -30,7 +30,7 @@ from .investment import (
     lognormal_iid,
     compute_metrics,
 )
-from .simulation import ScenarioConfig, SimulationEngine, ScenarioResult
+from .scenario import ScenarioConfig, SimulationEngine, ScenarioResult
 from .goals import Goal, evaluate_goals
 from .utils import ensure_1d, check_non_negative
 
@@ -52,6 +52,96 @@ __all__ = [
     "get_solver",
 ]
 
+# ---------- Time-varying allocation builders (C[t,k]) ----------
+
+def _normalize_rows(C: np.ndarray) -> np.ndarray:
+    rs = C.sum(axis=1, keepdims=True)
+    Cn = C.copy()
+    mask = (rs.squeeze() > 0.0)
+    Cn[mask] = C[mask] / rs[mask]
+    return Cn
+
+def make_glidepath_C(
+    index: pd.Index,
+    accounts: Sequence[str],
+    w_start: Sequence[float],
+    w_end: Sequence[float],
+) -> pd.DataFrame:
+    """
+    Linear glidepath from w_start to w_end across T=len(index) months.
+    """
+    T = len(index)
+    K = len(accounts)
+    w0 = np.asarray(w_start, dtype=float).reshape(1, K)
+    wT = np.asarray(w_end, dtype=float).reshape(1, K)
+    if w0.shape != (1, K) or wT.shape != (1, K):
+        raise ValueError("w_start and w_end must have length = len(accounts).")
+    ramp = np.linspace(0.0, 1.0, T).reshape(T, 1)
+    C = (1.0 - ramp) * w0 + ramp * wT
+    C = _normalize_rows(C)
+    return pd.DataFrame(C, index=index, columns=list(accounts))
+
+def make_piecewise_C(
+    index: pd.Index,
+    accounts: Sequence[str],
+    buckets: Sequence[tuple],
+) -> pd.DataFrame:
+    """
+    Piecewise policy over time.
+    buckets: list of tuples (end_t_exclusive, weights_vector)
+      - end_t_exclusive: int, last t (0-based) *excluded* for this bucket
+      - weights_vector: sequence length K (non-negative; will be row-normalized)
+    Example:
+        buckets = [
+          (T//3,      [0.75, 0.20, 0.05]),
+          (2*T//3,    [0.55, 0.35, 0.10]),
+          (T,         [0.40, 0.35, 0.25]),
+        ]
+    """
+    T = len(index)
+    K = len(accounts)
+    C = np.zeros((T, K), dtype=float)
+    start = 0
+    for end, w in buckets:
+        end = int(end)
+        if end < start or end > T:
+            raise ValueError(f"Bucket end {end} out of range [start={start}, T={T}].")
+        w = np.asarray(w, dtype=float)
+        if w.shape != (K,):
+            raise ValueError("Each weights_vector must have length = len(accounts).")
+        C[start:end, :] = w.reshape(1, K)
+        start = end
+    C = _normalize_rows(C)
+    return pd.DataFrame(C, index=index, columns=list(accounts))
+
+def make_seasonal_C(
+    index: pd.Index,
+    accounts: Sequence[str],
+    base: Sequence[float],
+    amplitudes: Sequence[float],
+    phases: Sequence[float],
+    period: int = 12,
+) -> pd.DataFrame:
+    """
+    Smooth seasonal tilt per account:
+        C[:,k] = base_k + amp_k * sin(2π*(t + phase_k)/period)
+    Then rows are clipped to >=0 and row-normalized.
+    """
+    T = len(index)
+    K = len(accounts)
+    base = np.asarray(base, dtype=float)
+    amps = np.asarray(amplitudes, dtype=float)
+    ph = np.asarray(phases, dtype=float)
+    if any(x.shape != (K,) for x in (base, amps, ph)):
+        raise ValueError("base, amplitudes, phases must have length = len(accounts).")
+
+    t = np.arange(T, dtype=float).reshape(T, 1)
+    C = np.zeros((T, K), dtype=float)
+    for k in range(K):
+        C[:, k] = base[k] + amps[k] * np.sin(2.0 * np.pi * (t[:, 0] + ph[k]) / float(period))
+    C = np.clip(C, 0.0, None)
+    C = _normalize_rows(C)
+    return pd.DataFrame(C, index=index, columns=list(accounts))
 
 # ===========================================================================
 # Dataclasses (Inputs / Outputs)
@@ -308,7 +398,7 @@ if __name__ == "__main__":
 
     from .investment import fixed_rate_path, simulate_capital
     from .income import FixedIncome, VariableIncome, IncomeModel
-    from .simulation import ScenarioConfig
+    from .scenario import ScenarioConfig
     from .goals import Goal
 
     # ---------------- 1) Closed-form sanity check + verification ----------------
