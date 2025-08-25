@@ -13,9 +13,10 @@ The goal is to connect **user objectives** (housing fund, emergency reserve, ret
 FinOpt consists of **modular components**, each with a clear role:
 
 - [`income.py`] → **Cash inflows** (fixed salary, variable income with seasonality/noise).  
-- [`investment.py`] → **Capital accumulation** under return paths.
-- [`simulation.py`] → **Scenario orchestration** (base/optimistic/pessimistic, Monte Carlo).  
+- [`investment.py`] → **Capital accumulation** under return paths.  
+- [`scenario.py`] → **Scenario orchestration** (base/optimistic/pessimistic, Monte Carlo).  
 - [`goals.py`] → **Goal evaluation** (success/shortfall ratios, required contributions, contribution splitting).  
+- [`optimization.py`] → **Problem solvers** (min contribution, min time, chance constraints, allocation).  
 - [`utils.py`] → **Shared helpers** (validation, rate conversion, index handling, drawdown, CAGR).  
 
 These modules connect seamlessly:
@@ -36,16 +37,16 @@ $$
 
 ## Incomes and Contributions
 
-- Net income:
+Net income:
 
 $$
 y_t = y_t^{\text{fixed}} + y_t^{\text{variable}}
 $$
 
-  - $y_t^{\text{fixed}}$: deterministic salary (with optional annual growth).  
-  - $y_t^{\text{variable}}$: seasonal/stochastic stream.  
+- $y_t^{\text{fixed}}$: deterministic salary (with optional annual growth).  
+- $y_t^{\text{variable}}$: seasonal/stochastic stream.  
 
-- Contributions (decision variable):
+Contributions (decision variable):
 
 $$
 a_t \in [0,\; y_t - g_t]
@@ -53,7 +54,7 @@ $$
 
 where $g_t$ are monthly expenses.
 
-- MVP contribution rule:
+MVP contribution rule:
 
 $$
 a_t = \alpha\,y_t^{\text{fixed}} + \beta\,y_t^{\text{variable}}, \quad \alpha,\beta \in [0,1].
@@ -93,20 +94,16 @@ Tracking:
 
 ---
 
-
-
 ## Scenarios
 
-- **Deterministic (three-case):**
-  - Base, optimistic, pessimistic fixed monthly rates.
-- **Stochastic (Monte Carlo):**
-  - IID lognormal returns
+- **Deterministic (three-case):** base, optimistic, pessimistic fixed monthly rates.  
+- **Stochastic (Monte Carlo):** IID lognormal returns  
 
 $$
 R_t \sim \text{LogNormal}(\mu,\sigma).
 $$
 
-- Reproducibility via explicit RNG seeds.
+Reproducibility via explicit RNG seeds.
 
 ---
 
@@ -140,7 +137,7 @@ We prioritize in **three phases**, increasing in complexity.
 
 ### (1) Minimum monthly contribution (fixed horizon)
 
-**Question:** Smallest constant $a$ such that $W_{m,T_m}\ge B_m$.
+Find smallest constant $a$ such that $W_{m,T_m}\ge B_m$.  
 
 Closed form with time-varying returns $\{r_t\}$:
 
@@ -153,23 +150,20 @@ $$
 a^* = \max\!\Big(0,\; \frac{B - W_0 G_0}{\sum_{t=0}^{T-1} G_{t+1}}\Big).
 $$
 
-- Solver: closed form or root-finding.  
-- Output: $a^*$.
-
 ---
 
 ### (2) Minimum time (fixed contribution)
 
-**Question:** Given constant $a$, what is the smallest $T$ with $W_{m,T}\ge B_m$?
-
+Given constant $a$, find the smallest $T$ with $W_{m,T}\ge B_m$.  
 - Solver: binary search over $T$.  
-- Output: $\hat T$ and attainment probability curve $\Pr(W_{m,t}\ge B_m)$.
+- Output: $\hat T$ and attainment probability curve.
 
 ---
 
 ## Phase II — Portfolio & Risk
 
 ### (3) Portfolio allocation
+
 - **Mean–Variance (QP):**  
 
   $$
@@ -179,13 +173,11 @@ $$
 - **CVaR minimization (LP)**.  
 - **Robust optimization** under uncertainty sets.
 
-Output: $w$, efficient frontier.
-
 ---
 
 ### (4) Probability of success (chance constraints)
 
-- Maximize 
+Maximize 
 
 $$
 \Pr(W_{m,T_m}\ge B_m)
@@ -197,9 +189,7 @@ $$
 \Pr(W_{m,T_m}\ge B_m) \ge 1-\varepsilon.
 $$  
 
-- Implemented via scenario counting or CVaR surrogates.  
-
-Output: success probability per goal.
+Implemented via scenario counting or CVaR surrogates.  
 
 ---
 
@@ -226,13 +216,14 @@ $$
 
 - Action: $a_{m,t},w_{i,t}$.  
 - Transition: wealth recurrence with stochastic returns.  
-- Methods: Approximate DP, policy gradients, actor–critic.
+
+Methods: Approximate DP, policy gradients, actor–critic.
 
 ---
 
 ### (7) Glidepath & smooth rebalancing
 
-- Penalize sharp changes in contributions/weights:
+Penalize sharp changes in contributions/weights:
 
 $$
 \lambda_a\sum_t (a_t-a_{t-1})^2 + \lambda_w \sum_t \|w_t-w_{t-1}\|.
@@ -244,12 +235,7 @@ $$
 
 - **Unit tests**: income growth, metrics, goal evaluation.  
 - **Integration tests**: simulate baseline scenarios, validate metrics consistency.  
-- **Property-based tests**: conservation  
-
-  $$
-  \sum_m a_{m,t}\le y_t-g_t
-  $$
-
+- **Property-based tests**: conservation $\sum_m a_{m,t}\le y_t-g_t$.  
 - **Reproducibility**: fixed RNG seeds.  
 - **Sensitivity analysis**: perturb $\mu,\Sigma,y_t,r$.
 
@@ -262,7 +248,7 @@ $$
 
 ### Problem (1): Required contribution for housing fund
 
-Target $B=20$M CLP, horizon 24 months, $r=0.004$ (0.4% monthly).  
+Target $B=20$M CLP, horizon 24 months, $r=0.004$.  
 
 Closed form yields:  
 
