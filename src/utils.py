@@ -128,6 +128,20 @@ def align_index_like(months: int, like: Optional[pd.Index | pd.Series | pd.DataF
     # Fallback
     return month_index(start=None, months=months)
 
+def normalize_start_month(start: Optional[date] | int) -> int:
+        """
+        Map start date or month to offset 0..11 (Jan=1→0).
+        If None, defaults to 0 (January).
+        """
+        if start is None:
+            return 0
+        if isinstance(start, date):
+            month = start.month
+        else:
+            month = int(start)
+        if not (1 <= month <= 12):
+            raise ValueError("start month must be in 1..12")
+        return (month - 1) % 12
 
 # ---------------------------------------------------------------------------
 # Finance helpers
