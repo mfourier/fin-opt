@@ -30,6 +30,7 @@ __all__ = [
     "to_series",
     "month_index",
     "align_index_like",
+    "normalize_start_month",
     # Finance
     "drawdown",
     "compute_cagr",
