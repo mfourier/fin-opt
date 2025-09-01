@@ -3,506 +3,606 @@ Investment modeling module for FinOpt.
 
 Purpose
 -------
-This module models *how capital grows* given monthly contributions and
-(arithmetic) return paths. It provides:
-- A single-asset accumulation engine (`simulate_capital`).
-- A multi-account simulator (`simulate_portfolio`) to track independent
-  accounts (e.g., housing, emergency, brokerage) and their aggregate wealth.
+Models portfolio allocation, wealth evolution, and return sampling for the optimization
+framework. This module implements the mathematical foundation for the wealth optimization
+problem where we seek allocation policies X that distribute total contributions A_t
+across multiple accounts to meet financial goals.
 
-Conventions & Assumptions
--------------------------
-- Time unit: monthly, horizon length T.
-- Returns are *arithmetic monthly rates* r_t (e.g., 0.01 == +1%).
-- Wealth recursion (order of operations each month):
-      W[t+1] = (W[t] + a[t]) * (1 + r[t])
-  i.e., contributions are added *before* applying returns.
-- Contributions may be negative to represent withdrawals.
-- Indexing: outputs are pandas Series/DataFrames indexed monthly when a
-  DatetimeIndex is available (via `align_index_like`), otherwise a sensible
-  default is built.
+Key Mathematical Framework
+--------------------------
+- Total monthly contribution: A_t (from income.py)
+- Allocation policy: X = {x_t^m} where x_t^m ≥ 0, Σ_m x_t^m = 1
+- Account contribution: A_t^m = x_t^m * A_t
+- Wealth evolution: W_{t+1}^m = (W_t^m + A_t^m)(1 + R_t^m)
+- Affine representation: W_t^m = W_0^m * F_{0,t}^m + Σ_{s=0}^{t-1} A_s * x_s^m * F_{s,t}^m
 
-Main API
---------
-- simulate_capital: wealth path for a single stream of contributions and returns.
-- simulate_portfolio: parallel simulation of multiple accounts; adds a "total"
-  column with the row-wise sum by default.
+Key components
+--------------
+- Account:
+    Represents a single investment account (e.g., emergency, housing, brokerage)
+    with return distribution parameters and risk characteristics.
+
+- Portfolio: 
+    Manages multiple accounts, handles cross-correlations, and provides
+    the core optimization interface. Computes wealth evolution given
+    allocation policies X and total contributions A_t, and can also
+    generate Monte Carlo samples of monthly returns for each account.
+
+Design principles
+-----------------
+- Optimization-centric: All methods designed to work with allocation matrices X
+- Mathematical consistency: Implements exact formulas from optimization theory
+- Efficient computation: Vectorized operations for Monte Carlo scenarios
+- Clear separation: Accounts define returns, Portfolio handles allocation logic
 
 Example
 -------
 >>> import numpy as np
->>> contrib = np.full(12, 50_000.0)
->>> path = np.full(12, 0.005)   # 0.5% monthly (arithmetic)
->>> wealth = simulate_capital(contrib, path)
->>> float(wealth.iloc[-1]) > 0
-True
+>>> from datetime import date
+>>> # Create accounts
+>>> emergency = Account.from_gaussian("emergency", 0.03, 0.01, initial_wealth=100000)
+>>> housing = Account.from_gaussian("housing", 0.08, 0.12, initial_wealth=50000)
+>>> portfolio = Portfolio([emergency, housing])
+>>> 
+>>> # Define allocation policy (50-50 split)
+>>> months = 12
+>>> X = np.full((months, 2), 0.5)  # allocation matrix
+>>> A = np.full(months, 100000.0)   # total contributions from income
+>>> 
+>>> # Sample returns and compute wealth evolution
+>>> returns = portfolio.returns(months=12, seed=42)  # sample Monte Carlo returns
+>>> wealth_path = portfolio.wealth(
+...     contributions=A,
+...     allocation_policy=X, 
+...     returns=returns
+... )
 """
 
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Mapping, Sequence, Optional, Union
+from dataclasses import dataclass, field
+from typing import Optional, Union, Literal, Sequence, Mapping
 import warnings
 import numpy as np
 import pandas as pd
+from scipy import stats
+from scipy.linalg import cholesky
 
 from .utils import (
-    ensure_1d,
-    align_index_like,
-
+    check_non_negative,
+    annual_to_monthly,
 )
 
-__all__ = ["simulate_capital", "simulate_portfolio", "allocate_contributions", "allocate_contributions_proportional"]
-
+__all__ = [
+    "Account",
+    "Portfolio", 
+    "ReturnModel",
+    "GaussianReturns",
+    "StudentTReturns",
+]
 
 
 # ---------------------------------------------------------------------------
-# Utilities & Types
+# Return Models
 # ---------------------------------------------------------------------------
 
-ArrayLike = Sequence[float] | np.ndarray | pd.Series
-
-
-# ---------------------------------------------------------------------------
-# Core Simulators
-# ---------------------------------------------------------------------------
-
-def simulate_capital(
-    contributions: ArrayLike,
-    returns: float | ArrayLike,
-    *,
-    start_value: float = 0.0,
-    index_like: Optional[pd.Index | pd.Series | pd.DataFrame] = None,
-    clip_negative_wealth: bool = True,
-) -> pd.Series:
+@dataclass(frozen=False)
+class ReturnModel:
+    """Base class for return distribution models."""
     
-    """Simulate the monthly wealth path under contributions and arithmetic returns.
+    def sample(self, months: int, scenarios: int, rng: np.random.Generator) -> np.ndarray:
+        """
+        Sample returns for given months and scenarios.
+        
+        Returns
+        -------
+        np.ndarray of shape (scenarios, months)
+        """
+        raise NotImplementedError
 
-    Wealth dynamics (monthly)
-    -------------------------
-    W[t+1] = (W[t] + a[t]) * (1 + r[t])
 
+@dataclass(frozen=False)
+class GaussianReturns(ReturnModel):
+    """
+    Gaussian (Normal) return model.
+    
     Parameters
     ----------
-    contributions : array-like of shape (T,)
-        Monthly contributions a[t]. Finite values required.
-        Negative values are allowed (withdrawals).
-    returns : float or array-like
-        Either a scalar monthly rate r (broadcast to length T), or a path r[t]
-        of shape (T,). Values are **arithmetic** returns (0.01 == +1%).
-    start_value : float, default 0.0
-        Initial wealth W[0].
-    index_like : pandas Index/Series/DataFrame, optional
-        If provided, attempts to reuse a DatetimeIndex (first-of-month)
-        for the output via `align_index_like(T, index_like)`.
-    clip_negative_wealth : bool, default True
-        If True, floors wealth at 0 to avoid negative trajectories after
-        applying contributions and returns.
-
-    Returns
-    -------
-    pd.Series
-        Wealth path of length T. If a suitable DatetimeIndex can be inferred
-        from `index_like`, it is reused; otherwise a default monthly index
-        is created.
-
-    Raises
-    ------
-    ValueError
-        If lengths are inconsistent, arrays are not 1-D, or contain non-finite
-        values.
-
-    Notes
-    -----
-    - Complexity: O(T).
-    - The contribution is applied *before* returns each month.
-    - Use `compute_metrics` for final wealth, CAGR, drawdown, etc.
-
-    Examples
-    --------
-    Constant rate:
-    >>> import numpy as np
-    >>> a = np.full(6, 1000.0)
-    >>> r = 0.01
-    >>> simulate_capital(a, r).round(2).iloc[-1] > 0
-    True
-
-    Time-varying path and a withdrawal:
-    >>> a = np.array([1000, 1000, -500, 1000, 1000, 1000], dtype=float)
-    >>> r = np.array([0.0, 0.01, 0.005, -0.02, 0.01, 0.0], dtype=float)
-    >>> simulate_capital(a, r).shape[0] == 6
-    True
+    annual_return : float
+        Expected annual return (e.g., 0.10 for 10%).
+    annual_volatility : float  
+        Annual volatility/standard deviation (e.g., 0.16 for 16%).
     """
-
-    a = ensure_1d(contributions, name="contributions")
-    T = a.shape[0]
-
-    if isinstance(returns, (float, int)):
-        r = np.full(T, float(returns), dtype=float)
-    else:
-        r = ensure_1d(returns, name="returns")
-        if r.shape[0] != T:
-            raise ValueError(
-                f"returns length {r.shape[0]} must match contributions length {T}."
-            )
-
-    if not np.isfinite(a).all() or not np.isfinite(r).all():
-        raise ValueError("contributions and returns must be finite.")
-
-    W = np.empty(T, dtype=float)
-    w_prev = float(start_value)
-    for t in range(T):
-        w_t = (w_prev + a[t]) * (1.0 + r[t])
-        if clip_negative_wealth and w_t < 0.0:
-            w_t = 0.0
-        W[t] = w_t
-        w_prev = w_t
-
-    idx = align_index_like(T, index_like)
-    return pd.Series(W, index=idx, name="wealth")
-
-
-def simulate_portfolio(
-    contributions_matrix,
-    returns_matrix,
-    *,
-    start_values=0.0,
-    index_like=None,
-    column_names=None,
-    clip_negative_wealth=True,
-    include_total_col=True,
-):
-    """
-    Simulate multiple independent accounts/portfolios in parallel.
-
-    Each column represents one account k=1..K with its own contribution
-    stream a^{(k)}_t and return path r^{(k)}_t. Wealth evolves as:
-
-        W^{(k)}_{t+1} = (W^{(k)}_t + a^{(k)}_t) * (1 + r^{(k)}_t)
-
-    The aggregate wealth is the sum across accounts:
-        W_t = sum_k W^{(k)}_t
-
-    Parameters
-    ----------
-    contributions_matrix : array-like or DataFrame of shape (T, K)
-        Per-account monthly contributions. Negative values allowed.
-    returns_matrix : scalar, (T,), or (T,K)
-        - Scalar: applied to all accounts.
-        - (T,): same path applied to all accounts.
-        - (T,K): per-account return paths.
-    start_values : float or array-like of shape (K,), default 0.0
-        Initial wealths for each account.
-    index_like : optional
-        Reference for building the output index (DatetimeIndex if available).
-    column_names : list of str, optional
-        Names for the account columns. Defaults to ["acct_1", ..., "acct_K"].
-    clip_negative_wealth : bool, default True
-        If True, floors each wealth path at zero.
-    include_total_col : bool, default True
-        If True, adds a "total" column with the row-wise sum.
-
-    Returns
-    -------
-    pd.DataFrame
-        Wealth paths of shape (T, K [+1]) with accounts as columns (plus "total").
-    """
-    import numpy as np
-    import pandas as pd
-
-    # Normalize contributions
-    if isinstance(contributions_matrix, pd.DataFrame):
-        A = contributions_matrix.to_numpy(dtype=float, copy=False)
-        if index_like is None:
-            index_like = contributions_matrix.index
-        if column_names is None:
-            column_names = list(contributions_matrix.columns)
-    else:
-        A = np.asarray(contributions_matrix, dtype=float)
-
-    if A.ndim != 2:
-        raise ValueError(f"contributions_matrix must be 2-D, got {A.shape}.")
-    if not np.isfinite(A).all():
-        raise ValueError("contributions_matrix must contain only finite values.")
-
-    T, K = A.shape
-
-    # Broadcast returns to (T,K)
-    def _broadcast_returns(Raw):
-        if np.isscalar(Raw):
-            return np.full((T, K), float(Raw), dtype=float)
-        R = np.asarray(Raw, dtype=float)
-        if R.ndim == 1:
-            if R.shape[0] != T:
-                raise ValueError("returns (T,) must match horizon length T.")
-            return np.repeat(R.reshape(T, 1), K, axis=1)
-        if R.ndim == 2:
-            if R.shape != (T, K):
-                raise ValueError(f"returns must be (T,K), got {R.shape}.")
-            return R
-        raise ValueError("returns must be scalar, (T,), or (T,K).")
-
-    R = _broadcast_returns(returns_matrix)
-    if not np.isfinite(R).all():
-        raise ValueError("returns_matrix must contain only finite values.")
-
-    # Start values
-    if np.isscalar(start_values):
-        starts = np.full(K, float(start_values), dtype=float)
-    else:
-        starts = np.asarray(start_values, dtype=float)
-        if starts.shape != (K,):
-            raise ValueError(f"start_values must be scalar or (K,), got {starts.shape}.")
-        if not np.isfinite(starts).all():
-            raise ValueError("start_values must contain only finite values.")
-
-    # Run simulate_capital per account
-    cols = []
-    for k in range(K):
-        w_k = simulate_capital(
-            contributions=A[:, k],
-            returns=R[:, k],
-            start_value=starts[k],
-            index_like=index_like,
-            clip_negative_wealth=clip_negative_wealth,
+    annual_return: float
+    annual_volatility: float
+    
+    def __post_init__(self):
+        check_non_negative("annual_volatility", self.annual_volatility)
+    
+    @property
+    def monthly_return(self) -> float:
+        """Convert annual return to monthly return (compounded)."""
+        return annual_to_monthly(self.annual_return)
+    
+    @property 
+    def monthly_volatility(self) -> float:
+        """Convert annual volatility to monthly volatility."""
+        return self.annual_volatility / np.sqrt(12)
+    
+    def sample(self, months: int, scenarios: int, rng: np.random.Generator) -> np.ndarray:
+        """Sample Gaussian returns."""
+        return rng.normal(
+            loc=self.monthly_return,
+            scale=self.monthly_volatility, 
+            size=(scenarios, months)
         )
-        cols.append(w_k)
-
-    df = pd.concat(cols, axis=1)
-    if column_names is None:
-        column_names = [f"acct_{i+1}" for i in range(K)]
-    df.columns = column_names
-    if include_total_col:
-        df["total"] = df.sum(axis=1)
-    return df
-
-# ---------------------------------------------------------------------------
-# Contribution allocation (matrix form)
-# ---------------------------------------------------------------------------
-
-from .utils import ensure_1d, align_index_like
 
 
-def allocate_contributions(
-    contributions: Union[pd.Series, np.ndarray, Sequence[float]],
-    C: Union[pd.DataFrame, np.ndarray, Sequence[Sequence[float]]],
-    *,
-    column_names: Optional[Sequence[str]] = None,
-    normalize_rows: bool = True,
-    rowsum_tol: float = 1e-6,
-) -> pd.DataFrame:
+@dataclass(frozen=False)
+class StudentTReturns(ReturnModel):
     """
-    Allocate a monthly contribution series `a[t]` across K accounts using a
-    (time‑varying) weight matrix `C` of shape (T, K), where each row represents
-    the fraction assigned to each account at month t.
-
+    Student's t-distribution return model for heavy tails.
+    
     Parameters
     ----------
-    contributions : Union[pd.Series, np.ndarray, Sequence[float]]
-        Monthly contributions `a[t]`, length T. Negative values are allowed
-        (withdrawals) and will be split according to the same row weights.
-        If a pandas Series is provided, its index is propagated to the output.
-    C : Union[pd.DataFrame, np.ndarray, Sequence[Sequence[float]]]
-        Weight matrix of shape (T, K) with non‑negative entries. If a
-        DataFrame is provided and `contributions` is a Series, an attempt is
-        made to align by index; otherwise lengths must match.
-    column_names : Optional[Sequence[str]], default None
-        Names for the K account columns. If None and `C` is a DataFrame,
-        uses `C.columns`; otherwise falls back to `["acct_1", ..., "acct_K"]`.
-    normalize_rows : bool, default True
-        If True, each row of `C` with positive sum is normalized to sum to 1.
-        Rows whose sum is exactly 0 are left as all‑zeros (i.e., no allocation).
-        If False, rows must already sum to 1 within `rowsum_tol` (rows with
-        sum==0 are still permitted and left as zeros).
-    rowsum_tol : float, default 1e-6
-        Tolerance to validate that row sums are 1 when `normalize_rows=False`.
-
-    Returns
-    -------
-    pd.DataFrame
-        Allocation matrix `A` of shape (T, K) with entries
-        `A[t, k] = a[t] * C[t, k]` and index aligned to `contributions` when
-        available.
-
-    Raises
-    ------
-    ValueError
-        If shapes are inconsistent, arrays contain non‑finite values,
-        any entry of `C` is negative, or row‑sum validation fails.
-
-    Notes
-    -----
-    - If a row sum is 0 and `a[t] != 0`, the entire row of allocations is 0.
-      This is intentional to represent "no allocation rule for this month".
-    - When `normalize_rows=True`, numeric stability is handled by normalizing
-      only rows with strictly positive sums.
-    - This function does **not** cap allocations when `a[t] < 0`; negative
-      contributions (withdrawals) are split proportionally by the same weights.
-
-    Examples
-    --------
-    >>> import numpy as np, pandas as pd
-    >>> a = pd.Series(np.full(3, 1000.0), index=pd.date_range("2025-01-01", periods=3, freq="MS"))
-    >>> C = pd.DataFrame([[0.2, 0.8], [0.5, 0.5], [0.0, 0.0]], index=a.index, columns=["goal_A", "goal_B"])
-    >>> allocate_contributions(a, C)
-                goal_A  goal_B
-    2025-01-01   200.0   800.0
-    2025-02-01   500.0   500.0
-    2025-03-01     0.0     0.0
+    annual_return : float
+        Expected annual return.
+    annual_volatility : float
+        Annual volatility.
+    degrees_freedom : float
+        Degrees of freedom for t-distribution. Must be > 2.
     """
-    # ---- contributions → 1-D ndarray (+ keep index if Series) ----
-    if isinstance(contributions, pd.Series):
-        a_ser = contributions.astype(float)
-        idx = a_ser.index
-        a = ensure_1d(a_ser.values, name="contributions")
-    else:
-        a = ensure_1d(contributions, name="contributions")
-        idx = None
-
-    T = a.shape[0]
-
-    # ---- C → (T, K) ndarray (+ try index alignment if DataFrame) ----
-    colnames_from_df: Optional[Sequence[str]] = None
-    if isinstance(C, pd.DataFrame):
-        C_df = C.copy()
-        # Try to align by index if contributions provided an index
-        if idx is not None and not C_df.index.equals(idx):
-            try:
-                C_df = C_df.reindex(idx)
-            except Exception:
-                # Fall back silently; shape validation will catch mismatches
-                pass
-        C_arr = np.asarray(C_df.values, dtype=float)
-        colnames_from_df = list(C_df.columns)
-    else:
-        C_arr = np.asarray(C, dtype=float)
-
-    if C_arr.ndim != 2:
-        raise ValueError(f"C must be 2-D (T, K); got shape {C_arr.shape}.")
-    if C_arr.shape[0] != T:
-        raise ValueError(f"C rows ({C_arr.shape[0]}) must match contributions length T={T}.")
-    if not np.isfinite(C_arr).all():
-        raise ValueError("C must contain only finite values.")
-    if (C_arr < 0).any():
-        raise ValueError("C must be non-negative (percentages/fractions).")
-
-    # ---- Row normalization / validation ----
-    row_sums = C_arr.sum(axis=1)
-    if normalize_rows:
-        C_norm = C_arr.copy()
-        mask = row_sums > 0.0
-        # Normalize only rows with positive sum
-        C_norm[mask] = C_arr[mask] / row_sums[mask][:, None]
-        # Rows with sum==0 remain exactly as provided (zeros recommended)
-    else:
-        # Allow rows that sum to 0 (treated as zero-allocation rows)
-        bad = (row_sums > 0.0) & (np.abs(row_sums - 1.0) > rowsum_tol)
-        if np.any(bad):
-            t_bad = np.where(bad)[0][:5]  # show only first few in error message
-            raise ValueError(
-                f"Each positive-sum row of C must sum to 1 within tol={rowsum_tol}. "
-                f"First bad rows (0-based): {t_bad.tolist()}."
-            )
-        C_norm = C_arr
-
-    # ---- Compute A[t, k] = a[t] * C[t, k] ----
-    A = (a.reshape(T, 1) * C_norm).astype(float)
-
-    # ---- Build output index and column names ----
-    out_idx = idx if idx is not None else align_index_like(T, None)
-
-    if column_names is not None:
-        if len(column_names) != A.shape[1]:
-            raise ValueError("`column_names` length must match number of accounts K.")
-        cols = list(column_names)
-    elif colnames_from_df is not None:
-        cols = list(colnames_from_df)
-    else:
-        cols = [f"acct_{k+1}" for k in range(A.shape[1])]
-
-    df = pd.DataFrame(A, index=out_idx, columns=cols)
-    if isinstance(contributions, pd.Series):
-        df.index.name = contributions.index.name
-    return df
+    annual_return: float
+    annual_volatility: float
+    degrees_freedom: float
+    
+    def __post_init__(self):
+        check_non_negative("annual_volatility", self.annual_volatility)
+        if self.degrees_freedom <= 2:
+            raise ValueError("degrees_freedom must be > 2 for finite variance")
+    
+    @property
+    def monthly_return(self) -> float:
+        return annual_to_monthly(self.annual_return)
+    
+    @property
+    def monthly_volatility(self) -> float:
+        # Scale volatility for t-distribution to match target
+        scale_factor = np.sqrt(self.degrees_freedom / (self.degrees_freedom - 2))
+        return (self.annual_volatility / np.sqrt(12)) / scale_factor
+    
+    def sample(self, months: int, scenarios: int, rng: np.random.Generator) -> np.ndarray:
+        """Sample Student-t returns."""
+        t_samples = rng.standard_t(df=self.degrees_freedom, size=(scenarios, months))
+        return self.monthly_return + self.monthly_volatility * t_samples
 
 
-def allocate_contributions_proportional(
-    contributions: pd.Series,
-    weights_by_account: Mapping[str, float],
-) -> pd.DataFrame:
+# ---------------------------------------------------------------------------
+# Account and Portfolio Classes
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=False)
+class Account:
     """
-    Convenience wrapper for constant allocation proportions over time.
-
-    Builds a constant row-stochastic matrix C of shape (T, K) from
-    `weights_by_account` and delegates to `allocate_contributions(...)`.
-
+    Single investment account with return characteristics.
+    
     Parameters
     ----------
-    contributions : pd.Series
-        Monthly contributions a[t], length T. The index (ideally a
-        monthly DatetimeIndex) is preserved in the output.
-    weights_by_account : Mapping[str, float]
-        Non-negative weights per account (key → weight). Only strictly
-        positive weights are kept; the remaining vector is normalized to
-        sum exactly to 1. Column order follows the mapping's insertion
-        order.
-
-    Returns
-    -------
-    pd.DataFrame
-        Allocation matrix A of shape (T, K) with columns equal to the
-        account names and rows aligned to `contributions.index`.
-        By construction, for each t: sum_k A[t, k] == contributions[t].
-
-    Raises
-    ------
-    ValueError
-        If `contributions` is not a non-empty Series, if the mapping is
-        empty or if all weights are non-positive.
-
-    Notes
-    -----
-    - Negative contributions (withdrawals) are split using the same
-      proportions.
-    - Rows with a[t] == 0 yield all-zeros for that month (as expected).
-
-    Example
-    -------
-    >>> import numpy as np, pandas as pd
-    >>> a = pd.Series(np.full(3, 1000.0),
-    ...               index=pd.date_range("2025-01-01", periods=3, freq="MS"))
-    >>> w = {"housing": 0.1, "emergency": 0.9}
-    >>> allocate_contributions_proportional(a, w)
-                housing  emergency
-    2025-01-01    100.0      900.0
-    2025-02-01    100.0      900.0
-    2025-03-01    100.0      900.0
+    name : str
+        Account identifier (e.g., "emergency", "housing", "brokerage").
+    return_model : ReturnModel
+        Statistical model for sampling returns R_t^m.
+    initial_wealth : float, default 0.0
+        Starting wealth W_0^m in this account.
     """
-    # --- Validate inputs ---
-    if not isinstance(contributions, pd.Series) or contributions.empty:
-        raise ValueError("contributions must be a non-empty pandas Series.")
-    if not weights_by_account:
-        raise ValueError("weights_by_account cannot be empty.")
+    name: str
+    return_model: ReturnModel
+    initial_wealth: float = 0.0
+    
+    def __post_init__(self):
+        check_non_negative("initial_wealth", self.initial_wealth)
+    
+    @classmethod
+    def from_gaussian(
+        cls,
+        name: str,
+        annual_return: float,
+        annual_volatility: float,
+        initial_wealth: float = 0.0
+    ) -> Account:
+        """Convenience constructor for Gaussian returns."""
+        return cls(
+            name=name,
+            return_model=GaussianReturns(annual_return, annual_volatility),
+            initial_wealth=initial_wealth
+        )
+    
+    @classmethod
+    def from_student_t(
+        cls,
+        name: str, 
+        annual_return: float,
+        annual_volatility: float,
+        degrees_freedom: float,
+        initial_wealth: float = 0.0
+    ) -> Account:
+        """Convenience constructor for Student-t returns."""
+        return cls(
+            name=name,
+            return_model=StudentTReturns(annual_return, annual_volatility, degrees_freedom),
+            initial_wealth=initial_wealth
+        )
 
-    # Keep strictly positive weights, preserve insertion order
-    filtered = [(str(k), float(v)) for k, v in weights_by_account.items() if float(v) > 0.0]
-    if not filtered:
-        raise ValueError("At least one strictly positive weight is required.")
 
-    names, vals = zip(*filtered)
-    w = np.asarray(vals, dtype=float)
-    w = w / w.sum()  # make it exactly row-stochastic
+@dataclass(frozen=False)
+class Portfolio:
+    """
+    Collection of accounts with correlation structure and allocation logic.
+    
+    This is the main interface for the optimization framework. It handles:
+    - Sampling correlated returns R_t^m across accounts
+    - Computing wealth evolution given allocation policies X and contributions A_t
+    - Providing optimization-ready representations (affine form, gradients)
+    
+    Parameters
+    ----------
+    accounts : list[Account]
+        List of Account instances representing different investment accounts.
+    correlation : Optional[np.ndarray], default None
+        Correlation matrix between account returns. Must be symmetric positive definite.
+        If None, assumes uncorrelated accounts (identity matrix).
+    name : str, default "portfolio"
+        Identifier for the portfolio.
+    """
+    accounts: list[Account]
+    correlation: Optional[np.ndarray] = None
+    name: str = "portfolio"
+    
+    def __post_init__(self):
+        if not self.accounts:
+            raise ValueError("accounts list cannot be empty")
+            
+        n_accounts = len(self.accounts)
+        
+        # Initialize correlation matrix if not provided
+        if self.correlation is None:
+            self.correlation = np.eye(n_accounts)
+        else:
+            self.correlation = np.asarray(self.correlation)
+            if self.correlation.shape != (n_accounts, n_accounts):
+                raise ValueError(f"correlation matrix shape {self.correlation.shape} "
+                               f"does not match number of accounts {n_accounts}")
+            
+            # Check if correlation matrix is valid
+            if not np.allclose(self.correlation, self.correlation.T):
+                raise ValueError("correlation matrix must be symmetric")
+            
+            eigenvals = np.linalg.eigvals(self.correlation)
+            if np.any(eigenvals <= 0):
+                raise ValueError("correlation matrix must be positive definite")
+    
+    @property
+    def n_accounts(self) -> int:
+        """Number of accounts in the portfolio."""
+        return len(self.accounts)
+    
+    @property
+    def account_names(self) -> list[str]:
+        """List of account names."""
+        return [acc.name for acc in self.accounts]
+    
+    @property
+    def initial_wealth_vector(self) -> np.ndarray:
+        """Initial wealth W_0^m across all accounts."""
+        return np.array([acc.initial_wealth for acc in self.accounts])
+    
+    def returns(self, months: int, seed: Optional[int] = None) -> np.ndarray:
+        """
+        Sample correlated returns for all accounts over a specified number of months.
+        
+        Parameters
+        ----------
+        months : int
+            Number of months to simulate. Must be positive.
+        seed : Optional[int], default None
+            Random seed for reproducibility.
+            
+        Returns
+        -------
+        np.ndarray of shape (months, n_accounts)
+            Sampled return matrix R_t^m for each month and account.
+        
+        Notes
+        -----
+        - Each account's return is sampled according to its `return_model`.
+        - Correlations between accounts are applied via Cholesky decomposition.
+        
+        Example
+        -------
+        >>> portfolio.returns(months=12, seed=42)
+        array([[0.01, 0.03],
+            [0.02, 0.01],
+            ...])
+        """
+        if not isinstance(months, int) or months <= 0:
+            raise ValueError(f"'months' must be a positive integer, got {months}")
+        
+        rng = np.random.default_rng(seed)
+        n_accounts = self.n_accounts
+        
+        # Step 1: Sample uncorrelated returns from each account model (vectorized)
+        uncorrelated = np.column_stack([
+            account.return_model.sample(months, 1, rng)[0] for account in self.accounts
+        ])  # shape: (months, n_accounts)
+        
+        # Step 2: Apply correlation if needed
+        if not np.allclose(self.correlation, np.eye(n_accounts)):
+            L = cholesky(self.correlation.astype(np.float64), lower=True)
+            uncorrelated = (L @ uncorrelated.T).T  # shape: (months, n_accounts)
+    
+        return uncorrelated
 
-    # Build constant C (T, K) and column labels
-    T = len(contributions)
-    C = np.repeat(w.reshape(1, -1), T, axis=0)
-    C_df = pd.DataFrame(C, index=contributions.index, columns=list(names))
+    def wealth(
+        self,
+        contributions: np.ndarray,
+        allocation_policy: np.ndarray,
+        returns: np.ndarray,
+    ) -> np.ndarray:
+        """
+        Compute wealth using affine representation for optimization.
+        
+        Implements the closed-form affine formula:
+        W_t^m = W_0^m * F_{0,t}^m + Σ_{s=0}^{t-1} A_s * x_s^m * F_{s,t}^m
+        
+        where F_{s,t}^m = Π_{r=s}^{t-1} (1 + R_r^m) are accumulation factors.
+        
+        This representation is linear in the allocation policy X, making it
+        suitable for convex optimization problems.
+        
+        Parameters
+        ----------
+        contributions : np.ndarray of shape (months,)
+            Total monthly contributions A_t from income streams.
+        allocation_policy : np.ndarray of shape (months, n_accounts)
+            Allocation policy matrix X with x_t^m ≥ 0, Σ_m x_t^m = 1.
+        returns : np.ndarray of shape (months, n_accounts)
+            Monthly returns R_t^m for each month and account (single realization).
+            
+        Returns
+        -------
+        np.ndarray of shape (months+1, n_accounts)
+            Wealth trajectory W_t^m using affine representation.
+            
+        Notes
+        -----
+        - This method is mathematically equivalent to wealth_recursive() but uses
+          the closed-form affine representation instead of recursive evolution.
+        - The affine form makes gradients with respect to allocation policy
+          immediate: ∂W_t^m/∂x_s^m = A_s * F_{s,t}^m
+        - Preferred method for optimization problems due to analytical tractability.
+        """
+        months, n_accounts = returns.shape
+        
+        # Validate inputs (same as wealth_recursive)
+        contributions = np.asarray(contributions).flatten()
+        if len(contributions) != months:
+            raise ValueError(f"contributions length {len(contributions)} "
+                           f"must match months {months}")
+        
+        allocation_policy = np.asarray(allocation_policy)
+        if allocation_policy.shape != (months, n_accounts):
+            raise ValueError(f"allocation_policy shape {allocation_policy.shape} "
+                           f"must be ({months}, {n_accounts})")
+        
+        # Validate allocation policy constraints
+        if np.any(allocation_policy < 0):
+            raise ValueError("allocation_policy must be non-negative")
+        
+        row_sums = np.sum(allocation_policy, axis=1)
+        if not np.allclose(row_sums, 1.0, rtol=1e-6):
+            bad_rows = np.where(np.abs(row_sums - 1.0) > 1e-6)[0][:5]
+            raise ValueError(f"allocation_policy rows must sum to 1. "
+                           f"Bad rows: {bad_rows.tolist()}")
+        
+        initial_wealth = self.initial_wealth_vector
+        
+        # Compute accumulation factors F_{s,t}^m
+        accumulation_factors = self.compute_accumulation_factors(returns)
+        
+        # Initialize wealth array: (months+1, n_accounts)
+        wealth = np.zeros((months + 1, n_accounts))
+        
+        # Set initial wealth W_0^m
+        wealth[0, :] = initial_wealth
+        
+        # Apply affine formula for each time t and account m
+        for t in range(1, months + 1):  # t = 1, 2, ..., months
+            for m in range(n_accounts):
+                # Initial wealth contribution: W_0^m * F_{0,t}^m
+                wealth[t, m] = initial_wealth[m] * accumulation_factors[0, t, m]
+                
+                # Contribution terms: Σ_{s=0}^{t-1} A_s * x_s^m * F_{s,t}^m
+                for s in range(t):
+                    contribution_term = (
+                        contributions[s] * 
+                        allocation_policy[s, m] * 
+                        accumulation_factors[s, t, m]
+                    )
+                    wealth[t, m] += contribution_term
+        
+        return wealth
+    
+    def compute_accumulation_factors(self, returns: np.ndarray) -> np.ndarray:
+        """
+        Compute accumulation factors F_{s,t}^m for affine wealth representation.
+        
+        F_{s,t}^m = ∏_{r=s}^{t-1}(1+R_r^m) represents the growth factor
+        from month s to month t for account m.
+        
+        Parameters
+        ----------
+        returns : np.ndarray of shape (months, n_accounts)
+            Monthly returns R_t^m for a single realization.
+            
+        Returns
+        -------
+        np.ndarray of shape (months+1, months+1, n_accounts)
+            Accumulation factors F_{s,t}^m where F[s,t,m] = ∏_{r=s}^{t-1}(1+R_r^m)
+            from month s to month t, account m.
+        """
+        months, n_accounts = returns.shape
+        
+        # Initialize factors array
+        factors = np.ones((months + 1, months + 1, n_accounts))
+        
+        # Compute accumulation factors
+        for s in range(months + 1):
+            for t in range(s, months + 1):
+                if t > s:
+                    # F_{s,t}^m = ∏_{r=s}^{t-1}(1+R_r^m)
+                    factors[s, t, :] = np.prod(1 + returns[s:t, :], axis=0)
+        
+        return factors
 
-    # Delegate to the general allocator.
-    # We already normalized rows exactly ⇒ no need to renormalize.
-    return allocate_contributions(
-        contributions=contributions,
-        C=C_df,
-        normalize_rows=False,
-        rowsum_tol=1e-12,
-    )
+    def wealth_statistics(
+        self,
+        wealth_paths: np.ndarray,
+        percentiles: Optional[list[float]] = None
+    ) -> dict:
+        """
+        Compute comprehensive statistics for wealth paths.
+        
+        Parameters
+        ----------
+        wealth_paths : np.ndarray of shape (scenarios, months+1, n_accounts)
+            Wealth trajectories from Portoflio.wealth
+        percentiles : Optional[list[float]], default None
+            Percentiles to compute. If None, uses [5, 25, 50, 75, 95].
+            
+        Returns
+        -------
+        dict
+            Dictionary containing statistics:
+            - 'mean': mean wealth across scenarios
+            - 'std': standard deviation across scenarios  
+            - 'percentiles': percentile values
+            - 'final_wealth': statistics for final period wealth
+            - 'account_statistics': per-account statistics
+        """
+        if percentiles is None:
+            percentiles = [5, 25, 50, 75, 95]
+        
+        scenarios, months_plus_1, n_accounts = wealth_paths.shape
+        
+        # Overall statistics
+        mean_wealth = np.mean(wealth_paths, axis=0)  # (months+1, n_accounts)
+        std_wealth = np.std(wealth_paths, axis=0)    # (months+1, n_accounts)
+        
+        # Percentile statistics
+        pct_wealth = np.percentile(wealth_paths, percentiles, axis=0)  # (len(percentiles), months+1, n_accounts)
+        
+        # Final wealth statistics (last time period)
+        final_wealth = wealth_paths[:, -1, :]  # (scenarios, n_accounts)
+        final_stats = {
+            'mean': np.mean(final_wealth, axis=0),
+            'std': np.std(final_wealth, axis=0),
+            'percentiles': {p: np.percentile(final_wealth, p, axis=0) for p in percentiles}
+        }
+        
+        # Total portfolio wealth (sum across accounts)
+        total_wealth = np.sum(wealth_paths, axis=2)  # (scenarios, months+1)
+        total_stats = {
+            'mean': np.mean(total_wealth, axis=0),
+            'std': np.std(total_wealth, axis=0),
+            'percentiles': {p: np.percentile(total_wealth, p, axis=0) for p in percentiles}
+        }
+        
+        # Per-account statistics
+        account_stats = {}
+        for i, account_name in enumerate(self.account_names):
+            account_wealth = wealth_paths[:, :, i]  # (scenarios, months+1)
+            account_stats[account_name] = {
+                'mean': np.mean(account_wealth, axis=0),
+                'std': np.std(account_wealth, axis=0),
+                'final_mean': np.mean(account_wealth[:, -1]),
+                'final_std': np.std(account_wealth[:, -1]),
+                'percentiles': {p: np.percentile(account_wealth, p, axis=0) for p in percentiles}
+            }
+        
+        return {
+            'mean': mean_wealth,
+            'std': std_wealth,
+            'percentiles': {p: pct_wealth[i] for i, p in enumerate(percentiles)},
+            'final_wealth': final_stats,
+            'total_portfolio': total_stats,
+            'account_statistics': account_stats,
+            'scenarios': scenarios,
+            'months': months_plus_1 - 1,
+            'n_accounts': n_accounts
+        }
+
+    def wealth_recursive(
+            self,
+            contributions: np.ndarray,
+            allocation_policy: np.ndarray,
+            returns: np.ndarray,
+        ) -> np.ndarray:
+            """
+            Compute wealth evolution given allocation policy and total contributions.
+            
+            Implements the core optimization equation:
+            W_{t+1}^m = (W_t^m + A_t^m)(1 + R_t^m)
+            where A_t^m = x_t^m * A_t
+            
+            Parameters
+            ----------
+            contributions : np.ndarray of shape (months,)
+                Total monthly contributions A_t from income streams.
+            allocation_policy : np.ndarray of shape (months, n_accounts)
+                Allocation policy matrix X with x_t^m ≥ 0, Σ_m x_t^m = 1.
+            returns : np.ndarray of shape (months, n_accounts) 
+                Monthly returns R_t^m for each month and account (single realization).
+                
+            Returns
+            -------
+            np.ndarray of shape (months+1, n_accounts)
+                Wealth trajectory W_t^m starting from t=0.
+            """
+            months, n_accounts = returns.shape
+            
+            # Validate inputs
+            contributions = np.asarray(contributions).flatten()
+            if len(contributions) != months:
+                raise ValueError(f"contributions length {len(contributions)} "
+                            f"must match months {months}")
+            
+            allocation_policy = np.asarray(allocation_policy)
+            if allocation_policy.shape != (months, n_accounts):
+                raise ValueError(f"allocation_policy shape {allocation_policy.shape} "
+                            f"must be ({months}, {n_accounts})")
+            
+            # Validate allocation policy constraints
+            if np.any(allocation_policy < 0):
+                raise ValueError("allocation_policy must be non-negative")
+            
+            row_sums = np.sum(allocation_policy, axis=1)
+            if not np.allclose(row_sums, 1.0, rtol=1e-6):
+                bad_rows = np.where(np.abs(row_sums - 1.0) > 1e-6)[0][:5]
+                raise ValueError(f"allocation_policy rows must sum to 1. "
+                            f"Bad rows: {bad_rows.tolist()}")
+            
+            initial_wealth = self.initial_wealth_vector
+
+            # Compute account contributions: A_t^m = x_t^m * A_t
+            account_contributions = allocation_policy * contributions.reshape(-1, 1)
+            
+            # Initialize wealth array: (months+1, n_accounts)
+            wealth = np.zeros((months + 1, n_accounts))
+            wealth[0, :] = initial_wealth  # Set initial wealth
+            
+            # Recursive evolution: W_{t+1}^m = (W_t^m + A_t^m) * (1 + R_t^m)
+            for t in range(months):
+                wealth[t+1, :] = (wealth[t, :] + account_contributions[t, :]) * (1 + returns[t, :])
+            
+            return wealth
