@@ -14,153 +14,113 @@
   - `goals.py` → defines success criteria.  
   - `optimization.py` → searches over *time* and *allocations* to satisfy goals.
 
-- **Factoring feasibility**  
-  Not all targets are attainable. Optimization starts with feasibility checks, then minimizes time or resources.
-
-- **Extensibility**  
-  The module is designed to grow: from MVP feasibility solvers to more advanced optimization routines (linear programming, stochastic optimization, dynamic programming).
-
 ---
 
-## Problem 1 — Minimum Time Multi-Goal Feasibility
+# Wealth Optimization Problem with Time-Dependent Goals
 
-**Question:**  
-Find the *smallest horizon* \(T\) and a contribution allocation matrix  
-\(C \in \mathbb{R}^{T \times K}\) such that every goal is satisfied:
+## Description
 
-$$
-W^{(k)}_{T} \;\;\ge\;\; B_k, \quad \forall k \in \{1,\dots,K\}.
-$$
+We aim to construct feasible investment plans that allocate contributions across multiple portfolios over time, so that specific financial targets are met at designated times, while optionally maximizing (or minimizing) an objective function, such as total wealth or exposure to risk.
 
----
-
-### Dynamics
-
-Each account \(k\) evolves as:
+The evolution of the wealth of each portfolio $m \in \mathcal{M}$ at month $t$ is given by:
 
 $$
-W^{(k)}_{t+1} = \big(W^{(k)}_{t} + a_t C_{t,k}\big)(1 + r^{(k)}_t).
+W_{t+1}^m = \big(W_t^m + A_t^m\big)\,(1 + R_t^m)
 $$
 
-Here:
-- $a_t$ = total contribution at time $t$ (from `income.py`).  
-- $C_{t,k}$ = fraction allocated to account $k$.  
-- $r^{(k)}_t$ = return of account $k$ at time $t$.  
-- $W^{(k)}_0$ = initial wealth of account $k$ (not necessarily zero).
+where:  
+- $W_t^m$ is the wealth of portfolio $m$ at month $t$.  
+- $A_t^m$ is the monthly contribution to portfolio $m$ at month $t$, determined by the allocation policy $X = \{x_{t}^m\}$.  
+- $R_t^m$ is the return of portfolio $m$ at month $t$.  
 
----
-
-### Change of variables
-
-Define decision variables in **peso space**:
+The allocation policy must satisfy **budget constraints** and non-negativity:
 
 $$
-x_{t,k} := a_t C_{t,k}, \quad \sum_{k} x_{t,k} = a_t.
+x_{t}^m \ge 0, \quad \sum_{m \in \mathcal{M}} x_{t}^m = 1, \quad \forall t \in \{0,1,\dots,T\}
 $$
 
-The recursion unrolls into a **closed form**:
+We define the **feasible allocation set** for horizon $T$ as:
 
 $$
-W^{(k)}_{T} = W^{(k)}_0 \, G^{(k)}_0 \;+\; \sum_{t=0}^{T-1} x_{t,k} \, H^{(k)}_{t+1},
+\mathcal{X}_T = \Big\{ X \in \mathbb{R}_{\ge 0}^{T \times |\mathcal{M}|} \;\big|\; \sum_{m \in \mathcal{M}} x_{t}^m = 1, \;\forall t \in \{0,1,\dots,T\} \Big\}.
 $$
 
-where:
+## Affine Wealth Representation
 
-- **Growth factor of initial wealth**:
-  $$
-  G^{(k)}_0 = \prod_{u=0}^{T-1} (1+r^{(k)}_u).
-  $$
-- **Future value factor of contributions**:
-  $$
-  H^{(k)}_{t+1} = \prod_{u=t+1}^{T-1} (1+r^{(k)}_u).
-  $$
+The recursive wealth evolution formula:
 
-Thus, terminal wealth is **affine in contributions**: a linear combination of peso allocations plus the scaled starting wealth.
+$$
+W_{t+1}^m = (W_t^m + A_t^m) \,(1 + R_t^m)
+$$
 
----
+can be equivalently expressed in a **closed-form (affine) representation**:
 
-### Feasibility as Linear Program
+$$
+\boxed{
+W_{t}^m = W_0^m \prod_{r=0}^{t-1} (1 + R_r^m) + \sum_{s=0}^{t-1} A_s^m \prod_{r=s}^{t-1} (1 + R_r^m)
+}
+$$
 
-For a fixed \(T\), the feasibility problem becomes:
+To simplify notation, we define the **accumulation factor** from month $s$ to month $t$ for portfolio $m$ as:
 
-- **Variables:** $x_{t,k} \ge 0$.  
-- **Row sums:**  
-  $$
-  \sum_k x_{t,k} = a_t .
-  $$
-- **Target constraints:**  
-  $$
-  \sum_t x_{t,k} \, H^{(k)}_{t+1} \;\;\ge\;\; B_k - W^{(k)}_0 G^{(k)}_0, 
-  \quad \forall k.
-  $$
+$$
+F_{s,t}^m := \prod_{r=s}^{t-1} (1 + R_r^m), \quad 0 \le s \le t.
+$$
 
-If a feasible solution exists, we can reconstruct a normalized allocation matrix \(C\) from \(x\).
+Using this, and the relation $A_s^m = A_s x_s^m$, the wealth at time $t$ can be expressed in **closed-form affine representation**:
 
-- **Objective:** minimize $T$.  
-- **Search:** increase $T=t_{\min}, t_{\min}+1, \dots, T_{\max}$ until feasibility holds.  
-  - `t_min` can be set manually or `"auto"`, in which case a lower bound is computed by checking whether dedicating *all* contributions to each goal could theoretically meet its deficit.
+$$
+\boxed{
+W_t^m = W_0^m \, F_{0,t}^m + \sum_{s=0}^{t-1} A_s \, x_s^m \, F_{s,t}^m
+}
+$$
 
----
+**Key consequences:**
 
-## Backends
+1. Each term $A_s x_s^m F_{s,t}^m$ shows the **linear contribution** of allocation $x_s^m$ to the final wealth, scaled by the accumulated returns.  
+2. The initial wealth $W_0^m$ grows independently of contributions through $F_{0,t}^m$.  
+3. Wealth $W_t^m$ is an **affine function of the allocation policy** $X$.  
+4. Constraints or objectives that depend on $W_t^m(X)$ are therefore **linear-affine in the decision variables**, simplifying optimization.  
+5. Gradients with respect to allocations are immediate:
+$$
+\frac{\partial W_t^m}{\partial x_s^m} = A_s \, F_{s,t}^m,
+$$
+facilitating analytical or numerical optimization methods.
 
-1. **Scipy LP backend**  
-   Uses `scipy.optimize.linprog` with objective = 0 (pure feasibility).  
 
-2. **Greedy backend**  
-   Heuristic that:
-   - Computes remaining deficits in future-value space.  
-   - At each month $t$, allocates $a_t$ to the account with the highest multiplier $H^{(k)}_{t+1}$.  
-   - Caps allocations once a goal’s deficit is covered.  
-   - Resolves ties deterministically (or with RNG seed if provided).  
+## Financial Targets
 
----
+We define a set of goals $\mathcal{G}$ as triplets $(t,m,b_t^m,\varepsilon_t^m)$, each specifying a portfolio $m$ and a target time $t$ with a threshold $b_t^m$ and a probability tolerance $\varepsilon_t^m$:
 
-## Outputs
+$$
+\mathcal{G} = \{(t,m,b_t^m,\varepsilon_t^m) \;|\; \text{we want } \mathbb{P}(W_t^m(X) \ge b_t^m) \ge 1-\varepsilon_t^m \}.
+$$
 
-Both backends return:
+## Nested Optimization Formulation
 
-- $T^*$: the minimal feasible horizon.  
-- $C^*$: row-stochastic allocation matrix (fractions).  
-- $A$: allocation in pesos per account and month.  
-- `wealth_by_account`: simulated wealth trajectories per account (plus total).  
-- **Diagnostics**:  
-  - `t_hit_by_account`: first month each goal is reached (or -1 if never).  
-  - `margin_at_T`: wealth minus target at horizon $T$.  
-  - `feasible`: whether a solution was found within $T_{\max}$.
+We seek the **minimum time** $T$ to achieve the goals, while maximizing (or minimizing) an objective function $f(X)$:
 
----
+$$
+\min_{T \in \mathbb{N}} \;\; 
+\Bigg\{ 
+\max_{X \in \mathcal{X}_T} f(X) \;\;\text{s.t.}\;\; 
+\mathbb{P}\big(W_t^m(X) \ge b_t^m\big) \ge 1 - \varepsilon_t^m, \;\forall (t,m,b_t^m,\varepsilon_t^m) \in \mathcal{G}
+\Bigg\}.
+$$
 
-## Roadmap of Extensions
+- The **inner problem** ($\max_{X \in \mathcal{X}_T} f(X)$) finds the best feasible allocation policy for a given horizon $T$, satisfying all goals in $\mathcal{G}$, $f(X)$ can include expected wealth, risk-adjusted return, or other financial metrics.  
+- The **outer problem** ($\min_T$) finds the minimum horizon $T$ for which a feasible allocation policy exists.
 
-1. **Phase I — Feasibility search**
-   - Incremental search of $T$.  
-   - LP and greedy backends as implemented.  
+## Notes
 
-2. **Phase II — Structured allocations**
-   - Restrict $C$ to special forms:  
-     - Constant weights.  
-     - Glidepaths (linear tilts).  
-     - Piecewise constant policies.  
+- This framework allows setting different goals for each portfolio at different times, e.g.:  
+  - $2M$ in an emergency account at month 12 with probability $\ge 1-\varepsilon$.  
+  - $12M$ in a housing account at month 24 with probability $\ge 1-\varepsilon$.  
+  - $4M$ in the emergency account at month 24 with probability $\ge 1-\varepsilon$.  
 
-3. **Phase III — Optimization under uncertainty**
-   - Stochastic returns (Monte Carlo).  
-   - Chance-constrained feasibility:  
-     $\Pr(W^{(k)}_{T} \ge B_k) \ge 1-\varepsilon$.  
-
-4. **Phase IV — Advanced methods**
-   - Convex optimization (LP/QP).  
-   - Approximate Dynamic Programming / RL for state-dependent policies.  
-   - Multi-objective formulations (lexicographic, utility-based).
-
----
-
-## Integration with FinOpt
-
-1. **Income generation** (`income.py`) → contributions $a_t$.  
-2. **Scenario orchestration** (`scenario.py`) → build return paths + allocation candidate $C$.  
-3. **Investment accumulation** (`investment.py`) → simulate per-account wealth.  
-4. **Goal evaluation** (`goals.py`) → check feasibility.  
-5. **Optimization loop** (`optimization.py`) → search over $T, C$ until feasible.  
-
+- The objective function $f(X)$ can model different strategies, e.g.:  
+  - Maximize expected total wealth.  
+  - Minimize risk or volatility.  
+  - Optimize a combination of financial metrics.
+ 
 ---
