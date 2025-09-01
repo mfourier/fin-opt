@@ -608,6 +608,7 @@ class IncomeModel:
         self,
         months: int,
         start: Optional[date] = None,
+        seed: int = None
     ) -> pd.Series:
         """
         Compute monthly contributions from fixed and variable income streams.
@@ -679,7 +680,7 @@ class IncomeModel:
 
         # Project incomes
         fixed_path = self.fixed.project(months, start=start)
-        variable_path = self.variable.project(months, start=start)
+        variable_path = self.variable.project(months, start=start, seed=seed)
 
         # Initialize contribution fractions (12-month lists)
         if self.monthly_contribution is None:
@@ -785,7 +786,7 @@ class IncomeModel:
 
         fixed_arr = self.fixed.project(months=months, start=start)
         if show_confidence_band and hasattr(self, "variable") and self.variable.sigma > 0:
-            sims = np.array([self.variable.project(months=months, start=start, seed=i) for i in range(n_simulations)])
+            sims = np.array([self.variable.project(months=months, start=start) for i in range(n_simulations)])
             var_mean = sims.mean(axis=0)
             lower_perc = np.percentile(sims, (1-confidence)/2*100, axis=0)
             upper_perc = np.percentile(sims, (1+confidence)/2*100, axis=0)
