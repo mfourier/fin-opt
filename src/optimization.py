@@ -56,7 +56,6 @@ import pandas as pd
 
 # Project imports
 from .income import IncomeModel
-from .investment import allocate_contributions, simulate_portfolio
 from .utils import ensure_1d, align_index_like, month_index
 
 
