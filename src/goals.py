@@ -38,7 +38,6 @@ __all__ = [
     "GoalEvaluation",
     "evaluate_goal",
     "evaluate_goals",
-    "allocate_contributions_proportional",
     "required_constant_contribution",
 ]
 
