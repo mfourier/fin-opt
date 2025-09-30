@@ -1,276 +1,276 @@
-# FinOpt — Optimization Problems (Technical Design)
+# FinOpt — Technical Framework
 
-> Tagline: *Intelligent financial planning based on simulation and optimization.*
+> **Tagline:** Intelligent financial planning through simulation and optimization under uncertainty.
 
-This document describes the **theoretical and technical framework** of **FinOpt**, a modular system for **personal financial planning** through simulation and optimization.  
-
-The goal is to connect **user objectives** (housing fund, emergency reserve, retirement) with **investment strategies**, under uncertainty in both **income** and **returns**.
+This document describes the **theoretical and technical framework** of **FinOpt**, a modular system that connects **user objectives** (housing, emergency, retirement) with **investment strategies** under stochastic income and returns.
 
 ---
 
-# 0. System Overview
+## 0. System Architecture
 
-FinOpt consists of **modular components**, each with a clear role:
+FinOpt is composed of **four core modules**:
 
-- [`income.py`] → **Cash inflows** (fixed salary, variable income with seasonality/noise).  
-- [`investment.py`] → **Capital accumulation** under return paths.  
-- [`scenario.py`] → **Scenario orchestration** (base/optimistic/pessimistic, Monte Carlo).  
-- [`goals.py`] → **Goal evaluation** (success/shortfall ratios, required contributions, contribution splitting).  
-- [`optimization.py`] → **Problem solvers** (min contribution, min time, chance constraints, allocation).  
-- [`utils.py`] → **Shared helpers** (validation, rate conversion, index handling, drawdown, CAGR).  
-
-These modules connect seamlessly:
-
-$$
-\text{Income} \;\longrightarrow\; \text{Contributions} \;\longrightarrow\; \text{Investment Growth} \;\longrightarrow\; \text{Scenario Simulation} \;\longrightarrow\; \text{Goal Evaluation}.
-$$
+- **`income.py`** → Cash flow modeling (fixed salary + variable income with seasonality/noise)
+- **`investment.py`** → Capital accumulation under stochastic returns
+- **`optimization.py`** → Goal-driven solvers (min time, min contribution, allocation search)
+- **`utils.py`** → Shared utilities (validation, rate conversion, metrics)
 
 ---
 
-# 1. Theoretical Framework
+## 1. Income Module
 
-We adopt a **discrete monthly horizon**:
+### 1.1 Fixed Income Stream
+
+Deterministic monthly salary with compounded annual growth and scheduled raises:
 
 $$
-t = 0,1,\dots,T-1
+y_t^{\text{fixed}} = \begin{cases}
+\text{base} \cdot (1+m)^t & \text{no raises} \\
+\text{current\_salary}(t) \cdot (1+m)^{\Delta t} & \text{with raises}
+\end{cases}
 $$
 
-## Incomes and Contributions
+where $m = (1+g_{\text{annual}})^{1/12}-1$ is the monthly growth rate.
 
-Net income:
+**Salary raises** are date-based: $\{(d_k, \Delta_k)\}$ where $d_k$ is a calendar date and $\Delta_k$ is the absolute raise amount applied from that month onward.
 
+### 1.2 Variable Income Stream
+
+Irregular monthly income with seasonality, noise, and guardrails:
+
+$$
+\tilde{y}_t^{\text{variable}} = \max\Big(0, \min\big(\text{cap}, \max(\text{floor}, \mu_t \cdot (1 + \epsilon_t))\big)\Big)
+$$
+
+where:
+- $\mu_t = \text{base} \cdot (1+m)^t \cdot s_{(t \bmod 12)}$ is the seasonal mean
+- $s \in \mathbb{R}^{12}_{\ge 0}$ is the seasonality vector (Jan–Dec multiplicative factors)
+- $\epsilon_t \sim \mathcal{N}(0, \sigma^2)$ is Gaussian noise (fraction of mean)
+- floor, cap are optional bounds
+
+### 1.3 Total Income and Contributions
+
+Total monthly income:
 $$
 y_t = y_t^{\text{fixed}} + y_t^{\text{variable}}
 $$
 
-- $y_t^{\text{fixed}}$: deterministic salary (with optional annual growth).  
-- $y_t^{\text{variable}}$: seasonal/stochastic stream.  
-
-Contributions (decision variable):
-
+Monthly contributions via **rotative 12-month fractions**:
 $$
-a_t \in [0,\; y_t - g_t]
+A_t = \alpha_{(t+\text{offset}) \bmod 12}^{\text{fixed}} \cdot y_t^{\text{fixed}} + \alpha_{(t+\text{offset}) \bmod 12}^{\text{variable}} \cdot y_t^{\text{variable}}
 $$
 
-where $g_t$ are monthly expenses.
+where:
+- $\alpha^{\text{fixed}}, \alpha^{\text{variable}} \in [0,1]^{12}$ are annual contribution fraction arrays
+- offset = $(\text{start\_month} - 1)$ aligns fractions to calendar
+- **Default:** $\alpha^{\text{fixed}} = [0.3]_{12}$, $\alpha^{\text{variable}} = [1.0]_{12}$
 
-MVP contribution rule:
-
-$$
-a_t = \alpha\,y_t^{\text{fixed}} + \beta\,y_t^{\text{variable}}, \quad \alpha,\beta \in [0,1].
-$$
+Contributions are floored at zero: $A_t = \max(0, A_t)$.
 
 ---
 
-## Investment Dynamics
+## 2. Investment Dynamics
 
-- **Single asset (MVP):**
+### 2.1 Portfolio Evolution
 
-$$
-W_{t+1} = (W_t + a_t)\,(1+r_t).
-$$
-
-- **Multiple independent portfolios/accounts** $k=1,\dots,K$:
+Multiple portfolios $m \in \mathcal{M} = \{1,\dots,M\}$ evolve via:
 
 $$
-W^{(k)}_{t+1} = \big(W^{(k)}_{t} + a^{(k)}_{t}\big)\,(1 + r^{(k)}_{t}),
+W_{t+1}^m = \big(W_t^m + A_t^m\big)(1 + R_t^m)
 $$
 
+where:
+- $W_t^m$ = wealth in portfolio $m$ at month $t$
+- $A_t^m$ = contribution to portfolio $m$ at month $t$
+- $R_t^m$ = stochastic return of portfolio $m$ at month $t$
+
+### 2.2 Allocation Policy
+
+Contributions are allocated via decision variables $x_t^m \in [0,1]$:
+
 $$
-W_{t} = \sum_{k=1}^{K} W^{(k)}_{t}, \quad \sum_{k=1}^{K} a^{(k)}_{t} = a_t.
+A_t^m = A_t \cdot x_t^m, \quad \sum_{m \in \mathcal{M}} x_t^m = 1, \quad x_t^m \ge 0
 $$
+
+**Feasible allocation set** for horizon $T$:
+
+$$
+\mathcal{X}_T = \Big\{ X \in \mathbb{R}_{\ge 0}^{T \times M} \;\Big|\; \sum_{m \in \mathcal{M}} x_t^m = 1, \;\forall t \in \{0,\dots,T-1\} \Big\}
+$$
+
+### 2.3 Affine Wealth Representation
+
+Recursive wealth can be expressed in **closed-form**:
+
+$$
+\boxed{
+W_t^m(X) = W_0^m F_{0,t}^m + \sum_{s=0}^{t-1} A_s \, x_s^m \, F_{s,t}^m
+}
+$$
+
+where the **accumulation factor** from month $s$ to $t$ is:
+
+$$
+F_{s,t}^m := \prod_{r=s}^{t-1} (1 + R_r^m)
+$$
+
+**Key properties:**
+- $W_t^m(X)$ is **affine** in the allocation policy $X$
+- Gradient: $\frac{\partial W_t^m}{\partial x_s^m} = A_s F_{s,t}^m$
+- Enables linear-affine constraint formulation
 
 ---
 
-## Goals
+## 3. Financial Goals
 
-A set $\mathcal{M}$ of goals $m$, each defined by:
-- Target amount $B_m$.  
-- Deadline $T_m$ (date or month index).  
+### 3.1 Goal Specification
 
-Tracking:
-- Per goal: $W_{m,t}$  
-- Aggregate: $W_t = \sum_m W_{m,t}$  
+A **goal** is a tuple $(t, m, b_t^m, \varepsilon_t^m)$ specifying:
+- $t$ = target month
+- $m$ = target portfolio
+- $b_t^m$ = wealth threshold
+- $\varepsilon_t^m$ = probability tolerance
+
+The **goal set** $\mathcal{G}$ is:
+
+$$
+\mathcal{G} = \Big\{(t,m,b_t^m,\varepsilon_t^m) \;\Big|\; \text{require } \mathbb{P}\big(W_t^m(X) \ge b_t^m\big) \ge 1-\varepsilon_t^m \Big\}
+$$
+
+**Examples:**
+- Emergency fund: $(12, 1, 2\text{M}, 0.05)$ → 2M in portfolio 1 at month 12 with 95% probability
+- Housing: $(24, 2, 12\text{M}, 0.10)$ → 12M in portfolio 2 at month 24 with 90% probability
+- Multi-stage emergency: $(12, 1, 2\text{M}, 0.05)$ and $(24, 1, 4\text{M}, 0.05)$ → progressive targets
 
 ---
 
-## Scenarios
+## 4. Optimization Framework
 
-- **Deterministic (three-case):** base, optimistic, pessimistic fixed monthly rates.  
-- **Stochastic (Monte Carlo):** IID lognormal returns  
+### 4.1 Nested (Bilevel) Problem
 
-$$
-R_t \sim \text{LogNormal}(\mu,\sigma).
-$$
-
-Reproducibility via explicit RNG seeds.
-
----
-
-## Metrics
-
-For a wealth path $\{W_t\}$:
-- Final wealth $W_T$.  
-- Total contributions $\sum_t a_t$.  
-- CAGR:
+Find the **minimum time** $T$ to achieve all goals, while optimizing an objective $f(X)$:
 
 $$
-\text{CAGR} = \Big(\tfrac{W_T}{W_0}\Big)^{1/\text{years}}-1.
+\boxed{
+\begin{aligned}
+\min_{T \in \mathbb{N}} \;\; T \quad \text{s.t.} \quad & \exists X^\star \in \arg\max_{X \in \mathcal{X}_T} f(X) \\
+& \text{with } \mathbb{P}\big(W_t^m(X^\star) \ge b_t^m\big) \ge 1-\varepsilon_t^m, \;\forall (t,m,b_t^m,\varepsilon_t^m) \in \mathcal{G}
+\end{aligned}
+}
 $$
 
-- Volatility of increments.  
-- Max drawdown:
+**Outer problem:** discrete search over horizons $T$  
+**Inner problem:** convex optimization (or chance-constrained programming) for allocations $X$
+
+### 4.2 Inner Problem (Fixed Horizon)
+
+For a given horizon $T$, solve:
 
 $$
-\max_t \frac{W_t - \max_{u\le t} W_u}{\max_{u\le t} W_u}.
+\begin{aligned}
+\max_{X \in \mathcal{X}_T} \;\; & f(X) \\
+\text{s.t.} \;\; & \mathbb{P}\big(W_t^m(X) \ge b_t^m\big) \ge 1-\varepsilon_t^m, \quad \forall (t,m,b_t^m,\varepsilon_t^m) \in \mathcal{G}
+\end{aligned}
 $$
 
----
+**Objective functions:**
+- Expected total wealth: $f(X) = \mathbb{E}\big[\sum_m W_T^m(X)\big]$
+- Risk-adjusted return: $f(X) = \text{Sharpe}(X)$ or CVaR-based
+- Terminal goal surplus: $f(X) = \mathbb{E}\big[W_T^m(X) - b_T^m\big]$
 
-# 2. Optimization Problems
+**Constraint reformulation:**
 
-We prioritize in **three phases**, increasing in complexity.
+Probabilistic constraints can be handled via:
 
----
+1. **CVaR approximation** (convex):
+   $$
+   \text{CVaR}_{\varepsilon}(b_t^m - W_t^m(X)) \le 0
+   $$
 
-## Phase I — Core (MVP)
+2. **Sample Average Approximation** (SAA):
+   $$
+   \frac{1}{N}\sum_{i=1}^N \mathbb{1}\{W_t^m(X; \omega^{(i)}) \ge b_t^m\} \ge 1-\varepsilon_t^m
+   $$
 
-### (1) Minimum monthly contribution (fixed horizon)
+3. **Analytical bounds** (e.g., for log-normal returns):
+   $$
+   \mathbb{E}[W_t^m(X)] - z_{1-\varepsilon} \cdot \text{Std}[W_t^m(X)] \ge b_t^m
+   $$
 
-Find smallest constant $a$ such that $W_{m,T_m}\ge B_m$.  
+### 4.3 Solution Strategy
 
-Closed form with time-varying returns $\{r_t\}$:
-
-$$
-W_T = W_0 G_0 + a\sum_{t=0}^{T-1}G_{t+1}, 
-\quad G_t = \prod_{u=t}^{T-1}(1+r_u).
-$$
-
-$$
-a^* = \max\!\Big(0,\; \frac{B - W_0 G_0}{\sum_{t=0}^{T-1} G_{t+1}}\Big).
-$$
-
----
-
-### (2) Minimum time (fixed contribution)
-
-Given constant $a$, find the smallest $T$ with $W_{m,T}\ge B_m$.  
-- Solver: binary search over $T$.  
-- Output: $\hat T$ and attainment probability curve.
-
----
-
-## Phase II — Portfolio & Risk
-
-### (3) Portfolio allocation
-
-- **Mean–Variance (QP):**  
-
-  $$
-  \max_w \;\mu^\top w - \lambda\,w^\top \Sigma w
-  $$
-
-- **CVaR minimization (LP)**.  
-- **Robust optimization** under uncertainty sets.
-
----
-
-### (4) Probability of success (chance constraints)
-
-Maximize 
-
-$$
-\Pr(W_{m,T_m}\ge B_m)
-$$ 
-
-or enforce 
-
-$$
-\Pr(W_{m,T_m}\ge B_m) \ge 1-\varepsilon.
-$$  
-
-Implemented via scenario counting or CVaR surrogates.  
-
----
-
-## Phase III — Multi-goal Planning & Dynamics
-
-### (5) Multi-goal allocation
-- **Lexicographic:** prioritize high-priority goals first.  
-- **Shortfall-penalized:**  
-
-$$
-\min \sum_m \alpha_m \xi_m \quad \text{s.t. } W_{m,T_m}+\xi_m \ge B_m
-$$  
-
-- **Utility-based:** maximize $\sum_m u_m(\text{attainment}_m)$.  
-
----
-
-### (6) Dynamic programming / RL
-- State:  
-
-$$
-x_t = (W_t,\{W_{m,t}\},y_t,g_t).
-$$  
-
-- Action: $a_{m,t},w_{i,t}$.  
-- Transition: wealth recurrence with stochastic returns.  
-
-Methods: Approximate DP, policy gradients, actor–critic.
-
----
-
-### (7) Glidepath & smooth rebalancing
-
-Penalize sharp changes in contributions/weights:
-
-$$
-\lambda_a\sum_t (a_t-a_{t-1})^2 + \lambda_w \sum_t \|w_t-w_{t-1}\|.
-$$
-
----
-
-# 3. Validation & Testing
-
-- **Unit tests**: income growth, metrics, goal evaluation.  
-- **Integration tests**: simulate baseline scenarios, validate metrics consistency.  
-- **Property-based tests**: conservation $\sum_m a_{m,t}\le y_t-g_t$.  
-- **Reproducibility**: fixed RNG seeds.  
-- **Sensitivity analysis**: perturb $\mu,\Sigma,y_t,r$.
-
----
-
-# 4. Illustrative Example (Current Parameters)
-
-- Monthly income: **1.4M CLP fixed + 0.2M CLP variable**.  
-- Contribution rule: $\alpha=0.35$, $\beta=1.0$ → ~0.7M CLP invested monthly.  
-
-### Problem (1): Required contribution for housing fund
-
-Target $B=20$M CLP, horizon 24 months, $r=0.004$.  
-
-Closed form yields:  
-
-$$
-a^* \approx 0.8\ \text{M CLP}.
-$$
-
-### Problem (2): Minimum time for emergency fund
-
-Target $B=6$M CLP (≈ 6 months of expenses).  
-
-Simulation shows with $a\approx 0.7$M CLP/month:  
-
-$$
-\hat T \approx 10\ \text{months}.
-$$
-
-### Goal evaluation (`goals.py`)
-
+**Outer loop (horizon search):**
 ```python
-goals = [
-  Goal("housing", target_amount=20_000_000, target_month_index=23),
-  Goal("emergency", target_amount=6_000_000, target_month_index=11),
-]
-df = evaluate_goals(results["base"].wealth, goals)
+for T in range(T_min, T_max + 1):
+    X_opt, feasible = solve_inner_problem(T)
+    if feasible:
+        return T, X_opt
+return None  # infeasible
+```
+
+**Inner loop (allocation optimization):**
+- Convex solver (CVXPY, scipy.optimize) for linear-affine problems
+- Monte Carlo sampling for chance constraint evaluation
+- Gradient-based methods leverage $\nabla_X W_t^m(X) = [A_s F_{s,t}^m]_{s<t}$
+
+---
+
+## 5. Implementation Notes
+
+### 5.1 Calendar Alignment
+
+- All projections use `start: date` parameter for calendar awareness
+- Seasonality rotates via offset = $(\text{start.month} - 1)$
+- Salary raises applied at specific dates relative to projection start
+- Contribution fractions rotate cyclically to match fiscal year
+
+### 5.2 Stochasticity Control
+
+- `FixedIncome`: deterministic (no seed)
+- `VariableIncome`: controlled via `seed` parameter (instance or method level)
+- Returns $R_t^m$: seeded random generators or historical bootstrap
+- Monte Carlo: use consistent seed across income + returns for reproducibility
+
+### 5.3 Output Formats
+
+All projection methods support flexible output:
+- `output="array"`: numpy arrays (computational efficiency)
+- `output="series"`: pandas Series with calendar index (reporting)
+- `output="dataframe"`: component breakdown (analysis)
+
+---
+
+## 6. Key Mathematical Results
+
+**Proposition 1 (Affine Wealth):**  
+For any allocation policy $X \in \mathcal{X}_T$ and return realization $\{R_t^m\}$:
+$$
+W_t^m(X) = W_0^m F_{0,t}^m + \sum_{s=0}^{t-1} A_s x_s^m F_{s,t}^m
+$$
+is affine in $X$.
+
+**Corollary 1 (Linear Constraints):**  
+If goals are specified as $W_t^m(X) \ge b_t^m$ (deterministic), the feasible allocation set is a convex polytope.
+
+**Proposition 2 (Gradient):**  
+The sensitivity of wealth to allocation at month $s$ is:
+$$
+\frac{\partial W_t^m}{\partial x_s^m} = A_s F_{s,t}^m, \quad s < t
+$$
+
+**Corollary 2 (Monotonicity):**  
+If $F_{s,t}^m > 0$ (positive returns), then $W_t^m(X)$ is strictly increasing in $x_s^m$.
+
+---
+
+## 7. Extensions
+
+- **Multi-period rebalancing:** Allow $x_t^m$ to vary by month
+- **Transaction costs:** Add friction terms $\kappa \|\Delta x_t\|_1$
+- **Tax-aware optimization:** Incorporate capital gains, withdrawal timing
+- **Robust optimization:** Worst-case performance over return scenarios
+- **Dynamic programming:** Optimize allocation via Bellman recursion for complex constraints
+
+---
+
+**End of Framework Document**
