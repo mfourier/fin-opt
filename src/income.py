@@ -45,7 +45,7 @@ Example
 >>> fi = FixedIncome(base=1_400_000.0, annual_growth=0.02)
 >>> vi = VariableIncome(base=200_000.0, sigma=0.0)  # deterministic example
 >>> income = IncomeModel(fixed=fi, variable=vi)
->>> df = income.project(months=12, start=date(2025, 1, 1), as_dataframe=True)
+>>> df = income.project(months=12, start=date(2025, 1, 1), output="dataframe")
 >>> contrib = income.contributions(months=12)
 """
 
@@ -53,7 +53,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Iterable, Optional
+from typing import Iterable, Optional, Literal
 
 import numpy as np
 import pandas as pd
@@ -159,104 +159,101 @@ class FixedIncome:
     def __post_init__(self) -> None:
         check_non_negative("base", self.base)
 
-    def project(self, months: int, start: Optional[date] = None) -> np.ndarray:
+    def project(
+        self,
+        months: int,
+        *,
+        start: Optional[date] = None,
+        output: Literal["array", "series"] = "array",
+    ) -> np.ndarray | pd.Series:
         """
-        Deterministic monthly income stream with optional annual growth 
-        and scheduled salary raises.
+        Project deterministic monthly income stream with optional growth and raises.
 
-        Purpose
-        -------
-        Models predictable, recurring cash inflows such as salaries, stipends,
-        or pensions. Supports two mechanisms for income evolution:
-
-        1. **Annual growth**: a fixed nominal rate converted to compounded 
-        monthly growth.
-        2. **Salary raises**: absolute increases at specific calendar dates,
-        applied permanently from the corresponding month onward.
+        Generates a deterministic projection incorporating annual growth (compounded
+        monthly) and scheduled salary raises at specific calendar dates. Raises are
+        applied permanently from the corresponding month onward, with future growth
+        compounding on the updated base.
 
         Parameters
         ----------
-        base : float
-            Monthly base income amount at t=0. Must be non-negative.
-        annual_growth : float, default 0.0
-            Nominal annual growth rate (e.g., 0.05 for +5% per year). Internally
-            converted to a monthly compounded rate:
-                m = (1 + annual_growth) ** (1/12) - 1
-            The projected income series follows:
-                y_t = base * (1 + m)^t
-            unless modified by salary raises.
-        salary_raises : Optional[Dict[date, float]], default None
-            Dictionary mapping raise dates to absolute raise amounts.
-            Each raise increases the current salary level permanently,
-            with future growth compounding on the new base.
-            Example: {date(2025, 7, 1): 200_000, date(2025, 12, 15): 150_000}
-        name : str, default "fixed"
-            Identifier for labeling outputs (e.g., column name in DataFrames).
+        months : int
+            Number of months to project. Must be >= 0. If `months <= 0`, returns
+            empty array or Series.
+        start : Optional[date], default None
+            Start date for the projection. Required when `salary_raises` are specified.
+            Used to convert raise dates to month offsets and to build calendar index
+            when `output='series'`.
+        output : Literal["array", "series"], default "array"
+            Output format:
+            - "array": returns np.ndarray (no calendar index)
+            - "series": returns pd.Series with monthly calendar index
 
-        Methods
+        Returns
         -------
-        project(months, start=None)
-            Returns a deterministic monthly income series for the given horizon.
+        np.ndarray or pd.Series
+            Projected monthly income for the given horizon.
+            - If `output="array"`: np.ndarray of length `months`
+            - If `output="series"`: pd.Series indexed by first-of-month dates
 
-        Notes
-        -----
-        - Income values are always non-negative; enforced during initialization.
-        - The projection is fully deterministic (no stochasticity).
-        - Salary raises are triggered from the month containing the specified date.
-        - Growth is applied multiplicatively per month, compounding on the
-        updated base (after raises).
-        - Can be combined with variable income streams in `IncomeModel`.
-
-        Example
-        -------
-        >>> from datetime import date
-        >>> fi = FixedIncome(
-        ...     base=1_400_000.0,
-        ...     annual_growth=0.03,
-        ...     salary_raises={date(2025, 7, 1): 200_000}
-        ... )
-        >>> fi.project(12, start=date(2025, 1, 1))
-        array([1400000.0, 1403485.0, ..., 1605021.0, ...])  
-        # raise applied starting July 2025
-    """
+        Raises
+        ------
+        ValueError
+            If `salary_raises` are specified but `start` is None.
+            If `output` is not 'array' or 'series'.
+        """
         if months <= 0:
-            return np.zeros(0, dtype=float)
+            arr = np.zeros(0, dtype=float)
+            if output == "array":
+                return arr
+            elif output == "series":
+                idx = month_index(start=start, months=0)
+                return pd.Series(arr, index=idx, name=self.name)
+            else:
+                raise ValueError(f"output must be 'array' or 'series', got: {output}")
 
         # If no raises, use simple projection
         if not self.salary_raises:
             m = annual_to_monthly(self.annual_growth)
             t = np.arange(months, dtype=float)
-            return self.base * np.power(1.0 + m, t)
+            arr = self.base * np.power(1.0 + m, t)
+        else:
+            # With raises, we need start date and month-by-month calculation
+            if start is None:
+                raise ValueError("start date is required when salary_raises are specified")
 
-        # With raises, we need start date and month-by-month calculation
-        if start is None:
-            raise ValueError("start date is required when salary_raises are specified")
+            # Convert raises to month offsets
+            raise_schedule = {}
+            for raise_date, raise_amount in self.salary_raises.items():
+                raise_month = self._date_to_month_offset(start, raise_date)
+                if 0 <= raise_month < months:
+                    raise_schedule[raise_month] = raise_amount
 
-        # Convert raises to month offsets
-        raise_schedule = {}
-        for raise_date, raise_amount in self.salary_raises.items():
-            raise_month = self._date_to_month_offset(start, raise_date)
-            if 0 <= raise_month < months:
-                raise_schedule[raise_month] = raise_amount
+            # Month-by-month calculation
+            monthly_rate = annual_to_monthly(self.annual_growth)
+            arr = np.zeros(months, dtype=float)
+            current_salary = self.base
 
-        # Month-by-month calculation
-        monthly_rate = annual_to_monthly(self.annual_growth)
-        income_path = np.zeros(months, dtype=float)
-        current_salary = self.base
+            for month in range(months):
+                # Apply raise if scheduled for this month
+                if month in raise_schedule:
+                    current_salary += raise_schedule[month]
+                
+                # Set income for this month
+                arr[month] = current_salary
+                
+                # Apply monthly growth for next month
+                if month < months - 1:
+                    current_salary *= (1.0 + monthly_rate)
 
-        for month in range(months):
-            # Apply raise if scheduled for this month
-            if month in raise_schedule:
-                current_salary += raise_schedule[month]
-            
-            # Set income for this month
-            income_path[month] = current_salary
-            
-            # Apply monthly growth for next month
-            if month < months - 1:  # Don't grow after the last month
-                current_salary *= (1.0 + monthly_rate)
+        # Return in requested format
+        if output == "array":
+            return arr
+        elif output == "series":
+            idx = month_index(start=start, months=months)
+            return pd.Series(arr, index=idx, name=self.name)
+        else:
+            raise ValueError(f"output must be 'array' or 'series', got: {output}")
 
-        return income_path
 
     def _date_to_month_offset(self, start_date: date, target_date: date) -> int:
         """
@@ -360,43 +357,95 @@ class VariableIncome:
             if any(v < 0 for v in vals):
                 raise ValueError("seasonality factors must be non-negative.")
     
-    def project(self, months: int, *,  start: Optional[date] | int = None, seed: int = None) -> np.ndarray:
+    def project(
+        self,
+        months: int,
+        *,
+        start: Optional[date | int] = None,
+        seed: Optional[int] = None,
+        output: Literal["array", "series"] = "array",
+    ) -> np.ndarray | pd.Series:
         """
-        Project a variable monthly income series over a given horizon.
+        Project variable monthly income with seasonality, noise, and growth.
 
-        Generates a projected income array incorporating optional annual growth,
-        seasonality, Gaussian noise, and guardrails (floor/cap). The series can
-        be aligned to any starting calendar month.
+        Generates income projection incorporating annual growth, seasonal factors,
+        Gaussian noise, and floor/cap guardrails. Can be aligned to any starting
+        calendar month for proper seasonality rotation.
 
         Parameters
         ----------
         months : int
-            Number of months to project. Must be non-negative.
-        start : Optional[date or int], default None
-            Starting date or month for the projection. If date, uses start.month.
-            If int, must be 1..12. If None, January is assumed.
+            Number of months to project. Must be >= 0. If `months <= 0`, returns
+            empty array or Series.
+        start : Optional[date | int], default None
+            Starting month for seasonality alignment:
+            - If date: uses start.month (1-12)
+            - If int: must be 1-12 (1=January)
+            - If None: assumes January
         seed : Optional[int], default None
-            Random seed to control Gaussian noise for reproducibility. If None,
-            a non-deterministic random sequence is used.
+            Random seed for Gaussian noise. If None, uses instance seed.
+            If both are None, generates non-deterministic noise.
+        output : Literal["array", "series"], default "array"
+            Output format:
+            - "array": returns np.ndarray
+            - "series": returns pd.Series with monthly calendar index
 
         Returns
         -------
-        np.ndarray
-            Array of length `months` containing the projected income for each month.
-            Values respect the specified floor, cap, and non-negativity constraints.
+        np.ndarray or pd.Series
+            Projected monthly income for the given horizon.
+            - If `output="array"`: np.ndarray of length `months`
+            - If `output="series"`: pd.Series indexed by first-of-month dates
+
+        Raises
+        ------
+        ValueError
+            If `output` is not 'array' or 'series'.
 
         Notes
         -----
-        - If `months <= 0`, returns an empty array.
-        - The base income is adjusted for annual growth using a compounded monthly rate.
-        - Gaussian noise is applied multiplicatively to simulate realistic income fluctuations.
-        - Seasonality, if provided, is applied multiplicatively and rotates according to `start_month`.
+        - Annual growth converted to monthly rate: m = (1 + annual_growth)^(1/12) - 1
+        - Seasonality applied multiplicatively after growth
+        - Noise applied multiplicatively: income * (1 + N(0, sigma))
+        - Floor/cap applied after noise, then non-negativity enforced
+        - Seasonality rotates based on `start` and repeats cyclically
+
+        Examples
+        --------
+        >>> vi = VariableIncome(
+        ...     base=200_000.0,
+        ...     seasonality=[1.0, 0.9, 1.1, 1.0, 1.2, 1.1, 
+        ...                  1.0, 0.8, 0.9, 1.0, 1.05, 1.15],
+        ...     sigma=0.15,
+        ...     floor=50_000.0,
+        ...     seed=42
+        ... )
+        
+        # Array output (default)
+        >>> vi.project(6)
+        array([200000., 183000., 224000., 210500., 240300., 230100.])
+        
+        # Series output with calendar index
+        >>> vi.project(6, start=date(2025, 1, 1), output="series")
+        2025-01-01    200000.0
+        2025-02-01    183000.0
+        ...
+        Name: variable, dtype: float64
         """
-
+        # Use method seed if provided, else instance seed
+        rng_seed = seed if seed is not None else self.seed
+        
         if months <= 0:
-            return np.zeros(0, dtype=float)
+            arr = np.zeros(0, dtype=float)
+            if output == "array":
+                return arr
+            elif output == "series":
+                idx = month_index(start=start, months=0)
+                return pd.Series(arr, index=idx, name=self.name)
+            else:
+                raise ValueError(f"output must be 'array' or 'series', got: {output}")
 
-        rng = np.random.default_rng(seed)
+        rng = np.random.default_rng(rng_seed)
         m = annual_to_monthly(self.annual_growth)
         t = np.arange(months, dtype=float)
         base_path = self.base * np.power(1.0 + m, t)
@@ -425,7 +474,16 @@ class VariableIncome:
         if self.cap is not None:
             noisy = np.minimum(noisy, self.cap)
 
-        return np.maximum(noisy, 0.0)
+        arr = np.maximum(noisy, 0.0)
+
+        # Return in requested format
+        if output == "array":
+            return arr
+        elif output == "series":
+            idx = month_index(start=start, months=months)
+            return pd.Series(arr, index=idx, name=self.name)
+        else:
+            raise ValueError(f"output must be 'array' or 'series', got: {output}")
 
 # ---------------------------------------------------------------------------
 # Income Model (Facade)
@@ -471,11 +529,10 @@ class IncomeModel:
 
     Methods
     -------
-    project(months, start=None, as_dataframe=False)
-        Returns projected monthly income over the given horizon, optionally as a DataFrame.
-    contributions(months, start=None)
-        Returns projected monthly contributions by applying the contribution fractions
-        to the fixed and variable income streams.
+    project(months, start=None, output="series", seed=None)
+        Returns projected monthly income as Series (total) or DataFrame (breakdown).
+    contributions(months, start=None, seed=None, output="series")
+        Returns projected monthly contributions as array or Series.
     to_dict()
         Serializes the model configuration and parameters into a dictionary.
     from_dict(payload)
@@ -486,13 +543,13 @@ class IncomeModel:
     - The `start` parameter defines the calendar alignment for both income projections
       and rotation of contribution fractions. For `VariableIncome`, it sets the
       first month for seasonality.
+    - The `seed` parameter controls reproducibility of variable income realizations.
+      If None, uses the variable stream's instance seed. If both None, non-deterministic.
     - Contribution fractions are automatically rotated according to the starting month
       and repeated every 12 months to cover longer horizons.
     - Contributions are floored at zero; negative values are never returned.
     - Both `project` and `contributions` handle `months <= 0` gracefully,
-      returning empty Series or DataFrames with proper indices.
-    - The class supports deterministic fixed incomes and stochastic variable incomes
-      with optional seasonality and noise.
+      returning empty structures with proper indices.
 
     Example
     -------
@@ -500,15 +557,24 @@ class IncomeModel:
     >>> fi = FixedIncome(base=1_400_000.0, annual_growth=0.02)
     >>> vi = VariableIncome(base=200_000.0, sigma=0.1, seed=123)
     >>> income_model = IncomeModel(fixed=fi, variable=vi)
-    >>> df = income_model.project(months=6, start=date(2025,1,1), as_dataframe=True)
+    
+    # Total income as Series
+    >>> income_model.project(months=6, start=date(2025,1,1))
+    2025-01-01    1610000.0
+    ...
+    
+    # Detailed breakdown as DataFrame
+    >>> df = income_model.project(months=6, start=date(2025,1,1), output="dataframe")
     >>> df
-               fixed   variable      total
-    2025-01  1400000  210000.0  1610000.0
-    2025-02  1402323  190000.0  1592323.0
-    >>> contrib = income_model.contributions(months=6)
+                  fixed   variable      total
+    2025-01-01  1400000  210000.0  1610000.0
+    2025-02-01  1402323  190000.0  1592323.0
+    
+    # Contributions
+    >>> contrib = income_model.contributions(months=6, start=date(2025,1,1))
     >>> contrib
-    2025-01    602000.0
-    2025-02    547697.0
+    2025-01-01    620000.0
+    2025-02-01    624200.0
     ...
     """
     
@@ -521,168 +587,202 @@ class IncomeModel:
     def project(
         self,
         months: int,
+        *,
         start: Optional[date] = None,
-        as_dataframe: bool = False,
+        output: Literal["series", "dataframe"] = "series",
+        seed: Optional[int] = None,
     ) -> pd.Series | pd.DataFrame:
         """
         Project combined fixed and variable income streams over a specified horizon.
 
         Generates monthly income projections by summing the deterministic fixed
-        income (`FixedIncome`) and the variable income (`VariableIncome`) streams.
-        Optionally aligns the projection with a calendar index starting from a given
-        date and returns either a Series of total income or a DataFrame with
-        individual components.
+        income and the variable income streams. Returns either total income as
+        a Series or detailed breakdown as a DataFrame.
 
         Parameters
         ----------
         months : int
-            Number of months to project. Must be >= 0. If `months <= 0`, an empty
-            Series or DataFrame is returned with appropriate calendar index.
+            Number of months to project. Must be >= 0. If `months <= 0`, returns
+            empty Series or DataFrame with appropriate calendar index.
         start : Optional[date], default None
-            If provided, used to build a calendar index (1st of each month). Also
-            determines the starting month for seasonality in `VariableIncome`.
-            If None, defaults to month 1 (January) for seasonality alignment.
-        as_dataframe : bool, default False
-            If True, returns a DataFrame with columns:
-                - fixed: projected fixed income
-                - variable: projected variable income
-                - total: sum of fixed and variable incomes
-            If False, returns a Series containing the total income only.
+            Start date for calendar alignment and seasonality rotation.
+            If None, defaults to January for seasonality.
+        output : Literal["series", "dataframe"], default "series"
+            Output format:
+            - "series": returns total income as pd.Series
+            - "dataframe": returns breakdown with [fixed, variable, total] columns
+        seed : Optional[int], default None
+            Random seed for variable income. If None, uses variable stream's
+            instance seed. If both None, non-deterministic.
 
         Returns
         -------
         pd.Series or pd.DataFrame
-            - Series of length `months` with total projected income if `as_dataframe=False`.
-            - DataFrame with columns [fixed, variable, total] if `as_dataframe=True`.
-            - Index is a monthly calendar based on `start` if provided, else integer range.
+            - If `output="series"`: Series of total income indexed by months
+            - If `output="dataframe"`: DataFrame with columns [fixed, variable, total]
+            Index is monthly calendar based on `start`, or integer range if start=None.
+
+        Raises
+        ------
+        ValueError
+            If `output` is not 'series' or 'dataframe'.
 
         Notes
         -----
-        - Negative or zero `months` return empty structures with correct indices.
-        - For `VariableIncome`, the starting month (`start.month`) is used to
-        rotate seasonality factors.
-        - Projection is deterministic for the fixed component, stochastic for
-        the variable component if its `sigma` > 0.
-        - Useful for calculating contributions, investment planning, and
-        combining multiple income sources in simulations.
+        - Projection is deterministic for fixed component, stochastic for variable
+        component if its `sigma > 0`.
+        - Seed controls reproducibility of variable income realizations.
 
         Examples
         --------
         >>> from datetime import date
-        >>> fi = FixedIncome(base=1_400_000.0, annual_growth=0.02)
-        >>> vi = VariableIncome(base=200_000.0, sigma=0.1, seed=123)
-        >>> income_model = IncomeModel(fixed=fi, variable=vi)
-        >>> income_model.project(months=6, start=date(2025, 1, 1), as_dataframe=True)
-                fixed   variable      total
-        2025-01  1400000  210000.0  1610000.0
-        2025-02  1402323  190000.0  1592323.0
-        >>> income_model.project(months=6, as_dataframe=False)
-        0    1610000.0
-        1    1592323.0
-        2    ...
+        >>> income = IncomeModel(
+        ...     fixed=FixedIncome(base=1_400_000, annual_growth=0.02),
+        ...     variable=VariableIncome(base=200_000, sigma=0.1, seed=123)
+        ... )
+        
+        # Total income as Series (default)
+        >>> income.project(6, start=date(2025, 1, 1))
+        2025-01-01    1610000.0
+        2025-02-01    1592323.0
+        ...
         Name: total, dtype: float64
+        
+        # Detailed breakdown as DataFrame
+        >>> income.project(6, start=date(2025, 1, 1), output="dataframe")
+                    fixed   variable      total
+        2025-01-01  1400000  210000.0  1610000.0
+        2025-02-01  1402323  190000.0  1592323.0
+        ...
+        
+        # Control randomness with seed
+        >>> income.project(6, start=date(2025, 1, 1), seed=42, output="series")
         """
         idx = month_index(start=start, months=max(months, 0))
+        
         if months <= 0:
-            if as_dataframe:
-                return pd.DataFrame(columns=[self.name_fixed, self.name_variable, "total"], index=idx)
-            return pd.Series(dtype=float, index=idx, name="total")
+            if output == "dataframe":
+                return pd.DataFrame(
+                    columns=[self.name_fixed, self.name_variable, "total"],
+                    index=idx
+                )
+            elif output == "series":
+                return pd.Series(dtype=float, index=idx, name="total")
+            else:
+                raise ValueError(f"output must be 'series' or 'dataframe', got: {output}")
 
-        fixed_path = self.fixed.project(months, start=start)
-        variable_path = self.variable.project(months, start=start)
-        total = fixed_path + variable_path
+        # Get arrays from streams
+        fixed_arr = self.fixed.project(months, start=start, output="array")
+        variable_arr = self.variable.project(months, start=start, seed=seed, output="array")
+        total_arr = fixed_arr + variable_arr
 
-        if as_dataframe:
-            df = pd.DataFrame(
+        # Return in requested format
+        if output == "dataframe":
+            return pd.DataFrame(
                 {
-                    self.name_fixed: fixed_path,
-                    self.name_variable: variable_path,
-                    "total": total,
+                    self.name_fixed: fixed_arr,
+                    self.name_variable: variable_arr,
+                    "total": total_arr,
                 },
                 index=idx,
             )
-            return df
-        return pd.Series(total, index=idx, name="total")
+        elif output == "series":
+            return pd.Series(total_arr, index=idx, name="total")
+        else:
+            raise ValueError(f"output must be 'series' or 'dataframe', got: {output}")
 
     def contributions(
         self,
         months: int,
+        *,
         start: Optional[date] = None,
-        seed: int = None
-    ) -> pd.Series:
+        seed: Optional[int] = None,
+        output: Literal["array", "series"] = "series",
+    ) -> np.ndarray | pd.Series:
         """
         Compute monthly contributions from fixed and variable income streams.
 
-        Description
-        -----------
-        Calculates monthly contributions by applying **monthly fractional rates** to the 
+        Calculates monthly contributions by applying monthly fractional rates to the 
         projected fixed and variable incomes. Contribution fractions are specified
-        annually (12 months) and are rotated based on the starting month to align with 
-        the calendar. If no fractions are provided, default values are used:
-            - fixed income: 30% each month
-            - variable income: 100% each month
-
-        Contributions are floored at zero, ensuring non-negative values, and can be
-        used for investment planning, savings projections, or cash-flow simulations.
+        as 12-month arrays and rotated based on the starting month. Default fractions
+        are 30% for fixed income and 100% for variable income.
 
         Parameters
         ----------
         months : int
             Number of months to compute contributions. Must be >= 0.
-            If `months <= 0`, returns an empty Series with the correct index.
+            If `months <= 0`, returns empty array or Series.
         start : Optional[date], default None
             Calendar start date for contributions. Determines:
-            - The first month for seasonality alignment of `VariableIncome`.
-            - The rotation of the 12-month contribution fractions.
-            If None, January (month 1) is assumed.
+            - Seasonality alignment of `VariableIncome`
+            - Rotation of the 12-month contribution fractions
+            If None, January is assumed.
+        seed : Optional[int], default None
+            Random seed for variable income. If None, uses variable stream's
+            instance seed. If both None, non-deterministic.
+        output : Literal["array", "series"], default "series"
+            Output format:
+            - "array": returns np.ndarray
+            - "series": returns pd.Series with monthly calendar index
 
         Returns
         -------
-        pd.Series
-            Series of length `months` with computed contributions per month.
-            Index is a monthly calendar based on `start` if provided; otherwise,
-            an integer range. Contributions are non-negative.
-
-        Notes
-        -----
-        - Monthly contribution for month `t` is computed as:
-            contrib_t = fixed_fraction_t * fixed_income_t
-                        + variable_fraction_t * variable_income_t
-        where fractions rotate annually based on `start`.
-        - If `self.monthly_contribution` is None, defaults (30% fixed, 100% variable)
-        are used.
-        - Both fixed and variable incomes are projected using their respective `project` methods.
-        - Negative contributions are automatically floored to zero.
+        np.ndarray or pd.Series
+            Monthly contributions for the given horizon.
+            - If `output="array"`: np.ndarray of length `months`
+            - If `output="series"`: pd.Series indexed by first-of-month dates
+            Contributions are non-negative (floored at zero).
 
         Raises
         ------
         ValueError
             If `self.monthly_contribution` is provided but either the fixed or variable
             fraction arrays do not have length 12.
+            If `output` is not 'array' or 'series'.
+
+        Notes
+        -----
+        - Monthly contribution: contrib_t = α_fixed_t * income_fixed_t + α_variable_t * income_variable_t
+        - Fractions rotate annually based on `start` and repeat cyclically
+        - Negative contributions are floored to zero
 
         Examples
         --------
-        >>> fi = FixedIncome(base=1_400_000.0, annual_growth=0.02)
-        >>> vi = VariableIncome(base=200_000.0, sigma=0.0)
-        >>> income_model = IncomeModel(fixed=fi, variable=vi)
-        >>> income_model.contributions(months=6, start=date(2025,1,1))
-        2025-01    620000.0
-        2025-02    624200.0
-        2025-03    628400.0
-        2025-04    632600.0
-        2025-05    636800.0
-        2025-06    641000.0
+        >>> income = IncomeModel(
+        ...     fixed=FixedIncome(base=1_400_000, annual_growth=0.02),
+        ...     variable=VariableIncome(base=200_000, sigma=0.1, seed=42)
+        ... )
+        
+        # Series output (default)
+        >>> income.contributions(6, start=date(2025, 1, 1))
+        2025-01-01    620000.0
+        2025-02-01    624200.0
+        ...
         Name: contribution, dtype: float64
+        
+        # Array output
+        >>> income.contributions(6, start=date(2025, 1, 1), output="array")
+        array([620000., 624200., 628400., 632600., 636800., 641000.])
+        
+        # Custom fractions
+        >>> income.monthly_contribution = {"fixed": [0.35]*12, "variable": [1.0]*12}
+        >>> income.contributions(6, start=date(2025, 1, 1))
         """
-        idx = month_index(start=start, months=max(months, 0))
         if months <= 0:
-            return pd.Series(dtype=float, index=idx, name="contribution")
+            arr = np.zeros(0, dtype=float)
+            if output == "array":
+                return arr
+            elif output == "series":
+                idx = month_index(start=start, months=0)
+                return pd.Series(arr, index=idx, name="contribution")
+            else:
+                raise ValueError(f"output must be 'array' or 'series', got: {output}")
 
-        # Project incomes
-        fixed_path = self.fixed.project(months, start=start)
-        variable_path = self.variable.project(months, start=start, seed=seed)
+        # Project incomes as arrays
+        fixed_arr = self.fixed.project(months, start=start, output="array")
+        variable_arr = self.variable.project(months, start=start, seed=seed, output="array")
 
-        # Initialize contribution fractions (12-month lists)
+        # Initialize contribution fractions (12-month arrays)
         if self.monthly_contribution is None:
             fixed_fractions = np.full(12, 0.3, dtype=float)
             variable_fractions = np.ones(12, dtype=float)
@@ -698,10 +798,17 @@ class IncomeModel:
         variable_fractions_full = np.array([variable_fractions[(offset + k) % 12] for k in range(months)])
 
         # Compute contributions
-        contrib = fixed_fractions_full * fixed_path + variable_fractions_full * variable_path
-        contrib = np.maximum(contrib, 0.0)
+        contrib_arr = fixed_fractions_full * fixed_arr + variable_fractions_full * variable_arr
+        contrib_arr = np.maximum(contrib_arr, 0.0)
 
-        return pd.Series(contrib, index=idx, name="contribution")
+        # Return in requested format
+        if output == "array":
+            return contrib_arr
+        elif output == "series":
+            idx = month_index(start=start, months=months)
+            return pd.Series(contrib_arr, index=idx, name="contribution")
+        else:
+            raise ValueError(f"output must be 'array' or 'series', got: {output}")
 
     def plot_income(
         self,
@@ -718,86 +825,164 @@ class IncomeModel:
         return_fig_ax: bool = False,
         dual_axis: str | bool = "auto",
         dual_axis_ratio: float = 3.0,
-        show_confidence_band: bool = True,
+        show_trajectories: bool = True,
+        show_confidence_band: bool = False,
+        trajectory_alpha: float = 0.08,
         confidence: float = 0.9,
         n_simulations: int = 500,
-        colors: dict | None = None,  # e.g., {"fixed": "blue", "variable": "orange", "total": "black"}
+        colors: dict | None = None,
     ):
         """
-        Plot monthly projections of fixed, variable, and total income.
+        Plot projected monthly income streams (fixed, variable, total) with optional Monte Carlo trajectories and confidence bands.
 
-        Supports stochastic variable income with optional confidence bands and automatic dual-axis scaling.
+        Visualizes the evolution of fixed income (deterministic), variable income (potentially stochastic),
+        and their sum over a specified horizon. Supports two visualization modes: individual stochastic
+        trajectories (Monte Carlo style) and/or statistical confidence intervals. Automatically handles
+        dual-axis rendering when income scales differ significantly.
 
         Parameters
         ----------
         months : int
-            Projection horizon in months (> 0).
-        start : date, optional
-            Start date for projection to align calendar months.
+            Number of months to project. Must be >= 0. If `months <= 0`, returns an empty
+            plot with a "no data" message.
+        start : datetime.date, optional
+            Start date for the projection. Used to align months with the calendar, determine
+            seasonality rotation for variable income, and apply salary raises at specific dates
+            for fixed income. If None, January (month 1) is assumed for seasonality.
         ax : matplotlib.axes.Axes, optional
             Existing Axes object to plot on. If None, a new figure and axes are created.
         figsize : tuple, default (12, 6)
-            Figure size (width, height) in inches if a new figure is created.
+            Figure size (width, height) in inches when creating a new figure.
         title : str, optional
-            Plot title.
+            Plot title. If None, no title is displayed.
         legend : bool, default True
-            Whether to display legend.
+            Whether to display the legend.
         grid : bool, default True
-            Whether to show grid.
+            Whether to display gridlines.
         ylabel_left : str, default "Fixed/Total (CLP)"
-            Label for left y-axis.
+            Label for the left y-axis (fixed and total income in single-axis mode,
+            or only these streams in dual-axis mode).
         ylabel_right : str, default "Variable (CLP)"
-            Label for right y-axis when dual-axis is used.
+            Label for the right y-axis when dual-axis is active.
         save_path : str, optional
-            File path to save the figure. If None, figure is not saved.
+            File path to save the figure. If None, the figure is not saved.
         return_fig_ax : bool, default False
             If True, returns a tuple (fig, ax) for further customization.
         dual_axis : {"auto", True, False}, default "auto"
-            Controls whether to use a second y-axis for variable income.
-            "auto": activate if scales differ significantly (controlled by dual_axis_ratio).
+            Controls whether to use a second y-axis for variable income:
+            - "auto": activates if max(left_scale/right_scale, right_scale/left_scale) >= dual_axis_ratio
+            - True: always use dual-axis
+            - False: always use single-axis
         dual_axis_ratio : float, default 3.0
-            Threshold ratio between left and right axis maxima to auto-activate dual-axis.
-        show_confidence_band : bool, default True
-            Whether to display confidence intervals for stochastic variable income.
+            Threshold ratio for automatic dual-axis activation when dual_axis="auto".
+            Higher values require larger scale differences to trigger dual-axis.
+        show_trajectories : bool, default True
+            Whether to display individual Monte Carlo trajectories for stochastic variable income.
+            Trajectories are plotted with low alpha for transparency. Only active when
+            variable income has non-zero sigma.
+        show_confidence_band : bool, default False
+            Whether to display confidence intervals as shaded bands (legacy visualization).
+            Can be combined with show_trajectories. Only active when variable income
+            has non-zero sigma.
+        trajectory_alpha : float, default 0.08
+            Transparency level for individual trajectories (0=invisible, 1=opaque).
+            When combining with confidence bands, reduce this value (e.g., 0.02-0.05)
+            for better band visibility.
         confidence : float, default 0.9
-            Confidence level for the bands (only used if show_confidence_band=True).
+            Confidence level for the band (between 0 and 1). Only used if
+            show_confidence_band=True. Example: 0.95 produces a 95% confidence interval.
         n_simulations : int, default 500
-            Number of stochastic simulations to compute confidence bands.
+            Number of Monte Carlo simulations to generate for variable income. Used for
+            computing both trajectories and confidence bands. When combining trajectories
+            and bands, reduce this value (e.g., 100-200) to prevent visual saturation.
         colors : dict, optional
-            Mapping of line colors. Keys: "fixed", "variable", "total". Defaults to
-            {"fixed": "blue", "variable": "orange", "total": "black"}.
+            Dictionary mapping line colors. Keys: "fixed", "variable", "total".
+            Defaults to {"fixed": "blue", "variable": "orange", "total": "black"}.
 
         Returns
         -------
         None or tuple
-            If return_fig_ax=True, returns (fig, ax). Otherwise, returns None.
+            If `return_fig_ax=True`, returns (fig, ax) tuple for further customization.
+            In dual-axis mode, `ax` is the left axis; the right axis is created internally.
+            Otherwise, returns None.
 
-        Notes
-        ------
-        - Automatically formats x-axis month labels and displays cumulative totals.
-        - Confidence bands are shaded regions for variable income simulations.
+        Examples
+        --------
+        >>> from datetime import date
+        >>> income = IncomeModel(
+        ...     fixed=FixedIncome(base=1_400_000, annual_growth=0.03),
+        ...     variable=VariableIncome(base=200_000, sigma=0.15, seed=42)
+        ... )
+
+        # Default: Monte Carlo trajectories with auto dual-axis
+        >>> income.plot_income(months=24, start=date(2025, 1, 1))
+
+        # Single-axis, no trajectories (deterministic view)
+        >>> income.plot_income(
+        ...     months=24,
+        ...     start=date(2025, 1, 1),
+        ...     dual_axis=False,
+        ...     show_trajectories=False
+        ... )
+
+        # Legacy: confidence bands only
+        >>> income.plot_income(
+        ...     months=24,
+        ...     start=date(2025, 1, 1),
+        ...     show_trajectories=False,
+        ...     show_confidence_band=True,
+        ...     confidence=0.95
+        ... )
+
+        # Hybrid: trajectories + bands (adjust parameters for visibility)
+        >>> income.plot_income(
+        ...     months=36,
+        ...     start=date(2025, 1, 1),
+        ...     show_trajectories=True,
+        ...     show_confidence_band=True,
+        ...     n_simulations=150,
+        ...     trajectory_alpha=0.03,
+        ...     dual_axis=True
+        ... )
+
+        # Custom colors and forced dual-axis
+        >>> income.plot_income(
+        ...     months=24,
+        ...     colors={"fixed": "darkgreen", "variable": "purple", "total": "red"},
+        ...     dual_axis=True,
+        ...     save_path="income_projection.png"
+        ... )
         """
-
         import matplotlib.pyplot as plt
         import numpy as np
 
         colors = colors or {"fixed": "blue", "variable": "orange", "total": "black"}
         fixed_col, var_col = self.name_fixed, self.name_variable
 
-        fixed_arr = self.fixed.project(months=months, start=start)
-        if show_confidence_band and hasattr(self, "variable") and self.variable.sigma > 0:
-            sims = np.array([self.variable.project(months=months, start=start) for i in range(n_simulations)])
+        fixed_arr = self.fixed.project(months=months, start=start, output="array")
+        
+        # Generate simulations if needed
+        sims = None
+        if (show_trajectories or show_confidence_band) and hasattr(self, "variable") and self.variable.sigma > 0:
+            sims = np.array([
+                self.variable.project(months=months, start=start, seed=None, output="array") 
+                for _ in range(n_simulations)
+            ])
             var_mean = sims.mean(axis=0)
-            lower_perc = np.percentile(sims, (1-confidence)/2*100, axis=0)
-            upper_perc = np.percentile(sims, (1+confidence)/2*100, axis=0)
+            if show_confidence_band:
+                lower_perc = np.percentile(sims, (1-confidence)/2*100, axis=0)
+                upper_perc = np.percentile(sims, (1+confidence)/2*100, axis=0)
+            else:
+                lower_perc = upper_perc = None
         else:
-            var_mean = self.variable.project(months=months, start=start)
-            lower_perc = upper_perc = var_mean
+            var_mean = self.variable.project(months=months, start=start, output="array")
+            lower_perc = upper_perc = None
 
-        total = fixed_arr + var_mean
+        total_mean = fixed_arr + var_mean
         idx = month_index(start=start, months=max(months, 0))
+        
         if len(idx) == 0:
-            fig, ax = plt.subplots(figsize=figsize) if ax is None else ax
+            fig, ax = plt.subplots(figsize=figsize) if ax is None else (None, ax)
             ax.set_axis_off()
             ax.text(0.5, 0.5, "No data (months <= 0)", ha="center", va="center", transform=ax.transAxes)
             if return_fig_ax: return (ax.figure, ax)
@@ -806,46 +991,96 @@ class IncomeModel:
         fig = None
         if ax is None: fig, ax = plt.subplots(figsize=figsize)
 
-        # Determine if dual-axis is needed
+        # Determine dual-axis
         use_dual = False
         if dual_axis is True:
             use_dual = True
         elif dual_axis == "auto":
-            left_max = max(np.nanmax(fixed_arr), np.nanmax(total))
+            left_max = max(np.nanmax(fixed_arr), np.nanmax(total_mean))
             right_max = np.nanmax(var_mean)
             use_dual = (max(left_max / right_max, right_max / left_max) >= dual_axis_ratio) if left_max*right_max>0 else False
 
         lines, labels = [], []
+        
         if use_dual:
-            l_fixed, = ax.plot(idx, fixed_arr, label=fixed_col, color=colors.get("fixed", "blue"))
-            l_total, = ax.plot(idx, total, label="total", color=colors.get("total", "black"))
-            ax.set_ylabel(ylabel_left)
-            lines.extend([l_fixed, l_total])
-            labels.extend([fixed_col, "total"])
-
+            # --- Dual-axis mode ---
             ax_r = ax.twinx()
-            l_var, = ax_r.plot(idx, var_mean, linestyle="--", label=var_col, color=colors.get("variable", "orange"))
-            if show_confidence_band:
-                ax_r.fill_between(idx, lower_perc, upper_perc, color=colors.get("variable", "orange"), alpha=0.2)
+            
+            # 1. Plot trajectories FIRST (background)
+            if show_trajectories and sims is not None:
+                for i in range(n_simulations):
+                    # Variable trajectories on right axis
+                    ax_r.plot(idx, sims[i], color='gray', alpha=trajectory_alpha, 
+                            linewidth=0.8, zorder=1)
+                    # Total trajectories on left axis
+                    ax.plot(idx, fixed_arr + sims[i], color='gray', 
+                        alpha=trajectory_alpha*0.7, linewidth=0.8, zorder=1)
+            
+            # 2. Plot confidence bands (if enabled)
+            if show_confidence_band and lower_perc is not None:
+                ax_r.fill_between(idx, lower_perc, upper_perc, 
+                                color=colors.get("variable", "orange"), 
+                                alpha=0.2, zorder=2)
                 ax.fill_between(idx, lower_perc + fixed_arr, upper_perc + fixed_arr,
-                                color=colors.get("total", "black"), alpha=0.15, label="Total CI")
+                            color=colors.get("total", "black"), 
+                            alpha=0.15, zorder=2)
+            
+            # 3. Plot mean lines (foreground)
+            l_fixed, = ax.plot(idx, fixed_arr, label=fixed_col, 
+                            color=colors.get("fixed", "blue"), 
+                            linewidth=2.5, zorder=3)
+            l_total, = ax.plot(idx, total_mean, label="total", 
+                            color=colors.get("total", "black"), 
+                            linewidth=2.5, zorder=3)
+            l_var, = ax_r.plot(idx, var_mean, linestyle="--", label=var_col, 
+                            color=colors.get("variable", "orange"), 
+                            linewidth=2.5, zorder=3)
+            
+            ax.set_ylabel(ylabel_left)
             ax_r.set_ylabel(ylabel_right)
-            lines.append(l_var)
-            labels.append(var_col)
+            lines.extend([l_fixed, l_total, l_var])
+            labels.extend([fixed_col, "total", var_col])
+            
         else:
-            l_fixed, = ax.plot(idx, fixed_arr, label=fixed_col, color=colors.get("fixed", "blue"))
-            l_var, = ax.plot(idx, var_mean, label=var_col, color=colors.get("variable", "orange"), linestyle="--")
-            l_total, = ax.plot(idx, total, label="total", color=colors.get("total", "black"))
+            # --- Single-axis mode ---
+            
+            # 1. Plot trajectories FIRST (background)
+            if show_trajectories and sims is not None:
+                for i in range(n_simulations):
+                    ax.plot(idx, sims[i], color='gray', alpha=trajectory_alpha, 
+                        linewidth=0.8, zorder=1, label='_nolegend_')
+                    ax.plot(idx, fixed_arr + sims[i], color='gray', 
+                        alpha=trajectory_alpha*0.7, linewidth=0.8, 
+                        zorder=1, label='_nolegend_')
+            
+            # 2. Plot confidence bands (if enabled)
+            if show_confidence_band and lower_perc is not None:
+                ax.fill_between(idx, lower_perc, upper_perc, 
+                            color=colors.get("variable", "orange"), 
+                            alpha=0.2, label=f"{var_col} CI", 
+                            zorder=2)
+                ax.fill_between(idx, lower_perc + fixed_arr, upper_perc + fixed_arr,
+                            color=colors.get("total", "black"), 
+                            alpha=0.15, label="Total CI", 
+                            zorder=2)
+            
+            # 3. Plot mean lines (foreground)
+            l_fixed, = ax.plot(idx, fixed_arr, label=fixed_col, 
+                            color=colors.get("fixed", "blue"), 
+                            linewidth=2.5, zorder=3)
+            l_var, = ax.plot(idx, var_mean, label=var_col, 
+                            color=colors.get("variable", "orange"), 
+                            linestyle="--", linewidth=2.5, zorder=3)
+            l_total, = ax.plot(idx, total_mean, label="total", 
+                            color=colors.get("total", "black"), 
+                            linewidth=2.5, zorder=3)
+            
+            ax.set_ylabel(ylabel_left)
             lines.extend([l_fixed, l_var, l_total])
             labels.extend([fixed_col, var_col, "total"])
-            if show_confidence_band:
-                ax.fill_between(idx, lower_perc, upper_perc, color=colors.get("variable", "orange"), 
-                                alpha=0.2, label=f"{var_col} CI")
-                ax.fill_between(idx, lower_perc + fixed_arr, upper_perc + fixed_arr,
-                                color=colors.get("total", "black"), alpha=0.15, label="Total CI")
-            ax.set_ylabel(ylabel_left)
 
-        if grid: ax.grid(True, linestyle="--", alpha=0.4)
+        # Formatting
+        if grid: ax.grid(True, linestyle="--", alpha=0.4, zorder=0)
         if title: ax.set_title(title)
         ax.set_xlabel("Month")
         for label in ax.get_xticklabels():
@@ -853,14 +1088,17 @@ class IncomeModel:
             label.set_ha("right")
         if legend: ax.legend(lines, labels, loc="best")
 
-        if save_path: (fig or ax.figure).savefig(save_path, bbox_inches="tight", dpi=150)
-
-        total_fixed_sum, total_var_sum, total_sum = fixed_arr.sum(), var_mean.sum(), fixed_arr.sum() + var_mean.sum()
+        # Total annotation
+        total_fixed_sum = fixed_arr.sum()
+        total_var_sum = var_mean.sum()
+        total_sum = total_fixed_sum + total_var_sum
         ax.text(0.02, 0.98,
                 f"Total Fixed: ${total_fixed_sum:,.0f}\nTotal Variable: ${total_var_sum:,.0f}\nTotal Income: ${total_sum:,.0f}".replace(",", "."),
-                transform=ax.transAxes, fontsize=9, verticalalignment="top", horizontalalignment="left",
-                bbox=dict(boxstyle="round", facecolor="white", alpha=0.7))
+                transform=ax.transAxes, fontsize=9, verticalalignment="top", 
+                horizontalalignment="left",
+                bbox=dict(boxstyle="round", facecolor="white", alpha=0.7), zorder=10)
 
+        if save_path: (fig or ax.figure).savefig(save_path, bbox_inches="tight", dpi=150)
         if return_fig_ax: return (fig or ax.figure, ax)
 
     def plot_contributions(
@@ -876,30 +1114,35 @@ class IncomeModel:
         save_path: Optional[str] = None,
         return_fig_ax: bool = False,
         colors: dict | None = None,
-        show_confidence_band: bool = True,
+        show_trajectories: bool = True,
+        show_confidence_band: bool = False,
+        trajectory_alpha: float = 0.08,
         confidence: float = 0.9,
         n_simulations: int = 500,
     ):
         """
-        Plot total monthly contributions with optional confidence bands for stochastic variable income.
+        Plot projected monthly contributions with optional Monte Carlo trajectories and confidence bands.
 
-        This method visualizes the **total monthly contributions** computed from both fixed and
-        variable income streams. If the variable income has stochasticity (non-zero sigma), the
-        method can simulate multiple contribution paths and display a confidence interval
-        representing the variability.
+        Visualizes total monthly contributions derived from fixed and variable income streams,
+        applying the contribution fractions specified in `self.monthly_contribution`. Supports
+        two visualization modes: individual stochastic trajectories (Monte Carlo style) and/or
+        statistical confidence intervals.
 
         Parameters
         ----------
         months : int
-            Number of months to project contributions. Must be >= 0.
+            Number of months to project. Must be >= 0. If `months <= 0`, returns an empty
+            plot with a "no data" message.
         start : datetime.date, optional
-            Start date for the projection. Used to align months with the calendar.
+            Start date for the projection. Used to align months with the calendar and
+            rotate contribution fractions according to the specified starting month.
+            If None, January (month 1) is assumed.
         ax : matplotlib.axes.Axes, optional
-            Existing matplotlib Axes object to plot on. If None, a new figure and axes are created.
+            Existing Axes object to plot on. If None, a new figure and axes are created.
         figsize : tuple, default (12, 6)
-            Size of the figure (width, height) in inches if a new figure is created.
+            Figure size (width, height) in inches when creating a new figure.
         title : str, default "Projected Monthly Contributions"
-            Title of the plot.
+            Plot title.
         legend : bool, default True
             Whether to display the legend.
         grid : bool, default True
@@ -907,81 +1150,142 @@ class IncomeModel:
         ylabel : str, default "Total Contribution (CLP)"
             Label for the y-axis.
         save_path : str, optional
-            Path to save the figure. If None, the figure is not saved.
+            File path to save the figure. If None, the figure is not saved.
         return_fig_ax : bool, default False
-            If True, returns the tuple (fig, ax) for further customization.
+            If True, returns a tuple (fig, ax) for further customization.
         colors : dict, optional
-            Dictionary of colors for plotting. Keys:
-                - "total": line color for total contributions.
-                - "ci": color for confidence band (if shown).
+            Dictionary mapping line colors. Keys: "total" (mean line), "ci" (confidence band).
             Defaults to {"total": "blue", "ci": "orange"}.
-        show_confidence_band : bool, default True
-            Whether to display a confidence band for stochastic contributions.
+        show_trajectories : bool, default True
+            Whether to display individual Monte Carlo trajectories for stochastic contributions.
+            Trajectories are plotted with low alpha for transparency. Only active when
+            variable income has non-zero sigma.
+        show_confidence_band : bool, default False
+            Whether to display confidence intervals as shaded bands (legacy visualization).
+            Can be combined with show_trajectories. Only active when variable income
+            has non-zero sigma.
+        trajectory_alpha : float, default 0.08
+            Transparency level for individual trajectories (0=invisible, 1=opaque).
+            When combining with confidence bands, reduce this value (e.g., 0.02-0.05)
+            for better band visibility.
         confidence : float, default 0.9
-            Confidence level for the band (between 0 and 1).
+            Confidence level for the band (between 0 and 1). Only used if
+            show_confidence_band=True. Example: 0.95 produces a 95% confidence interval.
         n_simulations : int, default 500
-            Number of stochastic simulations used to compute the confidence band.
+            Number of Monte Carlo simulations to generate. Used for computing both
+            trajectories and confidence bands. When combining trajectories and bands,
+            reduce this value (e.g., 100-200) to prevent visual saturation.
 
         Returns
         -------
         None or tuple
-            Returns (fig, ax) if `return_fig_ax=True`; otherwise, returns None.
+            If `return_fig_ax=True`, returns (fig, ax) tuple for further customization.
+            Otherwise, returns None.
 
-        Notes
-        -----
-        - Confidence bands are only displayed if `show_confidence_band=True` and the variable
-        income is stochastic.
-        - Contributions are floored at zero, so negative values do not appear in the plot.
-        - The x-axis is rotated for better readability of month labels.
+        Examples
+        --------
+        >>> from datetime import date
+        >>> income = IncomeModel(
+        ...     fixed=FixedIncome(base=1_400_000, annual_growth=0.02),
+        ...     variable=VariableIncome(base=200_000, sigma=0.1, seed=42)
+        ... )
+        >>> income.monthly_contribution = {"fixed": [0.3]*12, "variable": [1.0]*12}
 
+        # Default: Monte Carlo trajectories only
+        >>> income.plot_contributions(months=24, start=date(2025, 1, 1))
+
+        # Legacy: confidence band only
+        >>> income.plot_contributions(
+        ...     months=24,
+        ...     start=date(2025, 1, 1),
+        ...     show_trajectories=False,
+        ...     show_confidence_band=True
+        ... )
+
+        # Hybrid: trajectories + bands (adjust parameters for visibility)
+        >>> income.plot_contributions(
+        ...     months=24,
+        ...     start=date(2025, 1, 1),
+        ...     show_trajectories=True,
+        ...     show_confidence_band=True,
+        ...     n_simulations=150,
+        ...     trajectory_alpha=0.03,
+        ...     confidence=0.95
+        ... )
+
+        # Custom colors and save
+        >>> income.plot_contributions(
+        ...     months=36,
+        ...     start=date(2025, 1, 1),
+        ...     colors={"total": "green", "ci": "lightblue"},
+        ...     save_path="contributions_projection.png"
+        ... )
         """
-
         import matplotlib.pyplot as plt
         import numpy as np
 
         colors = colors or {"total": "blue", "ci": "orange"}
-
         idx = month_index(start=start, months=max(months, 0))
+        
         if months <= 0 or len(idx) == 0:
-            fig, ax = plt.subplots(figsize=figsize) if ax is None else ax
+            fig, ax = plt.subplots(figsize=figsize) if ax is None else (None, ax)
             ax.set_axis_off()
             ax.text(0.5, 0.5, "No data (months <= 0)", ha="center", va="center", transform=ax.transAxes)
             if return_fig_ax: return (ax.figure, ax)
             return
 
-        # Deterministic or stochastic contributions
-        if show_confidence_band and hasattr(self.variable, "sigma") and self.variable.sigma > 0:
-            sims = np.array([self.contributions(months, start=start) for _ in range(n_simulations)])
+        # Generate simulations if needed
+        sims = None
+        if (show_trajectories or show_confidence_band) and hasattr(self.variable, "sigma") and self.variable.sigma > 0:
+            sims = np.array([
+                self.contributions(months, start=start, seed=None, output="array") 
+                for _ in range(n_simulations)
+            ])
             contrib_mean = sims.mean(axis=0)
-            lower = np.percentile(sims, (1-confidence)/2*100, axis=0)
-            upper = np.percentile(sims, (1+confidence)/2*100, axis=0)
+            if show_confidence_band:
+                lower = np.percentile(sims, (1-confidence)/2*100, axis=0)
+                upper = np.percentile(sims, (1+confidence)/2*100, axis=0)
+            else:
+                lower = upper = None
         else:
-            contrib_mean = self.contributions(months, start=start)
-            lower = upper = contrib_mean
+            contrib_mean = self.contributions(months, start=start, output="array")
+            lower = upper = None
 
         fig = None
         if ax is None: fig, ax = plt.subplots(figsize=figsize)
 
-        # Plot total contribution
-        ax.plot(idx, contrib_mean, color=colors["total"], label="Total Contribution")
-        if show_confidence_band:
+        # 1. Plot trajectories FIRST (background)
+        if show_trajectories and sims is not None:
+            for i in range(n_simulations):
+                ax.plot(idx, sims[i], color='gray', alpha=trajectory_alpha, 
+                    linewidth=0.8, zorder=1, label='_nolegend_')
+        
+        # 2. Plot confidence band (if enabled)
+        if show_confidence_band and lower is not None:
             ax.fill_between(idx, lower, upper, color=colors["ci"], alpha=0.2,
-                            label=f"{int(confidence*100)}% CI")
+                        label=f"{int(confidence*100)}% CI", zorder=2)
+        
+        # 3. Plot mean line (foreground)
+        ax.plot(idx, contrib_mean, color=colors["total"], label="Mean Contribution", 
+            linewidth=2.5, zorder=3)
 
+        # Formatting
         ax.set_xlabel("Month")
         ax.set_ylabel(ylabel)
         ax.set_title(title)
-        if grid: ax.grid(True, linestyle="--", alpha=0.4)
+        if grid: ax.grid(True, linestyle="--", alpha=0.4, zorder=0)
         for label in ax.get_xticklabels():
             label.set_rotation(45)
             label.set_ha("right")
         if legend: ax.legend(loc="best")
 
-        # Total sum annotation
+        # Total annotation
+        total_contrib = contrib_mean.sum()
         ax.text(0.02, 0.98,
-                f"Total Contributions: ${contrib_mean.sum():,.0f}".replace(",", "."),
-                transform=ax.transAxes, fontsize=9, verticalalignment="top", horizontalalignment="left",
-                bbox=dict(boxstyle="round", facecolor="white", alpha=0.7))
+                f"Total Contributions: ${total_contrib:,.0f}".replace(",", "."),
+                transform=ax.transAxes, fontsize=9, verticalalignment="top", 
+                horizontalalignment="left",
+                bbox=dict(boxstyle="round", facecolor="white", alpha=0.7), zorder=10)
 
         if save_path: (fig or ax.figure).savefig(save_path, bbox_inches="tight", dpi=150)
         if return_fig_ax: return (fig or ax.figure, ax)
@@ -1002,19 +1306,45 @@ class IncomeModel:
         return_fig_ax: bool = False,
         dual_axis: str | bool = "auto",
         dual_axis_ratio: float = 3.0,
-        show_confidence_band: bool = True,
+        show_trajectories: bool = True,
+        show_confidence_band: bool = False,
+        trajectory_alpha: float = 0.08,
         confidence: float = 0.9,
         n_simulations: int = 500,
         colors: dict | None = None,
     ):
         """
         Unified plot wrapper to call either `plot_income` or `plot_contributions`.
-
+        
         Parameters
         ----------
         mode : str
-            "income" to plot income, "contributions" to plot contributions.
+            "income" to plot income streams, "contributions" to plot contributions.
+        show_trajectories : bool, default True
+            Whether to display individual Monte Carlo trajectories for stochastic components.
+        trajectory_alpha : float, default 0.08
+            Transparency level for individual trajectories (0=invisible, 1=opaque).
+        show_confidence_band : bool, default False
+            Whether to display confidence intervals as shaded bands (legacy option).
+            Can be combined with show_trajectories.
+        n_simulations : int, default 500
+            Number of Monte Carlo simulations. When combining trajectories and bands,
+            reduce this value (e.g., 100-200) for better visibility.
+        dual_axis : str | bool, default "auto"
+            Only applies to mode="income". Controls second y-axis for variable income.
+        dual_axis_ratio : float, default 3.0
+            Only applies to mode="income". Threshold ratio for auto dual-axis activation.
+        ylabel_left : str, optional
+            Left y-axis label. Defaults depend on mode.
+        ylabel_right : str, optional
+            Right y-axis label (only for dual-axis income plots).
+        
         Other parameters are passed directly to the corresponding plotting method.
+        
+        Returns
+        -------
+        None or tuple
+            If return_fig_ax=True, returns (fig, ax). Otherwise, returns None.
         """
         if mode == "income":
             return self.plot_income(
@@ -1031,7 +1361,9 @@ class IncomeModel:
                 return_fig_ax=return_fig_ax,
                 dual_axis=dual_axis,
                 dual_axis_ratio=dual_axis_ratio,
+                show_trajectories=show_trajectories,
                 show_confidence_band=show_confidence_band,
+                trajectory_alpha=trajectory_alpha,
                 confidence=confidence,
                 n_simulations=n_simulations,
                 colors=colors,
@@ -1045,16 +1377,18 @@ class IncomeModel:
                 title=title,
                 legend=legend,
                 grid=grid,
-                ylabel=ylabel_left or "Total Contribution (CLP)",  # Only one y-axis for contributions
+                ylabel=ylabel_left or "Total Contribution (CLP)",
                 save_path=save_path,
                 return_fig_ax=return_fig_ax,
                 colors=colors,
+                show_trajectories=show_trajectories,
                 show_confidence_band=show_confidence_band,
+                trajectory_alpha=trajectory_alpha,
                 confidence=confidence,
                 n_simulations=n_simulations,
             )
         else:
-            raise ValueError("Invalid kind. Must be 'income' or 'contributions'.")
+            raise ValueError("Invalid mode. Must be 'income' or 'contributions'.")
 
     def summary(
         self,
@@ -1121,7 +1455,7 @@ class IncomeModel:
         IncomeMetrics
             Dataclass with totals, means, dispersion and shares.
         """
-        df = self.project(months=months, start=start, as_dataframe=True)
+        df = self.project(months=months, start=start, output="dataframe")
         if df.empty:
             return IncomeMetrics(
                 months=0,
@@ -1262,7 +1596,7 @@ if __name__ == "__main__":
 
     # Projection (DataFrame with [fixed, variable, total] columns)
     print("=== Projection (6 months) ===")
-    df = model.project(months=months, start=start_date, as_dataframe=True)
+    df = model.project(months=months, start=start_date, output="dataframe")
     print(df)
 
     # Contributions using explicit monthly_contribution (12-month lists, rotated)
