@@ -10,8 +10,6 @@
 - **Separation of roles**
   - `income.py` → how much money is available.  
   - `investment.py` → how capital grows given contributions and returns.  
-  - `scenario.py` → generates possible wealth paths.  
-  - `goals.py` → defines success criteria.  
   - `optimization.py` → searches over *time* and *allocations* to satisfy goals.
 
 ---
@@ -87,6 +85,21 @@ $$
 $$
 facilitating analytical or numerical optimization methods.
 
+## Nested Optimization Formulation
+
+We seek the **minimum time** $T$ to achieve the goals, while maximizing (or minimizing) an objective function $f(X)$:
+
+$$
+\min_{T \in \mathbb{N}} \;\; 
+\Bigg\{ 
+\max_{X \in \mathcal{X}_T} f(X) \;\;\text{s.t.}\;\; 
+\mathbb{P}\big(W_T^m(X) \ge b_m\big) \ge 1 - \varepsilon_m, \;\forall m \in \{1, \dots, M\}
+\Bigg\}.
+$$
+
+- The **inner problem** ($\max_{X \in \mathcal{X}_T} f(X)$) finds the best feasible allocation policy for a given horizon $T$, risk-adjusted return, or other financial metrics.  
+- The **outer problem** ($\min_T$) finds the minimum horizon $T$ for which a feasible allocation policy exists.
+
 
 ## Financial Targets
 
@@ -96,14 +109,12 @@ $$
 \mathcal{G} = \{(t,m,b_t^m,\varepsilon_t^m) \;|\; \text{we want } \mathbb{P}(W_t^m(X) \ge b_t^m) \ge 1-\varepsilon_t^m \}.
 $$
 
-## Nested Optimization Formulation
-
-We seek the **minimum time** $T$ to achieve the goals, while maximizing (or minimizing) an objective function $f(X)$:
-
+We consider the following optimization problem:
 $$
 \min_{T \in \mathbb{N}} \;\; 
 \Bigg\{ 
 \max_{X \in \mathcal{X}_T} f(X) \;\;\text{s.t.}\;\; 
+\mathbb{P}\big(W_T^m(X) \ge b_m\big) \ge 1 - \varepsilon_m, \;\forall m \in \{1, \dots, M\};\; 
 \mathbb{P}\big(W_t^m(X) \ge b_t^m\big) \ge 1 - \varepsilon_t^m, \;\forall (t,m,b_t^m,\varepsilon_t^m) \in \mathcal{G}
 \Bigg\}.
 $$
