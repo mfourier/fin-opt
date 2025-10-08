@@ -59,7 +59,7 @@ Example
 ...     fixed=FixedIncome(base=1_400_000, annual_growth=0.03),
 ...     variable=VariableIncome(base=200_000, sigma=0.10)
 ... )
->>> returns = ReturnModel(accounts, correlation=np.eye(2))
+>>> returns = ReturnModel(accounts, default_correlation=np.eye(2))
 >>> 
 >>> T, n_sims = 24, 500
 >>> A_sims = income.contributions(T, start=date(2025,1,1), n_sims=n_sims)  # (500, 24)
@@ -72,15 +72,18 @@ Example
 >>> result = portfolio.simulate(A=A_sims, R=R_sims, X=X)
 >>> W = result["wealth"]  # (500, 25, 2)
 >>> W_total = result["total_wealth"]  # (500, 25)
+>>>
+>>> # 6. Visualize
+>>> portfolio.plot(result=result, X=X, save_path="portfolio_analysis.png")
 """
 
 from __future__ import annotations
-from typing import List, Literal
+from typing import List, Literal, Optional
 from dataclasses import dataclass
 
 import numpy as np
 
-from .utils import check_non_negative, annual_to_monthly
+from .utils import check_non_negative, annual_to_monthly, monthly_to_annual
 
 __all__ = [
     "Account",
@@ -95,10 +98,13 @@ __all__ = [
 @dataclass(frozen=True)
 class Account:
     """
-    Portfolio account metadata (no embedded dynamics).
+    Portfolio account metadata with dual temporal parameter access.
     
     Represents a single investment account with return characteristics.
     Return generation is delegated to returns.py (ReturnModel consumes this metadata).
+    
+    Internal storage uses monthly parameters (canonical form), but provides
+    seamless access to both monthly and annual representations via properties.
     
     Parameters
     ----------
@@ -110,26 +116,48 @@ class Account:
         Expected return and volatility in **monthly arithmetic** space:
         {"mu": float, "sigma": float}
         
-        - mu: monthly expected return (e.g., 0.0072 for ~9% annual)
-        - sigma: monthly volatility (e.g., 0.0433 for ~15% annual)
+        - mu: monthly expected return (e.g., 0.0033 for ~4% annual)
+        - sigma: monthly volatility (e.g., 0.0144 for ~5% annual)
         
         For annual parameters, use Account.from_annual() instead (recommended).
+        For monthly parameters, use Account.from_monthly() (advanced/explicit).
+    
+    Properties
+    ----------
+    monthly_params : Dict[str, float]
+        Monthly return parameters {"mu": float, "sigma": float}.
+    annual_params : Dict[str, float]
+        Annualized return parameters {"return": float, "volatility": float}.
     
     Methods
     -------
     from_annual(name, annual_return, annual_volatility, initial_wealth=0.0)
         Create account from annual parameters (recommended API).
+    from_monthly(name, monthly_mu, monthly_sigma, initial_wealth=0.0)
+        Create account from monthly parameters (advanced/explicit API).
         
     Examples
     --------
-    # High-level API with annual parameters (recommended)
+    # Recommended: Annual parameters (user-friendly)
     >>> emergency = Account.from_annual("Emergency", annual_return=0.04,
     ...                                 annual_volatility=0.05, initial_wealth=0)
-    >>> housing = Account.from_annual("Housing", annual_return=0.07,
-    ...                               annual_volatility=0.12, initial_wealth=50_000)
+    >>> print(emergency)
+    Account('Emergency': 4.0%/year, σ=5.0%, W₀=$0)
     
-    # Low-level API with monthly parameters (advanced/deserialization)
-    >>> custom = Account("Custom", 50000, {"mu": 0.0058, "sigma": 0.0347})
+    # Introspection: dual temporal views
+    >>> emergency.annual_params
+    {'return': 0.04, 'volatility': 0.05}
+    >>> emergency.monthly_params
+    {'mu': 0.0032737, 'sigma': 0.0144338}
+    
+    # Advanced: Monthly parameters (explicit control)
+    >>> custom = Account.from_monthly("Custom", monthly_mu=0.0058, 
+    ...                               monthly_sigma=0.0347, initial_wealth=50_000)
+    >>> custom.annual_params
+    {'return': 0.0719..., 'volatility': 0.1201...}
+    
+    # Low-level: Direct construction (deserialization/internal use)
+    >>> acc = Account("Legacy", 10_000, {"mu": 0.005, "sigma": 0.03})
     """
     name: str
     initial_wealth: float
@@ -185,23 +213,21 @@ class Account:
         >>> # Conservative emergency fund: 4% annual return, 5% vol
         >>> emergency = Account.from_annual("Emergency", annual_return=0.04,
         ...                                 annual_volatility=0.05)
+        >>> emergency.annual_params
+        {'return': 0.04, 'volatility': 0.05}
         
         >>> # Aggressive growth account: 12% annual return, 20% vol
         >>> growth = Account.from_annual("Growth", annual_return=0.12,
         ...                              annual_volatility=0.20,
         ...                              initial_wealth=100_000)
         
-        >>> # Verify conversion
-        >>> from finopt.src.utils import monthly_to_annual
+        >>> # Verify round-trip conversion
         >>> monthly_to_annual(emergency.return_strategy["mu"])
         0.04  # recovers annual_return
         >>> emergency.return_strategy["sigma"] * np.sqrt(12)
         0.05  # recovers annual_volatility
         """
-        # Convert annual to monthly using utils
         mu_monthly = annual_to_monthly(annual_return)
-        
-        # Standard time-scaling for volatility (IID assumption)
         sigma_monthly = annual_volatility / np.sqrt(12)
         
         return cls(
@@ -209,7 +235,124 @@ class Account:
             initial_wealth=initial_wealth,
             return_strategy={"mu": mu_monthly, "sigma": sigma_monthly}
         )
-
+    
+    @classmethod
+    def from_monthly(
+        cls,
+        name: str,
+        monthly_mu: float,
+        monthly_sigma: float,
+        initial_wealth: float = 0.0,
+    ) -> "Account":
+        """
+        Create account from monthly return parameters (advanced/explicit API).
+        
+        For most use cases, prefer from_annual() which uses more intuitive
+        annualized inputs. Use this method when you have explicit monthly
+        parameters from external sources or require precise control.
+        
+        Parameters
+        ----------
+        name : str
+            Account identifier.
+        monthly_mu : float
+            Monthly expected return (arithmetic).
+        monthly_sigma : float
+            Monthly volatility (arithmetic).
+        initial_wealth : float, default 0.0
+            Starting balance W_0^m (non-negative).
+        
+        Returns
+        -------
+        Account
+            Account instance with monthly parameters in return_strategy.
+        
+        Examples
+        --------
+        >>> # Explicit monthly parameters
+        >>> acc = Account.from_monthly("Tactical", monthly_mu=0.0058,
+        ...                            monthly_sigma=0.0347)
+        >>> acc.annual_params
+        {'return': 0.0719..., 'volatility': 0.1201...}
+        
+        >>> # Deserialization use case
+        >>> saved_params = {"mu": 0.0065, "sigma": 0.04}
+        >>> acc = Account.from_monthly("Restored", **saved_params)
+        """
+        return cls(
+            name=name,
+            initial_wealth=initial_wealth,
+            return_strategy={"mu": monthly_mu, "sigma": monthly_sigma}
+        )
+    
+    @property
+    def monthly_params(self) -> Dict[str, float]:
+        """
+        Monthly return parameters (canonical storage format).
+        
+        Returns
+        -------
+        Dict[str, float]
+            {"mu": float, "sigma": float} in monthly arithmetic space.
+        
+        Examples
+        --------
+        >>> acc = Account.from_annual("Test", 0.08, 0.12)
+        >>> acc.monthly_params
+        {'mu': 0.006434..., 'sigma': 0.034641...}
+        """
+        return dict(self.return_strategy)  # Copy to prevent mutation
+    
+    @property
+    def annual_params(self) -> Dict[str, float]:
+        """
+        Annualized return parameters (user-friendly representation).
+        
+        Converts internal monthly parameters to annualized equivalents
+        using standard financial formulas:
+        - Return: geometric compounding (1+μ_m)^12 - 1
+        - Volatility: time-scaling σ_m * sqrt(12)
+        
+        Returns
+        -------
+        Dict[str, float]
+            {"return": float, "volatility": float} in annual space.
+        
+        Examples
+        --------
+        >>> acc = Account.from_annual("Test", annual_return=0.08,
+        ...                           annual_volatility=0.12)
+        >>> acc.annual_params
+        {'return': 0.08, 'volatility': 0.12}  # Round-trip recovery
+        
+        >>> # Conversion from monthly
+        >>> acc2 = Account.from_monthly("Test2", monthly_mu=0.005,
+        ...                             monthly_sigma=0.03)
+        >>> acc2.annual_params
+        {'return': 0.0616..., 'volatility': 0.1039...}
+        """
+        mu_annual = monthly_to_annual(self.return_strategy["mu"])
+        sigma_annual = self.return_strategy["sigma"] * np.sqrt(12)
+        return {
+            "return": mu_annual,
+            "volatility": sigma_annual
+        }
+    
+    def __repr__(self) -> str:
+        """
+        String representation showing annualized parameters (user-friendly).
+        
+        Examples
+        --------
+        >>> acc = Account.from_annual("Emergency", 0.04, 0.05, 10_000)
+        >>> print(acc)
+        Account('Emergency': 4.0%/year, σ=5.0%, W₀=$10,000)
+        """
+        ap = self.annual_params
+        return (
+            f"Account('{self.name}': {ap['return']:.1%}/year, "
+            f"σ={ap['volatility']:.1%}, W₀=${self.initial_wealth:,.0f})"
+        )
 
 # ---------------------------------------------------------------------------
 # Portfolio (Wealth Dynamics Executor)
@@ -238,6 +381,8 @@ class Portfolio:
         Supports batch processing of Monte Carlo samples.
     compute_accumulation_factors(R) -> np.ndarray
         Compute F_{s,t}^m = ∏_{r=s}^{t-1} (1 + R_r^m) for affine wealth representation.
+    plot(result, X, **kwargs)
+        Visualize wealth trajectories, composition, and allocation policy.
     
     Notes
     -----
@@ -258,7 +403,7 @@ class Portfolio:
     >>> 
     >>> # Generate inputs
     >>> income = IncomeModel(...)
-    >>> returns = ReturnModel(accounts, correlation=np.eye(2))
+    >>> returns = ReturnModel(accounts, default_correlation=np.eye(2))
     >>> A = income.contributions(24, start=date(2025,1,1), n_sims=500)
     >>> R = returns.generate(T=24, n_sims=500, seed=42)
     >>> X = np.tile([0.6, 0.4], (24, 1))
@@ -267,6 +412,9 @@ class Portfolio:
     >>> result = portfolio.simulate(A=A, R=R, X=X)
     >>> result["wealth"].shape
     (500, 25, 2)
+    >>>
+    >>> # Visualize
+    >>> portfolio.plot(result, X)
     """
     
     def __init__(self, accounts: List[Account]):
@@ -290,7 +438,7 @@ class Portfolio:
         A: np.ndarray,  # Contributions: (T,) or (n_sims, T)
         R: np.ndarray,  # Returns: (n_sims, T, M)
         X: np.ndarray,  # Allocations: (T, M)
-        method: Literal["recursive", "affine"] = "recursive"
+        method: Literal["recursive", "affine"] = "affine"
     ) -> dict:
         """
         Execute wealth dynamics W_{t+1}^m = (W_t^m + A_t^m)(1 + R_t^m).
@@ -564,3 +712,267 @@ class Portfolio:
                 F[:, s, t, :] = np.prod(gross_returns[:, s:t, :], axis=1)
         
         return F
+    
+    def plot(
+        self,
+        result: dict,
+        X: np.ndarray,
+        figsize: tuple = (16, 10),
+        title: Optional[str] = None,
+        save_path: Optional[str] = None,
+        return_fig_ax: bool = False,
+        show_trajectories: bool = True,
+        trajectory_alpha: float = 0.05,
+        colors: Optional[dict] = None,
+        hist_bins: int = 30,
+        hist_color: str = 'mediumseagreen',
+    ):
+        """
+        Visualize portfolio wealth dynamics with 4 panels + lateral histogram.
+        
+        Panel layout:
+        - Top-left: Wealth per account (time series with trajectories)
+        - Top-right: Total portfolio wealth (time series with trajectories + lateral histogram)
+        - Bottom-left: Portfolio composition over time (stacked area)
+        - Bottom-right: Allocation policy heatmap (X matrix)
+        
+        Parameters
+        ----------
+        result : dict
+            Output from simulate() containing:
+            - "wealth": np.ndarray, shape (n_sims, T+1, M)
+            - "total_wealth": np.ndarray, shape (n_sims, T+1)
+        X : np.ndarray, shape (T, M)
+            Allocation policy used in the simulation.
+        figsize : tuple, default (16, 10)
+            Figure size (width, height).
+        title : str, optional
+            Main title for the figure.
+        save_path : str, optional
+            Path to save figure.
+        return_fig_ax : bool, default False
+            If True, returns (fig, axes_dict).
+        show_trajectories : bool, default True
+            Whether to show individual simulation paths.
+        trajectory_alpha : float, default 0.05
+            Transparency for trajectory lines.
+        colors : dict, optional
+            Custom colors for accounts. Keys are account names or indices.
+        hist_bins : int, default 30
+            Number of bins for final wealth distribution histogram.
+        hist_color : str, default 'mediumseagreen'
+            Color for the lateral histogram.
+        
+        Returns
+        -------
+        None or (fig, axes_dict)
+            If return_fig_ax=True, returns figure and dict of axes.
+        
+        Notes
+        -----
+        The lateral histogram on the total wealth panel shows the distribution
+        of final wealth W_T across all Monte Carlo simulations, providing
+        immediate visual feedback on outcome uncertainty.
+        
+        Examples
+        --------
+        >>> result = portfolio.simulate(A, R, X)
+        >>> portfolio.plot(result, X, title="Portfolio Analysis", save_path="portfolio.png")
+        
+        >>> # Custom colors and histogram
+        >>> portfolio.plot(result, X, colors={"Emergency": "green", "Housing": "blue"},
+        ...                hist_bins=40, hist_color='coral')
+        """
+        import matplotlib.pyplot as plt
+        from matplotlib.gridspec import GridSpec
+        from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
+        
+        W = result["wealth"]  # (n_sims, T+1, M)
+        W_total = result["total_wealth"]  # (n_sims, T+1)
+        n_sims, T_plus_1, M = W.shape
+        T = T_plus_1 - 1
+        
+        if X.shape != (T, M):
+            raise ValueError(f"X shape {X.shape} != expected ({T}, {M})")
+        
+        # Setup colors
+        if colors is None:
+            colors = {}
+        default_colors = plt.cm.tab10(np.linspace(0, 1, M))
+        account_colors = []
+        for i, acc in enumerate(self.accounts):
+            if acc.name in colors:
+                account_colors.append(colors[acc.name])
+            elif i in colors:
+                account_colors.append(colors[i])
+            else:
+                account_colors.append(default_colors[i])
+        
+        # Setup figure
+        fig = plt.figure(figsize=figsize)
+        gs = GridSpec(2, 2, figure=fig, hspace=0.3, wspace=0.3)
+        
+        ax_accounts = fig.add_subplot(gs[0, 0])
+        ax_total = fig.add_subplot(gs[0, 1])
+        ax_composition = fig.add_subplot(gs[1, 0])
+        ax_policy = fig.add_subplot(gs[1, 1])
+        
+        time_axis = np.arange(T_plus_1)
+        
+        # Panel 1: Wealth per account
+        if show_trajectories:
+            for m in range(M):
+                for i in range(n_sims):
+                    ax_accounts.plot(
+                        time_axis,
+                        W[i, :, m],
+                        color=account_colors[m],
+                        alpha=trajectory_alpha,
+                        linewidth=0.8,
+                        label=self.accounts[m].name if i == 0 else '_nolegend_'
+                    )
+        
+        # Mean trajectories (thicker)
+        for m in range(M):
+            mean_wealth = W[:, :, m].mean(axis=0)
+            ax_accounts.plot(
+                time_axis,
+                mean_wealth,
+                color=account_colors[m],
+                linewidth=2.5,
+                label=f"{self.accounts[m].name} (mean)"
+            )
+        
+        ax_accounts.set_xlabel("Month")
+        ax_accounts.set_ylabel("Wealth (CLP)")
+        ax_accounts.set_title("Wealth by Account")
+        ax_accounts.legend(loc='best', fontsize=8)
+        ax_accounts.grid(True, alpha=0.3)
+        
+        # Panel 2: Total wealth
+        if show_trajectories:
+            for i in range(n_sims):
+                ax_total.plot(
+                    time_axis,
+                    W_total[i, :],
+                    color='gray',
+                    alpha=trajectory_alpha,
+                    linewidth=0.8,
+                    label='Trajectories' if i == 0 else '_nolegend_'
+                )
+        
+        mean_total = W_total.mean(axis=0)
+        ax_total.plot(
+            time_axis,
+            mean_total,
+            color='black',
+            linewidth=2.5,
+            label='Mean'
+        )
+        
+        ax_total.set_xlabel("Month")
+        ax_total.set_ylabel("Total Wealth (CLP)")
+        ax_total.set_title("Total Portfolio Wealth")
+        ax_total.legend(loc='lower right')
+        ax_total.grid(True, alpha=0.3)
+        
+        # Annotation with final wealth statistics
+        final_mean = mean_total[-1]
+        final_std = W_total[:, -1].std()
+        final_median = np.median(W_total[:, -1])
+        ax_total.text(
+            0.02, 0.98,
+            f"Final Wealth:\nMean: ${final_mean:,.0f}\nMedian: ${final_median:,.0f}\nStd: ${final_std:,.0f}".replace(",", "."),
+            transform=ax_total.transAxes,
+            fontsize=9,
+            verticalalignment='top',
+            bbox=dict(boxstyle='round', facecolor='white', alpha=0.7)
+        )
+        
+        # Lateral histogram for final wealth distribution (only if n_sims > 1)
+        if n_sims > 1:
+            divider = make_axes_locatable(ax_total)
+            ax_hist = divider.append_axes("right", size=1.0, pad=0.15)
+            
+            final_wealth = W_total[:, -1]  # (n_sims,)
+            ax_hist.hist(
+                final_wealth,
+                bins=hist_bins,
+                orientation='horizontal',
+                color=hist_color,
+                alpha=0.6,
+                edgecolor='black',
+                linewidth=0.5
+            )
+            
+            ax_hist.set_xlabel("Count", fontsize=9)
+            ax_hist.set_ylim(ax_total.get_ylim())
+            ax_hist.tick_params(axis='both', labelsize=8)
+            ax_hist.grid(True, alpha=0.2)
+            ax_hist.set_title("Final\nDistribution", fontsize=9)
+        
+        # Panel 3: Portfolio composition (stacked area)
+        mean_wealth_by_account = W.mean(axis=0)  # (T+1, M)
+        
+        ax_composition.stackplot(
+            time_axis,
+            *[mean_wealth_by_account[:, m] for m in range(M)],
+            labels=[acc.name for acc in self.accounts],
+            colors=account_colors,
+            alpha=0.7
+        )
+        
+        ax_composition.set_xlabel("Month")
+        ax_composition.set_ylabel("Wealth (CLP)")
+        ax_composition.set_title("Portfolio Composition")
+        ax_composition.legend(loc='upper left', fontsize=8)
+        ax_composition.grid(True, alpha=0.3)
+        
+        # Panel 4: Allocation policy heatmap
+        im = ax_policy.imshow(
+            X.T,
+            aspect='auto',
+            cmap='YlOrRd',
+            vmin=0,
+            vmax=1,
+            interpolation='nearest'
+        )
+        
+        ax_policy.set_xlabel("Month")
+        ax_policy.set_ylabel("Account")
+        ax_policy.set_title("Allocation Policy")
+        ax_policy.set_yticks(range(M))
+        ax_policy.set_yticklabels([acc.name for acc in self.accounts], fontsize=8)
+        
+        # Add colorbar
+        plt.colorbar(im, ax=ax_policy, fraction=0.046, pad=0.04, label='Fraction')
+        
+        # Add allocation values as text (if not too many)
+        if T <= 24 and M <= 5:
+            for t in range(T):
+                for m in range(M):
+                    text_color = 'white' if X[t, m] > 0.5 else 'black'
+                    ax_policy.text(
+                        t, m, f"{X[t, m]:.2f}",
+                        ha='center', va='center',
+                        color=text_color, fontsize=7
+                    )
+        
+        # Main title
+        if title:
+            fig.suptitle(title, fontsize=14, fontweight='bold')
+        
+        # Annotation with simulation info
+        param_text = f"n_sims={n_sims} | T={T} | accounts={M}"
+        fig.text(0.99, 0.01, param_text, ha='right', va='bottom', fontsize=8, alpha=0.7)
+        
+        if save_path:
+            fig.savefig(save_path, bbox_inches='tight', dpi=150)
+        
+        if return_fig_ax:
+            return fig, {
+                'accounts': ax_accounts,
+                'total': ax_total,
+                'composition': ax_composition,
+                'policy': ax_policy
+            }
