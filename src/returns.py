@@ -163,7 +163,7 @@ class ReturnModel:
     # ========== Dual temporal representation (NEW) ==========
     
     @property
-    def monthly_params(self) -> List[Dict[str, float]]:
+    def monthly_params(self) -> List[dict[str, float]]:
         """
         Monthly return parameters for all accounts.
         
@@ -180,7 +180,7 @@ class ReturnModel:
         return [acc.monthly_params for acc in self.accounts]
     
     @property
-    def annual_params(self) -> List[Dict[str, float]]:
+    def annual_params(self) -> List[dict[str, float]]:
         """
         Annualized return parameters for all accounts.
         
@@ -814,6 +814,7 @@ class ReturnModel:
                 fig.savefig(save_path, bbox_inches='tight', dpi=150)
             
             return (fig, axes) if return_fig_ax else None
+
     
     # ========== Legacy properties (backward compatibility) ==========
     
