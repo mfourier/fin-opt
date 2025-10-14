@@ -141,7 +141,9 @@ class SimulationResult:
     Methods
     -------
     metrics(account=None) -> pd.DataFrame
-        Compute financial metrics (CAGR, Sharpe, Sortino, VaR, etc.).
+        Compute per-simulation financial metrics (CAGR, Sharpe, Sortino, etc.).
+    aggregate_metrics(account=None) -> pd.Series | pd.DataFrame
+        Compute distribution-level metrics (VaR, CVaR, final wealth statistics).
     summary(confidence=0.95) -> pd.DataFrame
         Statistical summary of final wealth with confidence intervals.
     convergence_analysis() -> pd.DataFrame
@@ -191,19 +193,21 @@ class SimulationResult:
     
     # Internal cache for lazy computation
     _metrics: Optional[dict[str, pd.DataFrame]] = field(default=None, init=False, repr=False)
-    
+    _aggregate_metrics: Optional[dict[str, dict]] = field(default=None, init=False, repr=False)
+
     def metrics(self, account: Optional[str] = None) -> pd.DataFrame:
         """
-        Compute financial metrics by account or aggregate.
+        Compute per-simulation financial metrics by account.
         
-        Computes standard risk-adjusted performance metrics:
+        Computes standard risk-adjusted performance metrics for each simulation:
         - CAGR: Compound Annual Growth Rate
         - Volatility: Standard deviation of monthly returns
         - Sharpe Ratio: Mean return / volatility
         - Sortino Ratio: Mean return / downside deviation
         - Max Drawdown: Maximum peak-to-trough decline
-        - VaR 95%: Value at Risk (5th percentile of final wealth)
-        - CVaR 95%: Conditional VaR (mean of worst 5% outcomes)
+        
+        For distribution-level metrics (VaR, CVaR, final wealth statistics),
+        use `aggregate_metrics()` instead.
         
         Results are cached on first call for efficiency.
         
@@ -219,16 +223,20 @@ class SimulationResult:
             Metrics with shape (n_sims, n_metrics) if account specified,
             or MultiIndex DataFrame with level 0 = account if None.
         
+        See Also
+        --------
+        aggregate_metrics : Distribution-level metrics (VaR, CVaR, etc.)
+        
         Examples
         --------
         >>> # All accounts
         >>> metrics_all = result.metrics()
         >>> print(metrics_all.groupby(level=0).mean())
-        >>> 
+        
         >>> # Specific account
         >>> metrics_emerg = result.metrics(account="Emergency")
         >>> print(f"Mean Sharpe: {metrics_emerg['sharpe'].mean():.3f}")
-        >>> 
+        
         >>> # Distribution of CAGR
         >>> import matplotlib.pyplot as plt
         >>> result.metrics(account="Housing")['cagr'].hist(bins=30)
@@ -248,6 +256,7 @@ class SimulationResult:
     def _compute_metrics(self):
         """Lazy computation of financial metrics."""
         self._metrics = {}
+        self._aggregate_metrics = {}  # NEW: distribution-level statistics
         
         for m, acc_name in enumerate(self.account_names):
             W = self.wealth[:, :, m]  # (n_sims, T+1)
@@ -285,21 +294,80 @@ class SimulationResult:
                 for i in range(self.n_sims)
             ])
             
-            # VaR and CVaR (5%)
-            W_final = W[:, -1]
-            var_95 = np.percentile(W_final, 5)
-            cvar_95 = W_final[W_final <= var_95].mean()
-            
-            # Store as DataFrame
+            # Store per-simulation metrics
             self._metrics[acc_name] = pd.DataFrame({
                 'cagr': cagr_values,
                 'volatility': volatility,
                 'sharpe': sharpe,
                 'sortino': sortino,
                 'max_drawdown': max_dd,
-                'var_95': var_95,
-                'cvar_95': cvar_95
             })
+            
+            # Aggregate metrics (distribution-level)
+            W_final = W[:, -1]
+            var_95_val = np.percentile(W_final, 5)
+            
+            self._aggregate_metrics[acc_name] = {
+                'var_95': var_95_val,
+                'cvar_95': W_final[W_final <= var_95_val].mean(),
+                'mean_final': W_final.mean(),
+                'median_final': np.median(W_final),
+                'std_final': W_final.std(),
+                'min_final': W_final.min(),
+                'max_final': W_final.max(),
+            }
+
+    def aggregate_metrics(self, account: Optional[str] = None) -> pd.Series | pd.DataFrame:
+        """
+        Compute distribution-level metrics (VaR, CVaR, final wealth statistics).
+        
+        These metrics characterize the entire distribution of outcomes across
+        simulations, not individual simulation paths. Includes risk measures
+        and summary statistics of terminal wealth.
+        
+        Parameters
+        ----------
+        account : str, optional
+            Account name to compute metrics for.
+            If None, returns metrics for all accounts.
+        
+        Returns
+        -------
+        pd.Series or pd.DataFrame
+            If account specified: Series with keys ['var_95', 'cvar_95', 
+            'mean_final', 'median_final', 'std_final', 'min_final', 'max_final'].
+            If None: DataFrame with accounts as rows, metrics as columns.
+        
+        Notes
+        -----
+        - VaR₉₅: Value at Risk at 5% confidence (5th percentile of final wealth)
+        - CVaR₉₅: Conditional VaR (mean of worst 5% outcomes)
+        - Results cached on first call; recomputed when wealth changes
+        
+        Examples
+        --------
+        >>> # All accounts
+        >>> agg = result.aggregate_metrics()
+        >>> print(agg)
+                    var_95    cvar_95  mean_final  median_final  std_final
+        Emergency  2280000.0  2150000.0   2500000.0     2480000.0  120000.0
+        Housing   11700000.0 11200000.0  12800000.0    12750000.0  580000.0
+        
+        >>> # Specific account
+        >>> emerg_agg = result.aggregate_metrics(account="Emergency")
+        >>> print(f"VaR₉₅: ${emerg_agg['var_95']:,.0f}")
+        VaR₉₅: $2,280,000
+        """
+        if self._metrics is None:
+            self._compute_metrics()
+        
+        if account is not None:
+            if account not in self._aggregate_metrics:
+                valid = ", ".join(self._aggregate_metrics.keys())
+                raise ValueError(f"Account '{account}' not found. Valid: {valid}")
+            return pd.Series(self._aggregate_metrics[account], name=account)
+        
+        return pd.DataFrame(self._aggregate_metrics).T
     
     def summary(self, confidence: float = 0.95) -> pd.DataFrame:
         """
@@ -618,6 +686,11 @@ class FinancialModel:
         >>> final_wealth = result.total_wealth[:, -1]
         >>> print(f"Mean: ${final_wealth.mean():,.0f}")
         """
+
+        # Validate number of simulations
+        if n_sims < 1 or not isinstance(n_sims, int):
+            raise ValueError(f"n_sims must be positive integer, got {n_sims}")
+
         # Validate allocation policy shape
         if X.shape != (T, self.M):
             raise ValueError(
@@ -777,7 +850,7 @@ class FinancialModel:
     # -----------------------------------------------------------------------
     # Unified plotting interface
     # -----------------------------------------------------------------------
-    
+
     def plot(
         self,
         mode: str,
@@ -837,7 +910,10 @@ class FinancialModel:
         n_sims : int, default 500
             Number of Monte Carlo simulations.
         start : date, optional
-            Calendar start date.
+            Calendar start date. Used for:
+            - Simulation: aligns income seasonality and calendar index
+            - Plotting: enables calendar-based x-axis (YYYY-MM format)
+            If None, numeric month indices (0, 1, 2, ...) are used.
         seed : int, optional
             Random seed for reproducibility.
         result : SimulationResult, optional
@@ -865,16 +941,19 @@ class FinancialModel:
             - dual_axis : "auto"|True|False (income only)
             
             **Returns modes:**
-            - n_sims : int
             - correlation : np.ndarray
             - show_trajectories : bool
+            - trajectory_alpha : float
             - show_percentiles : bool (cumulative only)
+            - percentiles : tuple (cumulative only)
             - horizons : np.ndarray (horizon only)
             
             **Wealth mode:**
             - show_trajectories : bool
             - trajectory_alpha : float
             - colors : dict
+            - hist_bins : int
+            - hist_color : str
             
             **Comparison mode:**
             - results : dict[str, SimulationResult], required
@@ -893,23 +972,24 @@ class FinancialModel:
         
         Examples
         --------
+        >>> from datetime import date
         >>> model = FinancialModel(income, accounts)
         >>> X = np.tile([0.6, 0.4], (24, 1))
         >>> 
-        >>> # Pre-simulation: income streams
+        >>> # Pre-simulation: income streams (calendar axis)
         >>> model.plot("income", months=24, start=date(2025,1,1))
         >>> 
-        >>> # Pre-simulation: return analysis
-        >>> model.plot("returns", T=24, n_sims=300, seed=42)
-        >>> model.plot("returns_cumulative", T=120, n_sims=500)
+        >>> # Pre-simulation: return analysis (calendar axis)
+        >>> model.plot("returns", T=24, n_sims=300, seed=42, start=date(2025,1,1))
+        >>> model.plot("returns_cumulative", T=120, n_sims=500, start=date(2025,1,1))
         >>> 
-        >>> # Simulation-based: auto-simulates + caches
-        >>> model.plot("wealth", T=24, X=X, n_sims=500, seed=42)
+        >>> # Simulation-based: auto-simulates + caches (calendar axis propagated)
+        >>> model.plot("wealth", T=24, X=X, n_sims=500, seed=42, start=date(2025,1,1))
         >>> # Second call: instant (cached)
         >>> model.plot("wealth", T=24, X=X, n_sims=500, seed=42, title="Alt View")
         >>> 
-        >>> # Bypass simulation if result exists
-        >>> result = model.simulate(T=24, X=X, n_sims=500)
+        >>> # Bypass simulation if result exists (start extracted from result)
+        >>> result = model.simulate(T=24, X=X, n_sims=500, start=date(2025,1,1))
         >>> model.plot("wealth", result=result, show_trajectories=False)
         >>> 
         >>> # Strategy comparison
@@ -921,7 +1001,7 @@ class FinancialModel:
         # Determine if mode needs simulation
         simulation_modes = {"wealth", "comparison"}
         needs_simulation = mode in simulation_modes
-        
+
         if needs_simulation:
             # Option 1: result already provided (bypass)
             if result is not None:
@@ -961,20 +1041,22 @@ class FinancialModel:
         
         # Add mode-specific parameters (only if not already in kwargs)
         if mode in ["returns", "returns_cumulative"]:
-            # These modes expect T, n_sims, seed, correlation (optional)
+            # These modes expect T, n_sims, seed, start, correlation (optional)
             if T is not None:
                 dispatch_kwargs.setdefault("T", T)
             dispatch_kwargs.setdefault("n_sims", n_sims)
             if seed is not None:
                 dispatch_kwargs.setdefault("seed", seed)
+            if start is not None:  # ← NUEVO: propagación de start
+                dispatch_kwargs.setdefault("start", start)
             # correlation comes from kwargs if provided
         
         elif mode == "returns_horizon":
-            # This mode uses horizons array from kwargs, no T/n_sims/seed
+            # This mode uses horizons array from kwargs, no T/n_sims/seed/start
             pass
         
         elif mode in ["income", "contributions"]:
-            # These modes expect months (from kwargs) and start
+            dispatch_kwargs.setdefault("months", T)
             if start is not None:
                 dispatch_kwargs.setdefault("start", start)
         
@@ -983,6 +1065,7 @@ class FinancialModel:
             dispatch_kwargs["result"] = sim_result
             if X is not None:
                 dispatch_kwargs["X"] = X
+            # start will be extracted from sim_result in _plot_wealth
         
         elif mode == "comparison":
             # results already in kwargs, no additional parameters needed
@@ -994,7 +1077,7 @@ class FinancialModel:
         
         # Dispatch
         return self._dispatch_plot(mode, **dispatch_kwargs)
-    
+
     def _dispatch_plot(self, mode: str, **kwargs):
         """Internal dispatcher to plotting methods."""
         _dispatch = {
@@ -1017,38 +1100,43 @@ class FinancialModel:
             )
         
         return _dispatch[mode](**kwargs)
-    
+
     # -----------------------------------------------------------------------
     # Plot delegates (forward to component methods)
     # -----------------------------------------------------------------------
-    
+
     def _plot_income(self, **kwargs):
         """Delegate to income.plot_income()."""
         return self.income.plot_income(**kwargs)
-    
+
     def _plot_contributions(self, **kwargs):
         """Delegate to income.plot_contributions()."""
         return self.income.plot_contributions(**kwargs)
-    
+
     def _plot_returns(self, **kwargs):
         """Delegate to returns.plot()."""
         return self.returns.plot(**kwargs)
-    
+
     def _plot_returns_cumulative(self, **kwargs):
         """Delegate to returns.plot_cumulative()."""
         return self.returns.plot_cumulative(**kwargs)
-    
+
     def _plot_returns_horizon(self, **kwargs):
         """Delegate to returns.plot_horizon_analysis()."""
         return self.returns.plot_horizon_analysis(**kwargs)
-    
+
     def _plot_wealth(
         self, 
         result: SimulationResult, 
         X: Optional[np.ndarray] = None, 
         **kwargs
     ):
-        """Delegate to portfolio.plot()."""
+        """
+        Delegate to portfolio.plot() with automatic start extraction.
+        
+        Extracts start date from SimulationResult if not explicitly provided
+        in kwargs, enabling seamless calendar-based visualization.
+        """
         if not isinstance(result, SimulationResult):
             raise TypeError("mode='wealth' requires result parameter")
         
@@ -1058,8 +1146,13 @@ class FinancialModel:
             "total_wealth": result.total_wealth
         }
         
+        # Extract start from SimulationResult if not explicitly provided
+        # User-provided start in kwargs takes precedence
+        if "start" not in kwargs:
+            kwargs["start"] = result.start
+        
         return self.portfolio.plot(portfolio_result, X_plot, **kwargs)
-    
+
     def _plot_comparison(
         self,
         results: dict[str, SimulationResult],
@@ -1137,7 +1230,7 @@ class FinancialModel:
         
         if return_fig_ax:
             return fig, axes
-    
+
     def __repr__(self) -> str:
         """Human-readable string representation."""
         account_names = [acc.name for acc in self.accounts]
