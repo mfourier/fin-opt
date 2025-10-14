@@ -456,7 +456,7 @@ class Portfolio:
         X : np.ndarray, shape (T, M)
             Allocation policy: X[t, m] = fraction of A_t to account m.
             Must satisfy: X[t, :].sum() = 1, X[t, m] ≥ 0.
-        method : {"recursive", "affine"}, default "recursive"
+        method : {"recursive", "affine"}, default "affine"
             Computation method:
             - "recursive": iterative W_{t+1} = (W_t + A_t)(1+R_t)
             - "affine": closed-form W_t = W_0 F_{0,t} + ∑_s A_s x_s F_{s,t}
@@ -717,7 +717,8 @@ class Portfolio:
         self,
         result: dict,
         X: np.ndarray,
-        figsize: tuple = (16, 10),
+        start: Optional[date] = None,
+        figsize: tuple = (16, 8),
         title: Optional[str] = None,
         save_path: Optional[str] = None,
         return_fig_ax: bool = False,
@@ -744,6 +745,10 @@ class Portfolio:
             - "total_wealth": np.ndarray, shape (n_sims, T+1)
         X : np.ndarray, shape (T, M)
             Allocation policy used in the simulation.
+        start : Optional[date], default None
+            Start date for temporal axis. If None, uses numeric month indices (0, 1, 2, ...).
+            If provided, x-axis shows calendar dates (first-of-month).
+            Aligns with income.py temporal representation convention.
         figsize : tuple, default (16, 10)
             Figure size (width, height).
         title : str, optional
@@ -774,13 +779,25 @@ class Portfolio:
         of final wealth W_T across all Monte Carlo simulations, providing
         immediate visual feedback on outcome uncertainty.
         
+        When start is provided, months are converted to calendar dates for
+        improved readability. This matches the temporal representation used
+        in income.plot_income() and income.plot_contributions().
+        
         Examples
         --------
+        >>> from datetime import date
         >>> result = portfolio.simulate(A, R, X)
-        >>> portfolio.plot(result, X, title="Portfolio Analysis", save_path="portfolio.png")
-        
+        >>> 
+        >>> # Numeric time axis (default)
+        >>> portfolio.plot(result, X, title="Portfolio Analysis")
+        >>> 
+        >>> # Calendar time axis
+        >>> portfolio.plot(result, X, start=date(2025, 1, 1),
+        ...                title="Portfolio Analysis")
+        >>> 
         >>> # Custom colors and histogram
-        >>> portfolio.plot(result, X, colors={"Emergency": "green", "Housing": "blue"},
+        >>> portfolio.plot(result, X, start=date(2025, 1, 1),
+        ...                colors={"Emergency": "green", "Housing": "blue"},
         ...                hist_bins=40, hist_color='coral')
         """
         import matplotlib.pyplot as plt
@@ -794,6 +811,15 @@ class Portfolio:
         
         if X.shape != (T, M):
             raise ValueError(f"X shape {X.shape} != expected ({T}, {M})")
+        
+        # ========== Construcción del eje temporal ==========
+        if start is not None:
+            from .utils import month_index
+            time_axis = month_index(start, T_plus_1)
+            xlabel = "Date"
+        else:
+            time_axis = np.arange(T_plus_1)
+            xlabel = "Month"
         
         # Setup colors
         if colors is None:
@@ -817,9 +843,7 @@ class Portfolio:
         ax_composition = fig.add_subplot(gs[1, 0])
         ax_policy = fig.add_subplot(gs[1, 1])
         
-        time_axis = np.arange(T_plus_1)
-        
-        # Panel 1: Wealth per account
+        # ========== Panel 1: Wealth per account ==========
         if show_trajectories:
             for m in range(M):
                 for i in range(n_sims):
@@ -843,13 +867,13 @@ class Portfolio:
                 label=f"{self.accounts[m].name} (mean)"
             )
         
-        ax_accounts.set_xlabel("Month")
+        ax_accounts.set_xlabel(xlabel)
         ax_accounts.set_ylabel("Wealth (CLP)")
-        ax_accounts.set_title("Wealth by Account")
+        ax_accounts.set_title(r'Wealth by Account $(W_t^m)$')
         ax_accounts.legend(loc='best', fontsize=8)
         ax_accounts.grid(True, alpha=0.3)
         
-        # Panel 2: Total wealth
+        # ========== Panel 2: Total wealth ==========
         if show_trajectories:
             for i in range(n_sims):
                 ax_total.plot(
@@ -870,9 +894,9 @@ class Portfolio:
             label='Mean'
         )
         
-        ax_total.set_xlabel("Month")
+        ax_total.set_xlabel(xlabel)
         ax_total.set_ylabel("Total Wealth (CLP)")
-        ax_total.set_title("Total Portfolio Wealth")
+        ax_total.set_title(r'Total Portfolio Wealth $(\sum_{m} W_t^m)$')
         ax_total.legend(loc='lower right')
         ax_total.grid(True, alpha=0.3)
         
@@ -911,7 +935,7 @@ class Portfolio:
             ax_hist.grid(True, alpha=0.2)
             ax_hist.set_title("Final\nDistribution", fontsize=9)
         
-        # Panel 3: Portfolio composition (stacked area)
+        # ========== Panel 3: Portfolio composition (stacked area) ==========
         mean_wealth_by_account = W.mean(axis=0)  # (T+1, M)
         
         ax_composition.stackplot(
@@ -922,13 +946,13 @@ class Portfolio:
             alpha=0.7
         )
         
-        ax_composition.set_xlabel("Month")
+        ax_composition.set_xlabel(xlabel)
         ax_composition.set_ylabel("Wealth (CLP)")
         ax_composition.set_title("Portfolio Composition")
         ax_composition.legend(loc='upper left', fontsize=8)
         ax_composition.grid(True, alpha=0.3)
         
-        # Panel 4: Allocation policy heatmap
+        # ========== Panel 4: Allocation policy heatmap ==========
         im = ax_policy.imshow(
             X.T,
             aspect='auto',
@@ -940,7 +964,7 @@ class Portfolio:
         
         ax_policy.set_xlabel("Month")
         ax_policy.set_ylabel("Account")
-        ax_policy.set_title("Allocation Policy")
+        ax_policy.set_title(r'Allocation Policy $(X = (x_t^m)_{t,m})$')
         ax_policy.set_yticks(range(M))
         ax_policy.set_yticklabels([acc.name for acc in self.accounts], fontsize=8)
         
@@ -957,6 +981,25 @@ class Portfolio:
                         ha='center', va='center',
                         color=text_color, fontsize=7
                     )
+        
+        # ========== Date formatting (if applicable) ==========
+        if start is not None:
+            # Rotate labels and format as dates for time series plots
+            for ax in [ax_accounts, ax_total, ax_composition]:
+                ax.tick_params(axis='x', rotation=45)
+                ax.xaxis.set_major_formatter(plt.matplotlib.dates.DateFormatter('%Y-%m'))
+                ax.xaxis.set_major_locator(plt.matplotlib.dates.MonthLocator(interval=max(1, T//12)))
+            
+            # For policy heatmap, format ticks manually (imshow uses numeric indices)
+            # Select subset of months to avoid label saturation
+            n_ticks = min(12, T)  # Maximum 12 ticks on x-axis
+            tick_positions = np.linspace(0, T-1, n_ticks, dtype=int)
+            
+            # Generate date labels for those tick positions
+            tick_labels = [time_axis[pos].strftime('%Y-%m') for pos in tick_positions]
+            
+            ax_policy.set_xticks(tick_positions)
+            ax_policy.set_xticklabels(tick_labels, rotation=45, ha='right', fontsize=7)
         
         # Main title
         if title:

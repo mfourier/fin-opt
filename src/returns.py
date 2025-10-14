@@ -309,8 +309,9 @@ class ReturnModel:
         n_sims: int = 300,
         correlation: Optional[np.ndarray] = None,
         seed: Optional[int] = None,
+        start: Optional[date] = None,
         figsize: tuple = (16, 8),
-        title: Optional[str] = None,
+        title: Optional[str] = r'Monthly Return Distributions $(R_t^m)$',
         save_path: Optional[str] = None,
         return_fig_ax: bool = False,
         show_trajectories: bool = True,
@@ -334,6 +335,10 @@ class ReturnModel:
             Correlation matrix override.
         seed : Optional[int]
             Random seed for reproducibility.
+        start : Optional[date], default None
+            Start date for temporal axis. If None, uses numeric month indices (0, 1, 2, ...).
+            If provided, x-axis shows calendar dates (first-of-month).
+            Aligns with income.py and portfolio.py temporal representation.
         figsize : tuple, default (16, 8)
             Figure size (width, height).
         title : str, optional
@@ -351,9 +356,27 @@ class ReturnModel:
         -------
         None or (fig, axes_dict)
             If return_fig_ax=True, returns figure and dict of axes.
+            
+        Examples
+        --------
+        >>> from datetime import date
+        >>> 
+        >>> # Numeric time axis (default)
+        >>> returns.plot(T=24, n_sims=300, seed=42)
+        >>> 
+        >>> # Calendar time axis
+        >>> returns.plot(T=24, n_sims=300, seed=42, start=date(2025, 1, 1))
         """
         # Generate returns
         R = self.generate(T, n_sims, correlation, seed)  # (n_sims, T, M)
+        
+        if start is not None:
+            from .utils import month_index
+            time_axis = month_index(start, T)
+            xlabel = "Date"
+        else:
+            time_axis = np.arange(T)
+            xlabel = "Month"
         
         # Setup figure: 2 rows, 2 columns (bottom row merged)
         fig = plt.figure(figsize=figsize)
@@ -361,18 +384,18 @@ class ReturnModel:
         
         ax_traj = fig.add_subplot(gs[0, 0])
         ax_hist = fig.add_subplot(gs[0, 1])
-        ax_stats = fig.add_subplot(gs[1, :])  # Ocupa ambas columnas
+        ax_stats = fig.add_subplot(gs[1, :])
         
         # Account names and colors
         names = [acc.name for acc in self.accounts]
-        colors = plt.cm.tab10(np.linspace(0, 1, self.M))
+        colors = plt.cm.Dark2(np.linspace(0, 1, self.M))
         
         # ========== Panel 1: Trajectories ==========
         if show_trajectories:
             for m in range(self.M):
                 for i in range(n_sims):
                     ax_traj.plot(
-                        range(T), 
+                        time_axis, 
                         R[i, :, m] * 100,
                         color=colors[m], 
                         alpha=trajectory_alpha,
@@ -382,11 +405,11 @@ class ReturnModel:
         
         for m in range(self.M):
             mean_path = R[:, :, m].mean(axis=0) * 100
-            ax_traj.plot(range(T), mean_path, color=colors[m], linewidth=2.5,
+            ax_traj.plot(time_axis, mean_path, color=colors[m], linewidth=2.5,
                         label=f"{names[m]} (mean)")
         
         ax_traj.axhline(0, color='black', linestyle='--', linewidth=0.8, alpha=0.5)
-        ax_traj.set_xlabel("Month")
+        ax_traj.set_xlabel(xlabel)
         ax_traj.set_ylabel("Monthly Return (%)")
         ax_traj.set_title("Return Trajectories")
         ax_traj.legend(loc='best', fontsize=8)
@@ -405,29 +428,25 @@ class ReturnModel:
         ax_hist.legend(loc='best')
         ax_hist.grid(True, alpha=0.3)
         
-        # ========== Panel 3: Statistics (dual metrics) ==========
+        # ========== Panel 3: Statistics ==========
         ax_stats.axis('off')
         
-        # Compute statistics con formato dual
         stats_data = []
         for m in range(self.M):
-            R_m = R[:, :, m].flatten() * 100  # monthly percentage
+            R_m = R[:, :, m].flatten() * 100
             
-            # Métricas mensuales
             mean_m = R_m.mean()
             std_m = R_m.std()
             median_m = np.percentile(R_m, 50)
             q25_m = np.percentile(R_m, 25)
             q75_m = np.percentile(R_m, 75)
             
-            # Anualización (compounded para mean/percentiles, time-scaling para std)
             mean_a = ((1 + mean_m/100)**12 - 1) * 100
             std_a = std_m * np.sqrt(12)
             median_a = ((1 + median_m/100)**12 - 1) * 100
             q25_a = ((1 + q25_m/100)**12 - 1) * 100
             q75_a = ((1 + q75_m/100)**12 - 1) * 100
             
-            # Fila 1: Métricas mensuales
             stats_data.append([
                 f"{names[m]}",
                 f"{mean_m:.2f}%",
@@ -438,7 +457,6 @@ class ReturnModel:
                 f"{R_m.max():.2f}%"
             ])
             
-            # Fila 2: Métricas anualizadas
             stats_data.append([
                 f"  ↳ Annualized",
                 f"{mean_a:.2f}%",
@@ -461,17 +479,23 @@ class ReturnModel:
         table.set_fontsize(9)
         table.scale(1, 1.5)
         
-        # Styling: header + filas alternas
         for (i, j), cell in table.get_celld().items():
-            if i == 0:  # Header
+            if i == 0:
                 cell.set_facecolor('#4CAF50')
                 cell.set_text_props(weight='bold', color='white')
-            elif i % 2 == 0:  # Filas anualizadas
+            elif i % 2 == 0:
                 cell.set_facecolor('#F0F0F0')
                 cell.set_text_props(style='italic', size=8)
         
         ax_stats.set_title("Summary Statistics (Monthly & Annualized)", 
                         pad=15, fontsize=11, fontweight='bold')
+        
+        # ========== Formateo de fechas (si aplica) ==========
+        if start is not None:
+            ax_traj.tick_params(axis='x', rotation=45)
+            ax_traj.xaxis.set_major_formatter(plt.matplotlib.dates.DateFormatter('%Y-%m'))
+            # Espaciado inteligente de ticks
+            ax_traj.xaxis.set_major_locator(plt.matplotlib.dates.MonthLocator(interval=max(1, T//12)))
         
         # ========== Main title y anotaciones ==========
         if title:
@@ -496,8 +520,9 @@ class ReturnModel:
         n_sims: int = 1000,
         correlation: Optional[np.ndarray] = None,
         seed: Optional[int] = None,
+        start: Optional[date] = None,
         figsize: tuple = (14, 6),
-        title: Optional[str] = None,
+        title: Optional[str] = r'Cumulative Returns per Account $(\prod_{t=0}^{T-1}(1 + R_t^m) - 1)$',
         save_path: Optional[str] = None,
         return_fig_ax: bool = False,
         show_trajectories: bool = True,
@@ -513,7 +538,57 @@ class ReturnModel:
         For M=1: Single plot with lateral histogram.
         For M>1: Separate subplot per account with individual histograms.
         
-        [Parameters and examples as before...]
+        Parameters
+        ----------
+        T : int, default 24
+            Time horizon (months).
+        n_sims : int, default 1000
+            Number of Monte Carlo simulations.
+        correlation : np.ndarray, optional
+            Correlation matrix override.
+        seed : Optional[int]
+            Random seed for reproducibility.
+        start : Optional[date], default None
+            Start date for temporal axis. If None, uses numeric month indices (0, 1, 2, ...).
+            If provided, x-axis shows calendar dates (first-of-month).
+            Aligns with income.py and portfolio.py temporal representation.
+        figsize : tuple, default (14, 6)
+            Figure size (width, height).
+        title : str, optional
+            Main title for the figure.
+        save_path : str, optional
+            Path to save figure.
+        return_fig_ax : bool, default False
+            If True, returns (fig, ax, ax_hist) for M=1 or (fig, axes, ax_hists) for M>1.
+        show_trajectories : bool, default True
+            Whether to show individual simulation paths.
+        trajectory_alpha : float, default 0.08
+            Transparency for trajectory lines.
+        show_percentiles : bool, default True
+            Whether to show percentile bands (P5-P95 by default).
+        percentiles : tuple, default (5, 95)
+            Percentile bounds for confidence band.
+        hist_bins : int, default 40
+            Number of bins for final distribution histogram.
+        hist_color : str, default 'red'
+            Color for the lateral histogram.
+        
+        Returns
+        -------
+        None or tuple
+            If return_fig_ax=True:
+            - M=1: (fig, ax, ax_hist)
+            - M>1: (fig, axes, ax_hists)
+            
+        Examples
+        --------
+        >>> from datetime import date
+        >>> 
+        >>> # Numeric time axis (default)
+        >>> returns.plot_cumulative(T=24, n_sims=500, seed=42)
+        >>> 
+        >>> # Calendar time axis
+        >>> returns.plot_cumulative(T=24, n_sims=500, seed=42, start=date(2025, 1, 1))
         """
         from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
         
@@ -524,7 +599,15 @@ class ReturnModel:
         cumulative_gross[:, 1:, :] = np.cumprod(gross_returns, axis=1)
         cumulative_returns_pct = (cumulative_gross - 1.0) * 100
         
-        time_axis = np.arange(T + 1)
+        # ========== Construcción del eje temporal ==========
+        if start is not None:
+            from .utils import month_index
+            time_axis = month_index(start, T + 1)
+            xlabel = "Date"
+        else:
+            time_axis = np.arange(T + 1)
+            xlabel = "Month"
+        
         names = [acc.name for acc in self.accounts]
         colors = plt.cm.tab10(np.linspace(0, 1, self.M))
         
@@ -550,7 +633,7 @@ class ReturnModel:
                             label=f'P{percentiles[0]}-P{percentiles[1]}')
             
             ax.axhline(y=0, color='black', linestyle='--', alpha=0.5, linewidth=1)
-            ax.set_xlabel('Month', fontsize=12)
+            ax.set_xlabel(xlabel, fontsize=12)
             ax.set_ylabel('Cumulative Return (%)', fontsize=12)
             ax.set_title(title or f'Monte Carlo Simulation ({n_sims} Scenarios): {names[m]}',
                         fontsize=14, fontweight='bold')
@@ -572,18 +655,23 @@ class ReturnModel:
                 ax_hist.grid(True, alpha=0.2)
                 ax_hist.set_title('Final\nDistribution', fontsize=10)
             
-            # Theoretical validation (CORREGIDO)
+            # Theoretical validation
             final_returns = cumulative_returns_pct[:, -1, m]
             mean_sim, std_sim = final_returns.mean(), final_returns.std()
             
-            # Usar monthly_params para claridad
             mu_monthly = self.accounts[m].monthly_params["mu"]
-            expected_theoretical = ((1 + mu_monthly) ** T - 1) * 100  # CORRECCIÓN
+            expected_theoretical = ((1 + mu_monthly) ** T - 1) * 100
             
             validation_text = (f"Simulation:\nMean: {mean_sim:.1f}%\nStd: {std_sim:.1f}%\n\n"
                             f"Theoretical:\nMean: {expected_theoretical:.1f}%")
             ax.text(0.02, 0.98, validation_text, transform=ax.transAxes, fontsize=9,
                 verticalalignment='top', bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+            
+            # ========== Formateo de fechas (si aplica) ==========
+            if start is not None:
+                ax.tick_params(axis='x', rotation=45)
+                ax.xaxis.set_major_formatter(plt.matplotlib.dates.DateFormatter('%Y-%m'))
+                ax.xaxis.set_major_locator(plt.matplotlib.dates.MonthLocator(interval=max(1, T//12)))
             
             param_text = f"T={T} | n_sims={n_sims} | seed={seed}"
             fig.text(0.99, 0.01, param_text, ha='right', va='bottom', fontsize=8, alpha=0.7)
@@ -622,7 +710,7 @@ class ReturnModel:
                                 label=f'P{percentiles[0]}-P{percentiles[1]}')
                 
                 ax.axhline(y=0, color='black', linestyle='--', alpha=0.5, linewidth=1)
-                ax.set_xlabel('Month', fontsize=11)
+                ax.set_xlabel(xlabel, fontsize=11)
                 ax.set_ylabel('Cumulative Return (%)', fontsize=11)
                 ax.set_title(names[m], fontsize=12, fontweight='bold', loc='left')
                 ax.grid(True, linestyle='--', alpha=0.3)
@@ -642,6 +730,12 @@ class ReturnModel:
                     ax_hists.append(ax_hist)
                 else:
                     ax_hists.append(None)
+                
+                # ========== Formateo de fechas (si aplica) ==========
+                if start is not None:
+                    ax.tick_params(axis='x', rotation=45)
+                    ax.xaxis.set_major_formatter(plt.matplotlib.dates.DateFormatter('%Y-%m'))
+                    ax.xaxis.set_major_locator(plt.matplotlib.dates.MonthLocator(interval=max(1, T//12)))
             
             main_title = title or f'Cumulative Return Evolution by Account ({n_sims} Scenarios, T={T} months)'
             fig.suptitle(main_title, fontsize=14, fontweight='bold', y=0.995)
@@ -658,9 +752,9 @@ class ReturnModel:
     
     def plot_horizon_analysis(
         self,
-        horizons: np.ndarray = np.array([1, 2, 3, 5, 10, 20]),
-        figsize: tuple = (14, 5),
-        title: Optional[str] = None,
+        horizons: np.ndarray = np.array([1, 2, 3, 5, 10, 15, 20]),
+        figsize: tuple = (15, 5),
+        title: Optional[str] = 'Horizon Analysis: Average Portfolio Behavior',
         save_path: Optional[str] = None,
         return_fig_ax: bool = False,
         show_table: bool = True,
@@ -668,7 +762,7 @@ class ReturnModel:
         """
         Analyze expected returns, volatility, and probability of loss across investment horizons.
         
-        [Docstring remains the same as provided...]
+
         """
         from scipy import stats
         

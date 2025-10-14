@@ -980,7 +980,7 @@ class IncomeModel:
         start: Optional[date] = None,
         ax=None,
         figsize: tuple = (12, 6),
-        title: Optional[str] = None,
+        title: Optional[str] = r"Projected Monthly Income $(Y_t)$",
         legend: bool = True,
         grid: bool = True,
         ylabel_left: str = "Fixed/Total (CLP)",
@@ -990,8 +990,8 @@ class IncomeModel:
         dual_axis: str | bool = "auto",
         dual_axis_ratio: float = 3.0,
         show_trajectories: bool = True,
-        show_confidence_band: bool = False,
-        trajectory_alpha: float = 0.08,
+        show_confidence_band: bool = True,
+        trajectory_alpha: float = 0.07,
         confidence: float = 0.9,
         n_simulations: int = 500,
         colors: dict | None = None,
@@ -1120,7 +1120,7 @@ class IncomeModel:
         import matplotlib.pyplot as plt
         import numpy as np
 
-        colors = colors or {"fixed": "blue", "variable": "orange", "total": "black"}
+        colors = colors or {"fixed": "black", "variable": "gray", "total": "blue"}
         fixed_col, var_col = self.name_fixed, self.name_variable
 
         # Fixed income: single projection (deterministic, replicated internally if needed)
@@ -1279,7 +1279,7 @@ class IncomeModel:
         start: Optional[date] = None,
         ax=None,
         figsize: tuple = (12, 6),
-        title: str = "Projected Monthly Contributions",
+        title: str = r"Projected Monthly Contributions $(A_t)$",
         legend: bool = True,
         grid: bool = True,
         ylabel: str = "Total Contribution (CLP)",
