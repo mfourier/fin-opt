@@ -23,7 +23,7 @@ We aim to construct feasible investment plans that allocate contributions across
 The evolution of the wealth of each portfolio $m \in \mathcal{M}$ at month $t$ is given by:
 
 $$
-W_{t+1}^m = \big(W_t^m + A_t^m\big)\,(1 + R_t^m)
+W_{t+1}^m = (W_t^m + A_t x_t^m) \,(1 + R_t^m)
 $$
 
 where:  
@@ -48,14 +48,14 @@ $$
 The recursive wealth evolution formula:
 
 $$
-W_{t+1}^m = (W_t^m + A_t^m) \,(1 + R_t^m)
+W_{t+1}^m = (W_t^m + A_t x_t^m) \,(1 + R_t^m)
 $$
 
 can be equivalently expressed in a **closed-form (affine) representation**:
 
 $$
 \boxed{
-W_{t}^m = W_0^m \prod_{r=0}^{t-1} (1 + R_r^m) + \sum_{s=0}^{t-1} A_s^m \prod_{r=s}^{t-1} (1 + R_r^m)
+W_{t}^m = W_0^m \prod_{r=0}^{t-1} (1 + R_r^m) + \sum_{s=0}^{t-1} A_s x_s^m \prod_{r=s}^{t-1} (1 + R_r^m)
 }
 $$
 
@@ -65,7 +65,7 @@ $$
 F_{s,t}^m := \prod_{r=s}^{t-1} (1 + R_r^m), \quad 0 \le s \le t.
 $$
 
-Using this, and the relation $A_s^m = A_s x_s^m$, the wealth at time $t$ can be expressed in **closed-form affine representation**:
+Using this, the wealth at time $t$ can be expressed in **closed-form affine representation**:
 
 $$
 \boxed{
