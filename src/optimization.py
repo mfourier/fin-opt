@@ -1,625 +1,1228 @@
+# finopt/src/optimization.py
 """
-optimization.py — Min-Time Feasibility with Allocation Matrix C[t,k]
+Stochastic optimization module for FinOpt.
 
-Goal
-----
-Find the smallest horizon T and a contribution allocation matrix C (T×K)
-such that each account/goal k attains its target B_k by its deadline.
-
-Core idea (deterministic returns)
----------------------------------
-Wealth dynamics per account k:
-    W_{t+1}^{(k)} = (W_t^{(k)} + a_t C_{t,k}) (1 + r_t^{(k)})
-
-With arithmetic returns, terminal wealth is affine in contributions:
-    W_T^{(k)} = W_0^{(k)} G_0^{(k)} + sum_{t=0}^{T-1} (a_t C_{t,k}) * H_{t+1}^{(k)},
-where:
-    G_t^{(k)} = Π_{u=t}^{T-1} (1 + r_u^{(k)}),    G_T^{(k)} = 1
-    H_{t+1}^{(k)} = Π_{u=t+1}^{T-1} (1 + r_u^{(k)})    (future value factor)
-
-Hence, for fixed T, feasibility reduces to a Linear Program in the variables
-x_{t,k} := a_t C_{t,k} (the peso amount allocated to account k in month t):
-
-Variables: x_{t,k} ≥ 0
-Row sums:  sum_k x_{t,k} = a_t,   ∀t
-Targets:   sum_t x_{t,k} * H_{t+1}^{(k)} ≥ B_k - W_0^{(k)} G_0^{(k)},   ∀k
-
-We search T = 1..T_max and return the smallest feasible T and a C*.
-
-Backends
---------
-- "scipy": LP feasibility via scipy.optimize.linprog (objective 0).
-- "greedy": deterministic greedy on marginal FV weights H_{t+1}^{(k)} while
-            tracking remaining deficits; no external dependencies.
-
-Outputs
+Purpose
 -------
-- T_star: smallest feasible horizon
-- C_star: DataFrame (T×K) row-stochastic allocation matrix
-- A_df:   DataFrame (T×K) allocated contributions (x_{t,k})
-- wealth_by_account: DataFrame (T×K [+ "total"]) simulated with simulate_portfolio
-- diagnostics (per-account deficit, t_hit, margins)
+Goal-driven allocation policy synthesis under uncertainty with support for
+intermediate and terminal goals. Integrates convex programming with Monte Carlo
+simulation for solving chance-constrained portfolio optimization problems.
 
-Notes
------
-- Supports either explicit contributions Series, or an IncomeModel + (alpha, beta).
-- Returns may be scalar, length-T vector, (T×K) matrix, or dict per account.
+Mathematical Framework
+----------------------
+Bilevel optimization problem:
+
+    min T ∈ ℕ  s.t.  ∃X* ∈ arg max f(X)
+                          X ∈ 𝒳_T
+                          ℙ(W_t^m(X) ≥ b_t^m) ≥ 1-ε_t^m  ∀ intermediate goals
+                          ℙ(W_T^m(X) ≥ b^m) ≥ 1-ε^m      ∀ terminal goals
+
+Outer problem: Linear search over horizon T (GoalSeeker)
+Inner problem: Convex program via affine wealth representation (AllocationOptimizer)
+
+Key Components
+--------------
+- OptimizationResult: Container for X*, T*, objective value, and diagnostics
+- AllocationOptimizer: Abstract base with parametrizable objectives f(X)
+- CVaROptimizer: Risk-adjusted optimization (stub for future CVXPY implementation)
+- SAAOptimizer: Sample Average Approximation with sigmoid smoothing
+- GoalSeeker: Bilevel solver with linear search and warm start
+
+Design Principles
+-----------------
+- Separation of concerns: Goals defined in goals.py, solvers here
+- Scenario-driven: Receives pre-generated (A, R) from FinancialModel
+- Solver-agnostic: Abstract base allows scipy, CVXPY, or custom solvers
+- Optimization-ready: Exploits affine wealth W_t^m(X) for analytical gradients
+- Reproducible: Explicit seed management for stochastic scenarios
 """
 
 from __future__ import annotations
-
 from dataclasses import dataclass
-from typing import Dict, Mapping, Optional, Sequence, Tuple, Union, Literal
-
+from typing import List, Optional, Callable, Dict, Any, Union, Literal, TYPE_CHECKING
+from abc import ABC, abstractmethod
+import time
 import numpy as np
-import pandas as pd
 
-# Project imports
-from .income import IncomeModel
-from .utils import ensure_1d, align_index_like, month_index
+from .goals import IntermediateGoal, TerminalGoal, GoalSet, check_goals
 
-
-ArrayLike = Sequence[float] | np.ndarray | pd.Series
-MatrixLike = np.ndarray | pd.DataFrame
+if TYPE_CHECKING:
+    from .model import SimulationResult
 
 __all__ = [
-    "MinTimeAllocationInput",
-    "MinTimeAllocationResult",
-    "min_time_with_allocation",
+    "OptimizationResult",
+    "AllocationOptimizer",
+    "CVaROptimizer",
+    "SAAOptimizer",
+    "GoalSeeker",
+]
+
+
+# Type alias for objective specifications
+ObjectiveType = Union[
+    Literal["terminal_wealth", "low_turnover", "risk_adjusted", "balanced"],
+    Callable[[np.ndarray, np.ndarray, int, int], float]
 ]
 
 
 # ---------------------------------------------------------------------------
-# Dataclasses
+# Optimization Result Container
 # ---------------------------------------------------------------------------
 
 @dataclass(frozen=True)
-class MinTimeAllocationInput:
-    # Accounts & targets
-    accounts: Sequence[str]                                 # length K
-    targets_by_account: Mapping[str, float]                 # B_k per account
-    start_wealth_by_account: Union[float, Mapping[str, float]] = 0.0
-
-    # Contributions source (choose one)
-    contributions: Optional[pd.Series] = None               # a_t (indexed monthly)
-    income_model: Optional[IncomeModel] = None              # alternatively...
-    start: Optional[pd.Timestamp] = None                    # ...calendar start
-    alpha_fixed: float = 0.35
-    beta_variable: float = 1.0
-
-    # Returns per account (deterministic)
-    returns_by_account: Union[
-        float, ArrayLike, MatrixLike, Mapping[str, Union[float, ArrayLike]]
-    ] = 0.0
-
-    # Search settings
-    T_max: int = 120                                        # months
-    t_min: Union[int, Literal["auto"]] = "auto"             # <-- NUEVO
-    backend: str = "scipy"                                  # "scipy" | "greedy"
-    seed: Optional[int] = 42                                # for greedy tie-breaks
-    equality_rows: bool = True                              # enforce sum_k x_{t,k} == a_t
-
-@dataclass(frozen=True)
-class MinTimeAllocationResult:
-    T_star: int
-    C_star: pd.DataFrame
-    A_df: pd.DataFrame
-    contributions_total: pd.Series
-    returns_by_account: pd.DataFrame
-    wealth_by_account: pd.DataFrame
-    t_hit_by_account: pd.Series
-    margin_at_T: pd.Series   # W_T^{(k)} - B_k
-    feasible: bool           # True if feasibility was achieved within T_max
-
-
-# ---------------------------------------------------------------------------
-# Helpers — broadcasting, factors, building specs
-# ---------------------------------------------------------------------------
-
-def _as_index(T: int, start: Optional[pd.Timestamp]) -> pd.DatetimeIndex:
-    return month_index(start, T)  # first-of-month index
-
-def _broadcast_returns(
-    R_spec: Union[float, ArrayLike, MatrixLike, Mapping[str, Union[float, ArrayLike]]],
-    T: int,
-    accounts: Sequence[str],
-) -> pd.DataFrame:
-    K = len(accounts)
-    # dict{name -> scalar/array}
-    if isinstance(R_spec, Mapping):
-        cols = []
-        for name in accounts:
-            v = R_spec[name]
-            if np.isscalar(v):
-                cols.append(np.full(T, float(v), dtype=float))
-            else:
-                v1 = ensure_1d(v, name=f"returns[{name}]")
-                if v1.shape[0] != T:
-                    raise ValueError(f"returns[{name}] length {v1.shape[0]} must equal T={T}.")
-                cols.append(v1)
-        R = np.column_stack(cols)
-        return pd.DataFrame(R, columns=list(accounts), index=_as_index(T, None))
-    # DataFrame
-    if isinstance(R_spec, pd.DataFrame):
-        Rdf = R_spec.copy()
-        if Rdf.shape[0] != T or Rdf.shape[1] != K:
-            raise ValueError(f"returns DataFrame must be (T,K) = ({T},{K}).")
-        Rdf.columns = list(accounts)
-        return Rdf
-    # ndarray
-    if isinstance(R_spec, np.ndarray):
-        if R_spec.ndim == 1:
-            if R_spec.shape[0] != T:
-                raise ValueError(f"returns length {R_spec.shape[0]} must equal T={T}.")
-            R = np.repeat(R_spec.reshape(T, 1), K, axis=1)
-            return pd.DataFrame(R, columns=list(accounts), index=_as_index(T, None))
-        if R_spec.ndim == 2:
-            if R_spec.shape != (T, K):
-                raise ValueError(f"returns must be shape (T,K)=({T},{K}).")
-            return pd.DataFrame(R_spec, columns=list(accounts), index=_as_index(T, None))
-        raise ValueError("returns ndarray must be 1-D or 2-D.")
-    # scalar or 1-D listlike
-    if np.isscalar(R_spec):
-        R = np.full((T, K), float(R_spec), dtype=float)
-        return pd.DataFrame(R, columns=list(accounts), index=_as_index(T, None))
-    r1 = ensure_1d(R_spec, name="returns")
-    if r1.shape[0] != T:
-        raise ValueError(f"returns length {r1.shape[0]} must equal T={T}.")
-    R = np.repeat(r1.reshape(T, 1), K, axis=1)
-    return pd.DataFrame(R, columns=list(accounts), index=_as_index(T, None))
-
-
-def _growth_and_annuity_factors(R_df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
+class OptimizationResult:
     """
-    For each account k, compute:
-      G0[k] = Π_{u=0}^{T-1} (1+r_{u,k})
-      H[t+1, k] = Π_{u=t+1}^{T-1} (1+r_{u,k})   (with H[T, k] = 1)
-    Returns:
-      G0: shape (K,)
-      H:  shape (T+1, K)  (we will use H[1:, :] for the LP)
-    """
-    R = np.asarray(R_df.values, dtype=float)
-    T, K = R.shape
-    one_plus = 1.0 + R
-    # G0
-    G0 = np.prod(one_plus, axis=0).astype(float)  # (K,)
-    # H (future value factors)
-    H = np.empty((T + 1, K), dtype=float)
-    H[T, :] = 1.0
-    acc = np.ones(K, dtype=float)
-    for t in range(T - 1, -1, -1):
-        acc *= one_plus[t, :]
-        H[t, :] = acc
-    # H[t+1,:] is FV factor from month t to T
-    return G0, H
-
-
-def _get_contributions_series(inp: MinTimeAllocationInput, T: int) -> pd.Series:
-    if inp.contributions is not None:
-        a = inp.contributions
-        if len(a) < T:
-            raise ValueError(f"Provided contributions length {len(a)} < T={T}.")
-        a = a.iloc[:T].astype(float)
-        return a
-    if inp.income_model is None or inp.start is None:
-        raise ValueError("Provide either `contributions` Series or an IncomeModel + (months, start).")
-    # Build from income model for the requested horizon T
-    a = inp.income_model.contributions(
-        months=T,
-        alpha_fixed=inp.alpha_fixed,
-        beta_variable=inp.beta_variable,
-        start=inp.start,
-    )
-    return a.astype(float)
-
-
-def _init_starts(inp: MinTimeAllocationInput) -> np.ndarray:
-    K = len(inp.accounts)
-    if np.isscalar(inp.start_wealth_by_account):
-        return np.full(K, float(inp.start_wealth_by_account), dtype=float)
-    arr = np.zeros(K, dtype=float)
-    for i, name in enumerate(inp.accounts):
-        arr[i] = float(inp.start_wealth_by_account.get(name, 0.0))  # type: ignore
-    return arr
-
-
-def _targets_vector(inp: MinTimeAllocationInput) -> np.ndarray:
-    K = len(inp.accounts)
-    return np.array([float(inp.targets_by_account[name]) for name in inp.accounts], dtype=float)
-
-def _build_full_paths(inp: MinTimeAllocationInput) -> tuple[pd.Series, pd.DataFrame]:
-    """
-    Build contributions and returns up to horizon T_max.
-    Useful to compute a lower bound t_min 'auto'.
-    """
-    T = int(inp.T_max)
-    # a_full
-    if inp.contributions is not None:
-        if len(inp.contributions) < T:
-            raise ValueError(f"Provided contributions length {len(inp.contributions)} < T_max={T}.")
-        a_full = inp.contributions.iloc[:T].astype(float).copy()
-    else:
-        if inp.income_model is None or inp.start is None:
-            raise ValueError("For t_min='auto', need contributions Series or (income_model + start).")
-        a_full = inp.income_model.contributions(
-            months=T,
-            alpha_fixed=inp.alpha_fixed,
-            beta_variable=inp.beta_variable,
-            start=inp.start,
-        ).astype(float)
-
-    if not isinstance(a_full.index, pd.DatetimeIndex):
-        a_full.index = month_index(inp.start, T)
-
-    # R_full (T×K)
-    R_full = _broadcast_returns(inp.returns_by_account, T, inp.accounts)
-    R_full.index = a_full.index
-    return a_full, R_full
-
-
-def _auto_t_min(
-    a_full: pd.Series,
-    R_full: pd.DataFrame,
-    W0: np.ndarray,
-    B: np.ndarray,
-) -> int:
-    """
-    Compute t_min (lower bound) such that, for each account k,
-    the accumulated 'capacity' up to T in future value (if you dedicated ALL to k)
-    is enough to cover the deficit in future value at T.
-
-    Definitions:
-      cp_k[T] = Prod_{u=0..T-1} (1 + r_{u,k})       (growth prefix)
-      deficit_k(T) = max(0, B_k - W0_k * cp_k[T])   (in future value)
-      H_{t+1}^{(k)}(T) = Prod_{u=t+1..T-1} (1 + r_{u,k})
-      Cap_k(T) = sum_{t=0..T-1} a_t * H_{t+1}^{(k)}(T)
-
-    Key observation (O(1) update):
-      Cap_k(T) = Cap_k(T-1) * (1 + r_{T-1,k}) + a_{T-1}
-    """
-    T, K = R_full.shape
-    one_plus = 1.0 + R_full.to_numpy(dtype=float)  # (T,K)
-
-    # Prefixes cp_k[T] with cumulative product per column
-    cp = np.ones((T + 1, K), dtype=float)
-    for t in range(1, T + 1):
-        cp[t, :] = cp[t - 1, :] * one_plus[t - 1, :]
-
-    # Incremental capacity Cap_k(T)
-    cap = np.zeros((T + 1, K), dtype=float)  # cap[0,:] = 0
-    a_vals = a_full.to_numpy(dtype=float)
-    for t in range(1, T + 1):
-        # Cap(T) = Cap(T-1) * (1 + r_{t-1}) + a_{t-1}
-        cap[t, :] = cap[t - 1, :] * one_plus[t - 1, :] + a_vals[t - 1]
-
-    # Find the minimum T such that Cap_k(T) >= deficit_k(T) for all k
-    for t in range(1, T + 1):
-        deficit = np.maximum(B - (W0 * cp[t, :]), 0.0)
-        # Note: cap[t,:] is already in "t=0 weight units" transformed to the end (FV at T),
-        # because each step multiplies by (1+r) and adds a_{t-1} (equivalent to H=1 in that month).
-        if np.all(cap[t, :] + 1e-9 >= deficit):
-            return t
-    return 1  # if never satisfied, start at 1 (outer loop will find actual feasibility)
-
-
-# ---------------------------------------------------------------------------
-# Feasibility at fixed T — backends
-# ---------------------------------------------------------------------------
-
-def _feasible_LP(a: pd.Series, R_df: pd.DataFrame, W0: np.ndarray, B: np.ndarray, equality_rows: bool = True):
-    """
-    LP feasibility:
-        variables x[t,k] >= 0
-        Row sums: sum_k x[t,k] = a[t]  (or <= a[t] if equality_rows=False)
-        Targets:  sum_t x[t,k] * H[t+1,k] >= B_k - W0_k * G0_k
-    Returns (feasible: bool, X: ndarray T×K)
-    """
-    try:
-        from scipy.optimize import linprog
-    except Exception:
-        return (False, None)
-
-    T, K = R_df.shape
-    idx = a.index
-    G0, H = _growth_and_annuity_factors(R_df)
-    rhs = B - (W0 * G0)
-    rhs = np.maximum(rhs, 0.0)  # if already above target, require 0 additional FV
-
-    # Flatten variables x[t,k] row-major
-    nvar = T * K
-
-    # Objective: 0 (pure feasibility)
-    c = np.zeros(nvar, dtype=float)
-
-    # Row-sum equalities/inequalities
-    A_eq, b_eq, A_ub, b_ub = [], [], [], []
-    for t in range(T):
-        row = np.zeros(nvar, dtype=float)
-        row[t * K : (t + 1) * K] = 1.0
-        if equality_rows:
-            A_eq.append(row)
-            b_eq.append(float(a.iloc[t]))
-        else:
-            A_ub.append(row)
-            b_ub.append(float(a.iloc[t]))
-
-    # Target inequalities per account k:
-    # sum_t x[t,k] * H[t+1,k] >= rhs[k]  →  -sum_t (...) <= -rhs[k]
-    for k in range(K):
-        row = np.zeros(nvar, dtype=float)
-        for t in range(T):
-            row[t * K + k] = -float(H[t + 1, k])
-        A_ub.append(row)
-        b_ub.append(-float(rhs[k]))
-
-    bounds = [(0.0, None)] * nvar
-
-    res = linprog(
-        c,
-        A_ub=np.array(A_ub) if A_ub else None,
-        b_ub=np.array(b_ub) if A_ub else None,
-        A_eq=np.array(A_eq) if A_eq else None,
-        b_eq=np.array(b_eq) if A_eq else None,
-        bounds=bounds,
-        method="highs",
-    )
-    if not res.success:
-        return (False, None)
-
-    x = res.x.reshape(T, K)
-    # If we allowed <= rows, normalize tiny slack into the last positive column for exactness
-    if not equality_rows:
-        row_sums = x.sum(axis=1)
-        target = a.to_numpy(dtype=float)
-        diff = target - row_sums
-        for t in range(T):
-            if abs(diff[t]) > 1e-9 and target[t] > 0:
-                k = int(np.argmax(x[t, :]))
-                x[t, k] += diff[t]
-    return (True, x)
-
-
-def _feasible_greedy(a: pd.Series, R_df: pd.DataFrame, W0: np.ndarray, B: np.ndarray, seed: Optional[int] = 42):
-    """
-    Greedy feasibility:
-      - Compute FV weights H[t+1,k].
-      - Track remaining FV deficits d_k = max(0, B_k - W0_k*G0_k).
-      - For each t, allocate a[t] to argmax (H[t+1,k]) among k with d_k > 0,
-        but cap by what is still needed in FV space (a[t]*H contributes to d_k).
-      - Break ties deterministically (np.argmax) or with RNG if provided.
-
-    Returns (feasible: bool, X: ndarray T×K)
-    """
-    T, K = R_df.shape
-    rng = np.random.default_rng(seed)
-    G0, H = _growth_and_annuity_factors(R_df)
-    deficits = np.maximum(B - (W0 * G0), 0.0)  # FV units at T
-    X = np.zeros((T, K), dtype=float)
-
-    for t in range(T):
-        at = float(a.iloc[t])
-        if at <= 0.0:
-            continue
-        # While we have contribution to place and unmet deficits:
-        remaining = at
-        # Build preference order by H[t+1,k] (higher FV per peso first)
-        order = np.argsort(-H[t + 1, :])  # descending
-        for k in order:
-            if remaining <= 1e-12:
-                break
-            if deficits[k] <= 1e-12:
-                continue
-            # Max FV we can contribute to k this month if we give all remaining pesos:
-            fv_from_all = remaining * H[t + 1, k]
-            if fv_from_all <= deficits[k] + 1e-12:
-                # Allocate all remaining to k
-                X[t, k] += remaining
-                deficits[k] -= fv_from_all
-                remaining = 0.0
-                break
-            else:
-                # Allocate just enough to cover k's deficit
-                need_pesos = deficits[k] / max(H[t + 1, k], 1e-18)
-                give = min(remaining, need_pesos)
-                X[t, k] += give
-                deficits[k] -= give * H[t + 1, k]
-                remaining -= give
-
-        # If still remaining (all deficits ~0), dump to best H (doesn't harm feasibility)
-        if remaining > 1e-12:
-            k_best = int(np.argmax(H[t + 1, :]))
-            X[t, k_best] += remaining
-
-        # Early exit if all deficits are cleared
-        if np.all(deficits <= 1e-9):
-            # Fill any subsequent rows (t+1..T-1) with zeros (already zeros)
-            break
-
-    feasible = bool(np.all(deficits <= 1e-6))
-    return (feasible, X)
-
-
-# ---------------------------------------------------------------------------
-# Public solver — outer loop over T
-# ---------------------------------------------------------------------------
-
-def min_time_with_allocation(inp: MinTimeAllocationInput) -> MinTimeAllocationResult:
-    """Min-Time Feasibility with Allocation Matrix C[t,k]
-    Goal
-    ----
-    Find the smallest horizon T and a contribution allocation matrix C (T×K)
-    such that each account/goal k attains its target B_k by its deadline.
-
-    Core idea (deterministic returns)
-    ---------------------------------
-    Wealth dynamics per account k:
-        W_{t+1}^{(k)} = (W_t^{(k)} + a_t C_{t,k}) (1 + r_t^{(k)})
-
-    With arithmetic returns, terminal wealth is affine in contributions:
-        W_T^{(k)} = W_0^{(k)} G_0^{(k)} + sum_{t=0}^{T-1} (a_t C_{t,k}) * H_{t+1}^{(k)},
-    where:
-        G_t^{(k)} = Π_{u=t}^{T-1} (1 + r_u^{(k)}),    G_T^{(k)} = 1
-        H_{t+1}^{(k)} = Π_{u=t+1}^{T-1} (1 + r_u^{(k)})    (future value factor)
-
-    Hence, for fixed T, feasibility reduces to a Linear Program in the variables
-    x_{t,k} := a_t C_{t,k} (the peso amount allocated to account k in month t):
-
-    Variables: x_{t,k} ≥ 0
-    Row sums:  sum_k x_{t,k} = a_t,   ∀t
-    Targets:   sum_t x_{t,k} * H_{t+1}^{(k)} ≥ B_k - W_0^{(k)} G_0^{(k)},   ∀k
-
-    We search T = 1..T_max and return the smallest feasible T and a C*.
-
-    Backends
+    Container for allocation optimization output.
+    
+    Immutable dataclass holding optimal policy X*, horizon T*, objective value,
+    feasibility status, and solver diagnostics.
+    
+    Attributes
+    ----------
+    X : np.ndarray, shape (T, M)
+        Optimal allocation policy matrix.
+        X[t, m] = fraction of contribution A_t allocated to account m at month t.
+        Satisfies: Σ_m X[t, m] = 1, X[t, m] ≥ 0 for all t, m.
+    T : int
+        Optimization horizon (number of months).
+    objective_value : float
+        Final objective f(X*) at optimum.
+    feasible : bool
+        Whether all goals satisfied at X*.
+        True → all chance constraints hold within tolerance.
+        False → at least one goal violated (infeasible solution).
+    goals : List[Union[IntermediateGoal, TerminalGoal]]
+        Original goal specifications from problem formulation.
+    solve_time : float
+        Total solver execution time (seconds).
+    n_iterations : int, optional
+        Number of solver iterations (solver-dependent).
+    diagnostics : dict, optional
+        Solver-specific metadata (duality_gap, convergence_status, etc.)
+    
+    Examples
     --------
-    - "scipy": LP feasibility via scipy.optimize.linprog (objective 0).
-    - "greedy": deterministic greedy on marginal FV weights H_{t+1}^{(k)} while
-                tracking remaining deficits; no external dependencies.
+    >>> result = optimizer.solve(T=24, A=A, R=R, W0=W0, goals=goals, goal_set=gs)
+    >>> print(result.summary())
+    OptimizationResult(
+      Status: ✓ Feasible
+      Horizon: T=24 months
+      Objective: 11234567.89
+      Goals: 3 (1 intermediate, 2 terminal)
+      Solve time: 0.342s
+      Iterations: 18
+    )
+    """
+    X: np.ndarray
+    T: int
+    objective_value: float
+    feasible: bool
+    goals: List[Union[IntermediateGoal, TerminalGoal]]
+    solve_time: float
+    n_iterations: Optional[int] = None
+    diagnostics: Optional[Dict[str, Any]] = None
+    
+    def __post_init__(self):
+        """Validate result structure at construction."""
+        if self.X.ndim != 2:
+            raise ValueError(f"X must be 2D array, got shape {self.X.shape}")
+        T_X, M = self.X.shape
+        if T_X != self.T:
+            raise ValueError(f"X.shape[0]={T_X} != T={self.T}")
+        
+        if not isinstance(self.T, int) or self.T < 1:
+            raise ValueError(f"T must be positive int, got {self.T}")
+        if not isinstance(self.feasible, bool):
+            raise TypeError(f"feasible must be bool, got {type(self.feasible)}")
+        if not isinstance(self.solve_time, (int, float)) or self.solve_time < 0:
+            raise ValueError(f"solve_time must be non-negative, got {self.solve_time}")
+    
+    def summary(self) -> str:
+        """Human-readable optimization summary."""
+        status = "✓ Feasible" if self.feasible else "✗ Infeasible"
+        
+        n_intermediate = sum(1 for g in self.goals if isinstance(g, IntermediateGoal))
+        n_terminal = sum(1 for g in self.goals if isinstance(g, TerminalGoal))
+        
+        lines = [
+            "OptimizationResult(",
+            f"  Status: {status}",
+            f"  Horizon: T={self.T} months",
+            f"  Objective: {self.objective_value:.2f}",
+            f"  Goals: {len(self.goals)} ({n_intermediate} intermediate, "
+            f"{n_terminal} terminal)",
+            f"  Solve time: {self.solve_time:.3f}s",
+            f"  Iterations: {self.n_iterations if self.n_iterations is not None else 'N/A'}",
+        ]
+        
+        if self.diagnostics:
+            if 'duality_gap' in self.diagnostics:
+                lines.append(f"  Duality gap: {self.diagnostics['duality_gap']:.2e}")
+            if 'convergence_status' in self.diagnostics:
+                lines.append(f"  Convergence: {self.diagnostics['convergence_status']}")
+        
+        lines.append(")")
+        return "\n".join(lines)
+    
+    def validate_goals(
+        self,
+        result: SimulationResult,
+        account_names: List[str],
+        start_date
+    ) -> Dict[Union[IntermediateGoal, TerminalGoal], Dict[str, float]]:
+        """Validate goal satisfaction in simulation result using X*."""
+        if result.T != self.T:
+            raise ValueError(
+                f"Result horizon mismatch: result.T={result.T} != self.T={self.T}"
+            )
+        
+        return check_goals(result, self.goals, account_names, start_date)
+    
+    def is_valid_allocation(self, tol: float = 1e-6) -> bool:
+        """Check if X satisfies allocation constraints."""
+        if np.any(self.X < -tol):
+            return False
+        
+        row_sums = self.X.sum(axis=1)
+        if not np.allclose(row_sums, 1.0, atol=tol):
+            return False
+        
+        return True
+    
+    @property
+    def M(self) -> int:
+        """Number of accounts (portfolio size)."""
+        return self.X.shape[1]
 
-    Outputs
-    -------
-    - T_star: smallest feasible horizon
-    - C_star: DataFrame (T×K) row-stochastic allocation matrix
-    - A_df:   DataFrame (T×K) allocated contributions (x_{t,k})
-    - wealth_by_account: DataFrame (T×K [+ "total"]) simulated with simulate_portfolio
-    - diagnostics (per-account deficit, t_hit, margins)
 
+# ---------------------------------------------------------------------------
+# Abstract Optimizer Interface
+# ---------------------------------------------------------------------------
+
+class AllocationOptimizer(ABC):
+    """
+    Abstract base class for allocation policy optimizers.
+    
+    Defines interface for inner problem solvers in bilevel optimization.
+    Subclasses implement specific formulations (CVaR, SAA, etc.) by
+    providing concrete solve() method.
+    
+    Supports parametrizable objectives f(X):
+    - "terminal_wealth": E[Σ_m W_T^m] (default)
+    - "low_turnover": E[W_T] - λ·Σ_{t,m}|x_{t+1,m} - x_t^m|
+    - "risk_adjusted": E[W_T] - λ·Std(W_T)
+    - "balanced": Combination of above
+    - Custom callable: f(W, X, T, M) → float
+    
+    Parameters
+    ----------
+    n_accounts : int
+        Number of portfolio accounts M
+    objective : ObjectiveType, default "terminal_wealth"
+        Objective function specification
+    objective_params : dict, optional
+        Parameters for objective function (e.g., {"lambda": 0.1})
+    account_names : List[str], optional
+        Account name labels for goal resolution
+    
     Notes
     -----
-    - Supports either explicit contributions Series, or an IncomeModel + (alpha, beta).
-    - Returns may be scalar, length-T vector, (T×K) matrix, or dict per account.
+    Subclasses must implement:
+    - solve(T, A, R, W0, goals, goal_set, X_init, **kwargs) → OptimizationResult
+    
+    Provided utilities:
+    - _validate_inputs(...) → GoalSet
+    - _check_feasibility(...) → bool
+    - _compute_objective(W, X, T, M) → float (dispatches to objective functions)
     """
-    accounts = list(inp.accounts)
-    K = len(accounts)
-
-    # We will reuse the calendar from contributions if provided; otherwise build per T.
-    W0 = _init_starts(inp)
-    B = _targets_vector(inp)
-    if inp.t_min == "auto":
-            a_full, R_full = _build_full_paths(inp)
-            T_start = max(1, _auto_t_min(a_full, R_full, W0, B))
-    else:
-        T_start = max(1, int(inp.t_min))
-
-    best = None  # (T, A (T×K), a_series, R_df_T)
-    for T in range(T_start, int(inp.T_max) + 1):
-        # Build contributions and returns for this T
-        a = _get_contributions_series(inp, T)  # Series length T
-        # Ensure monthly DatetimeIndex
-        if not isinstance(a.index, pd.DatetimeIndex):
-            a.index = _as_index(T, inp.start)
-
-        R_df = _broadcast_returns(inp.returns_by_account, T, accounts)
-        R_df.index = a.index  # align calendar
-
-        # Backend feasibility at fixed T
-        if inp.backend == "scipy":
-            ok, X = _feasible_LP(a, R_df, W0, B, equality_rows=inp.equality_rows)
-            if not ok:
-                ok, X = _feasible_greedy(a, R_df, W0, B, seed=inp.seed)
-        elif inp.backend == "greedy":
-            ok, X = _feasible_greedy(a, R_df, W0, B, seed=inp.seed)
+    
+    def __init__(
+        self,
+        n_accounts: int,
+        objective: ObjectiveType = "terminal_wealth",
+        objective_params: Optional[Dict[str, Any]] = None,
+        account_names: Optional[List[str]] = None
+    ):
+        if n_accounts < 1:
+            raise ValueError(f"n_accounts must be ≥ 1, got {n_accounts}")
+        
+        self.M = n_accounts
+        self.objective = objective
+        self.objective_params = objective_params or {}
+        self.account_names = account_names or [f"Account_{i}" for i in range(n_accounts)]
+        
+        if len(self.account_names) != n_accounts:
+            raise ValueError(
+                f"account_names length {len(self.account_names)} != "
+                f"n_accounts {n_accounts}"
+            )
+    
+    @abstractmethod
+    def solve(
+        self,
+        T: int,
+        A: np.ndarray,
+        R: np.ndarray,
+        W0: np.ndarray,
+        goals: List[Union[IntermediateGoal, TerminalGoal]],
+        goal_set: GoalSet,
+        X_init: Optional[np.ndarray] = None,
+        **solver_kwargs
+    ) -> OptimizationResult:
+        """
+        Solve allocation optimization problem for fixed horizon T.
+        
+        Parameters
+        ----------
+        T : int
+            Optimization horizon (months)
+        A : np.ndarray, shape (n_sims, T)
+            Contribution scenarios
+        R : np.ndarray, shape (n_sims, T, M)
+            Return scenarios
+        W0 : np.ndarray, shape (M,)
+            Initial wealth vector
+        goals : List[Union[IntermediateGoal, TerminalGoal]]
+            Goal specifications
+        goal_set : GoalSet
+            Pre-validated goal collection
+        X_init : np.ndarray, optional
+            Warm start allocation (T, M)
+        **solver_kwargs
+            Solver-specific parameters
+        
+        Returns
+        -------
+        OptimizationResult
+            Optimal X*, objective value, feasibility, diagnostics
+        """
+        pass
+    
+    def _validate_inputs(
+        self,
+        T: int,
+        A: np.ndarray,
+        R: np.ndarray,
+        W0: np.ndarray,
+        goals: List[Union[IntermediateGoal, TerminalGoal]],
+        start_date
+    ) -> GoalSet:
+        """Validate inputs and return GoalSet."""
+        if not isinstance(T, int) or T < 1:
+            raise ValueError(f"T must be positive int, got {T}")
+        
+        if A.ndim != 2 or A.shape[1] != T:
+            raise ValueError(f"A must have shape (n_sims, T), got {A.shape}")
+        
+        if R.ndim != 3 or R.shape[1:] != (T, self.M):
+            raise ValueError(f"R must have shape (n_sims, T, M), got {R.shape}")
+        
+        if A.shape[0] != R.shape[0]:
+            raise ValueError(
+                f"A and R must have same n_sims: {A.shape[0]} != {R.shape[0]}"
+            )
+        
+        if W0.shape != (self.M,):
+            raise ValueError(f"W0 must have shape (M,), got {W0.shape}")
+        
+        if not goals:
+            raise ValueError("goals list cannot be empty")
+        
+        goal_set = GoalSet(goals, self.account_names, start_date)
+        
+        if goal_set.T_min > T:
+            raise ValueError(
+                f"Goals require T ≥ {goal_set.T_min}, but got T={T}. "
+                f"Latest intermediate goal at month {goal_set.T_min}."
+            )
+        
+        return goal_set
+    
+    def _check_feasibility(
+        self,
+        X: np.ndarray,
+        A: np.ndarray,
+        R: np.ndarray,
+        W0: np.ndarray,
+        goal_set: GoalSet
+    ) -> bool:
+        """
+        Check if allocation X satisfies all goals using exact SAA.
+        
+        Uses non-smoothed indicator function for final validation.
+        """
+        # Import here to avoid circular dependency
+        from .portfolio import Portfolio
+        
+        # Create dummy accounts for Portfolio
+        class DummyAccount:
+            def __init__(self, name, wealth):
+                self.name = name
+                self.initial_wealth = wealth
+        
+        accounts_dummy = [
+            DummyAccount(name, W0[i])
+            for i, name in enumerate(self.account_names)
+        ]
+        portfolio = Portfolio(accounts_dummy)
+        
+        # Simulate wealth with X
+        result = portfolio.simulate(A=A, R=R, X=X, method="affine")
+        W = result["wealth"]  # (n_sims, T+1, M)
+        
+        n_sims = W.shape[0]
+        
+        # Check intermediate goals
+        for goal in goal_set.intermediate_goals:
+            m = goal_set.get_account_index(goal)
+            t = goal_set.get_resolved_month(goal)
+            
+            W_t_m = W[:, t, m]
+            violations = W_t_m < goal.threshold
+            violation_rate = violations.mean()
+            
+            if violation_rate > goal.epsilon:
+                return False
+        
+        # Check terminal goals
+        T = X.shape[0]
+        for goal in goal_set.terminal_goals:
+            m = goal_set.get_account_index(goal)
+            
+            W_T_m = W[:, T, m]
+            violations = W_T_m < goal.threshold
+            violation_rate = violations.mean()
+            
+            if violation_rate > goal.epsilon:
+                return False
+        
+        return True
+    
+    def _compute_objective(
+        self,
+        W: np.ndarray,
+        X: np.ndarray,
+        T: int,
+        M: int
+    ) -> float:
+        """
+        Compute objective function value (to be MAXIMIZED).
+        
+        Parameters
+        ----------
+        W : np.ndarray, shape (n_sims, T+1, M)
+            Wealth trajectories
+        X : np.ndarray, shape (T, M)
+            Allocation policy
+        T : int
+            Horizon
+        M : int
+            Number of accounts
+        
+        Returns
+        -------
+        float
+            Objective value (higher is better)
+        """
+        if callable(self.objective):
+            return self.objective(W, X, T, M)
+        
+        # Dispatch to predefined objectives
+        if self.objective == "terminal_wealth":
+            return self._objective_terminal_wealth(W, X, T, M)
+        elif self.objective == "low_turnover":
+            return self._objective_low_turnover(W, X, T, M)
+        elif self.objective == "risk_adjusted":
+            return self._objective_risk_adjusted(W, X, T, M)
+        elif self.objective == "balanced":
+            return self._objective_balanced(W, X, T, M)
         else:
-            raise ValueError("backend must be 'scipy' or 'greedy'.")
+            raise ValueError(f"Unknown objective: {self.objective}")
+    
+    def _objective_terminal_wealth(
+        self,
+        W: np.ndarray,
+        X: np.ndarray,
+        T: int,
+        M: int
+    ) -> float:
+        """Expected total terminal wealth: E[Σ_m W_T^m]."""
+        return W[:, T, :].sum(axis=1).mean()
+    
+    def _objective_low_turnover(
+        self,
+        W: np.ndarray,
+        X: np.ndarray,
+        T: int,
+        M: int
+    ) -> float:
+        """
+        Terminal wealth with turnover penalty.
+        
+        f(X) = E[W_T] - λ·Σ_{t,m} |x_{t+1,m} - x_t^m|
+        """
+        lambda_ = self.objective_params.get("lambda", 0.1)
+        
+        terminal_wealth = W[:, T, :].sum(axis=1).mean()
+        
+        if T > 1:
+            turnover = np.abs(X[1:, :] - X[:-1, :]).sum()
+        else:
+            turnover = 0.0
+        
+        return terminal_wealth - lambda_ * turnover
+    
+    def _objective_risk_adjusted(
+        self,
+        W: np.ndarray,
+        X: np.ndarray,
+        T: int,
+        M: int
+    ) -> float:
+        """
+        Mean-variance objective.
+        
+        f(X) = E[W_T] - λ·Std(W_T)
+        """
+        lambda_ = self.objective_params.get("lambda", 0.5)
+        
+        W_T_total = W[:, T, :].sum(axis=1)
+        mean_wealth = W_T_total.mean()
+        std_wealth = W_T_total.std()
+        
+        return mean_wealth - lambda_ * std_wealth
+    
+    def _objective_balanced(
+        self,
+        W: np.ndarray,
+        X: np.ndarray,
+        T: int,
+        M: int
+    ) -> float:
+        """
+        Balanced objective combining wealth, risk, and turnover.
+        
+        f(X) = E[W_T] - λ_risk·Std(W_T) - λ_turnover·Turnover(X)
+        """
+        lambda_risk = self.objective_params.get("lambda_risk", 0.3)
+        lambda_turnover = self.objective_params.get("lambda_turnover", 0.05)
+        
+        W_T_total = W[:, T, :].sum(axis=1)
+        mean_wealth = W_T_total.mean()
+        std_wealth = W_T_total.std()
+        
+        if T > 1:
+            turnover = np.abs(X[1:, :] - X[:-1, :]).sum()
+        else:
+            turnover = 0.0
+        
+        return mean_wealth - lambda_risk * std_wealth - lambda_turnover * turnover
 
-        if ok:
-            best = (T, X, a, R_df)
-            break
 
-    if best is None:
-        # Not feasible within T_max — return informative artifact at T_max using greedy allocation
-        T = int(inp.T_max)
-        a = _get_contributions_series(inp, T)
-        if not isinstance(a.index, pd.DatetimeIndex):
-            a.index = _as_index(T, inp.start)
-        R_df = _broadcast_returns(inp.returns_by_account, T, accounts)
-        R_df.index = a.index
-        _, X = _feasible_greedy(a, R_df, W0, B, seed=inp.seed)
-        feas = False
-    else:
-        T, X, a, R_df = best
-        feas = True
+# ---------------------------------------------------------------------------
+# CVaR Optimizer (Stub)
+# ---------------------------------------------------------------------------
 
-    # Build DataFrames
-    A_df = pd.DataFrame(X, index=a.index, columns=accounts)                # pesos allocated
-    # Guard: if a[t] == 0, leave C[t,*] = 0
-    with np.errstate(divide="ignore", invalid="ignore"):
-        C_arr = np.where(a.values.reshape(-1, 1) > 0, X / a.values.reshape(-1, 1), 0.0)
-    C_df = pd.DataFrame(C_arr, index=a.index, columns=accounts)
+class CVaROptimizer(AllocationOptimizer):
+    """
+    CVaR-based allocation optimizer with risk-adjusted objective.
+    
+    **STUB IMPLEMENTATION**: Requires CVXPY for full functionality.
+    
+    Mathematical Formulation
+    ------------------------
+    Objective:
+        maximize  E[W_T] - λ·CVaR_α(-W_T)
+    
+    where CVaR_α (Conditional Value-at-Risk) is computed via auxiliary variables:
+        CVaR_α(loss) = ξ + (1/(α·n))Σ_i u_i
+        u_i ≥ loss_i - ξ
+        u_i ≥ 0
+    
+    Parameters
+    ----------
+    n_accounts : int
+        Number of portfolio accounts
+    risk_aversion : float, default 0.5
+        Risk-return tradeoff parameter λ ≥ 0
+    alpha : float, default 0.95
+        CVaR confidence level α ∈ (0.5, 1.0)
+    objective : ObjectiveType, default "terminal_wealth"
+        Base objective (applied before CVaR adjustment)
+    objective_params : dict, optional
+        Additional objective parameters
+    account_names : List[str], optional
+        Account name labels
+    
+    Notes
+    -----
+    Implementation requires CVXPY. See NotImplementedError message for
+    detailed implementation checklist.
+    
+    References
+    ----------
+    Rockafellar & Uryasev (2000), "Optimization of conditional value-at-risk"
+    """
+    
+    def __init__(
+        self,
+        n_accounts: int,
+        risk_aversion: float = 0.5,
+        alpha: float = 0.95,
+        objective: ObjectiveType = "terminal_wealth",
+        objective_params: Optional[Dict[str, Any]] = None,
+        account_names: Optional[List[str]] = None
+    ):
+        super().__init__(n_accounts, objective, objective_params, account_names)
+        
+        if risk_aversion < 0:
+            raise ValueError(f"risk_aversion must be ≥ 0, got {risk_aversion}")
+        if not (0.5 < alpha < 1.0):
+            raise ValueError(f"alpha must be ∈ (0.5, 1.0), got {alpha}")
+        
+        self.lambda_ = risk_aversion
+        self.alpha = alpha
+    
+    def solve(
+        self,
+        T: int,
+        A: np.ndarray,
+        R: np.ndarray,
+        W0: np.ndarray,
+        goals: List[Union[IntermediateGoal, TerminalGoal]],
+        goal_set: GoalSet,
+        X_init: Optional[np.ndarray] = None,
+        **solver_kwargs
+    ) -> OptimizationResult:
+        """Solve CVaR-constrained allocation problem."""
+        raise NotImplementedError(
+            "CVaROptimizer.solve() requires CVXPY implementation.\n\n"
+            "Implementation checklist:\n"
+            "1. Install CVXPY: pip install cvxpy\n"
+            "2. Import: import cvxpy as cp\n"
+            "3. Validate inputs: goal_set = self._validate_inputs(...)\n"
+            "4. Compute F: from .portfolio import Portfolio; "
+            "F = portfolio.compute_accumulation_factors(R)\n"
+            "5. Variables:\n"
+            "   - X = cp.Variable((T, M), nonneg=True)\n"
+            "   - ξ_obj = cp.Variable()\n"
+            "   - u = cp.Variable(n_sims, nonneg=True)\n"
+            "   - For each goal: ξ_g = cp.Variable(), "
+            "v_g = cp.Variable(n_sims, nonneg=True)\n"
+            "6. Affine wealth: W_t_m[i] = W0[m]*F[i,0,t,m] + "
+            "sum(A[i,s]*X[s,m]*F[i,s,t,m] for s in range(t))\n"
+            "7. Objective:\n"
+            "   mean_wealth = cp.sum([cp.sum(W_T[i,:]) for i in range(n_sims)]) / n_sims\n"
+            "   cvar_obj = ξ_obj + cp.sum(u) / (self.alpha * n_sims)\n"
+            "   objective = cp.Maximize(mean_wealth - self.lambda_ * cvar_obj)\n"
+            "8. Constraints:\n"
+            "   - u[i] >= -W_T[i] - ξ_obj for all i\n"
+            "   - For each goal: ξ_g + cp.sum(v_g) / (goal.epsilon * n_sims) <= -threshold\n"
+            "   - v_g[i] >= -W_t_m[i] - ξ_g for all i\n"
+            "   - cp.sum(X[t,:]) == 1 for all t\n"
+            "9. Solve: prob.solve(solver=solver_kwargs.get('solver', 'ECOS'), ...)\n"
+            "10. Extract: X_star = X.value, obj = prob.value\n"
+            "11. Validate: feasible = self._check_feasibility(X_star, A, R, W0, goal_set)\n"
+            "12. Return OptimizationResult(...)\n\n"
+            "Reference: Rockafellar & Uryasev (2000), "
+            "'Optimization of conditional value-at-risk'"
+        )
 
-    # Simulate wealth-by-account for diagnostics and plots
-    wealth_df = simulate_portfolio(
-        contributions_matrix=A_df,
-        returns_matrix=R_df,
-        start_values=_init_starts(inp),
-        index_like=a.index,
-        column_names=accounts,
-        include_total_col=True,
-    )
 
-    # Compute t_hit per account and margins
-    t_hit = []
-    margins = []
-    for k, name in enumerate(accounts):
-        target = float(inp.targets_by_account[name])
-        serie = wealth_df[name]
-        # first month where wealth >= target
-        where = np.where(serie.values >= target)[0]
-        hit = int(where[0]) if where.size > 0 else None
-        t_hit.append(hit if hit is not None else -1)
-        margins.append(float(serie.iloc[-1]) - target)
-    t_hit_ser = pd.Series(t_hit, index=accounts, name="t_hit_index")
-    margin_ser = pd.Series(margins, index=accounts, name="margin_at_T")
+# ---------------------------------------------------------------------------
+# SAA Optimizer (Smoothed Sigmoid Approximation)
+# ---------------------------------------------------------------------------
 
-    return MinTimeAllocationResult(
-        T_star=T,
-        C_star=C_df,
-        A_df=A_df,
-        contributions_total=a,
-        returns_by_account=R_df,
-        wealth_by_account=wealth_df,
-        t_hit_by_account=t_hit_ser,
-        margin_at_T=margin_ser,
-        feasible=feas,
-    )
+class SAAOptimizer(AllocationOptimizer):
+    """
+    Sample Average Approximation optimizer with smoothed sigmoid constraints.
+    
+    Mathematical Formulation
+    ------------------------
+    Objective:
+        maximize  f(X) (parametrizable via objective argument)
+    
+    Subject to:
+        Intermediate goals: ℙ(W_t^m ≥ b) ≥ 1 - ε  (fixed t)
+        Terminal goals: ℙ(W_T^m ≥ b) ≥ 1 - ε  (variable T)
+        Σ_m x_t^m = 1
+        x_t^m ≥ 0
+    
+    Smoothed Approximation
+    ----------------------
+    The discontinuous indicator 𝟙{W ≥ b} is replaced by sigmoid:
+    
+        𝟙{W_i ≥ b}  ≈  σ((W_i - b)/τ)
+        
+        where σ(x) = 1/(1 + exp(-x))
+    
+    Chance constraint becomes:
+        (1/n) Σ_i σ((W_t^{m,i}(X) - b)/τ) ≥ 1 - ε
+    
+    Key Properties
+    --------------
+    1. Differentiability: σ is C^∞ → analytical gradients
+       σ'(x) = σ(x)(1 - σ(x))
+    
+    2. Approximation quality: Controlled by temperature τ
+       - Small τ (0.01): σ ≈ 𝟙 (better approximation, steeper gradient)
+       - Large τ (1.0): σ ≈ 0.5 (smoother, worse approximation)
+       - Balanced τ (0.1): Trade-off for practical optimization
+    
+    3. Convexity: Smoothed constraint is convex (albeit non-linear)
+       Enables gradient-based solvers like SLSQP
+    
+    Parameters
+    ----------
+    n_accounts : int
+        Number of portfolio accounts
+    tau : float, default 0.1
+        Sigmoid temperature parameter (smaller = sharper approximation)
+    objective : ObjectiveType, default "terminal_wealth"
+        Objective function specification
+    objective_params : dict, optional
+        Parameters for objective function
+    account_names : List[str], optional
+        Account name labels
+    
+    Examples
+    --------
+    >>> # Sharp approximation (may be harder to optimize)
+    >>> opt_sharp = SAAOptimizer(n_accounts=2, tau=0.01)
+    >>> 
+    >>> # Smooth approximation (easier convergence)
+    >>> opt_smooth = SAAOptimizer(n_accounts=2, tau=1.0)
+    >>> 
+    >>> # Balanced (recommended)
+    >>> opt = SAAOptimizer(n_accounts=2, tau=0.1, 
+    ...                   objective="low_turnover",
+    ...                   objective_params={"lambda": 0.1})
+    >>> result = opt.solve(T=24, A=A, R=R, W0=W0, goals=goals, goal_set=gs)
+    
+    References
+    ----------
+    Luedtke & Ahmed (2008), "A sample approximation approach for 
+    optimization with probabilistic constraints"
+    """
+    
+    def __init__(
+        self,
+        n_accounts: int,
+        tau: float = 0.1,
+        objective: ObjectiveType = "terminal_wealth",
+        objective_params: Optional[Dict[str, Any]] = None,
+        account_names: Optional[List[str]] = None
+    ):
+        super().__init__(n_accounts, objective, objective_params, account_names)
+        
+        if tau <= 0:
+            raise ValueError(f"tau must be > 0, got {tau}")
+        
+        self.tau = tau
+    
+    def solve(
+        self,
+        T: int,
+        A: np.ndarray,
+        R: np.ndarray,
+        W0: np.ndarray,
+        goals: List[Union[IntermediateGoal, TerminalGoal]],
+        goal_set: GoalSet,
+        X_init: Optional[np.ndarray] = None,
+        **solver_kwargs
+    ) -> OptimizationResult:
+        """
+        Solve SAA problem with smoothed sigmoid approximation.
+        
+        Uses scipy.optimize.minimize with SLSQP method for gradient-based
+        optimization with equality and inequality constraints.
+        
+        Parameters
+        ----------
+        T : int
+            Optimization horizon
+        A : np.ndarray, shape (n_sims, T)
+            Contribution scenarios
+        R : np.ndarray, shape (n_sims, T, M)
+            Return scenarios
+        W0 : np.ndarray, shape (M,)
+            Initial wealth vector
+        goals : List[Union[IntermediateGoal, TerminalGoal]]
+            Goal specifications
+        goal_set : GoalSet
+            Pre-validated goal collection with resolved indices
+        X_init : np.ndarray, optional
+            Warm start allocation (T, M). If None, uses uniform (1/M).
+        **solver_kwargs
+            Solver parameters:
+            - maxiter : int, default 1000
+            - gtol : float, default 1e-6
+            - ftol : float, default 1e-9
+            - verbose : bool, default False
+        
+        Returns
+        -------
+        OptimizationResult
+            Optimal X*, objective value, feasibility, diagnostics
+        
+        Raises
+        ------
+        ImportError
+            If scipy not installed
+        RuntimeError
+            If solver fails to converge
+        """
+        try:
+            from scipy.optimize import minimize
+        except ImportError:
+            raise ImportError(
+                "scipy is required for SAAOptimizer. Install with: pip install scipy"
+            )
+        
+        start_time = time.time()
+        
+        # Extract parameters
+        n_sims = A.shape[0]
+        M = self.M
+        maxiter = solver_kwargs.get('maxiter', 1000)
+        gtol = solver_kwargs.get('gtol', 1e-6)
+        ftol = solver_kwargs.get('ftol', 1e-9)
+        verbose = solver_kwargs.get('verbose', False)
+        
+        # Compute accumulation factors F: (n_sims, T+1, T+1, M)
+        from .portfolio import Portfolio
+        
+        class DummyAccount:
+            def __init__(self, name, wealth):
+                self.name = name
+                self.initial_wealth = wealth
+        
+        accounts_dummy = [
+            DummyAccount(name, W0[i])
+            for i, name in enumerate(self.account_names)
+        ]
+        portfolio = Portfolio(accounts_dummy)
+        F = portfolio.compute_accumulation_factors(R)
+        
+        # Sigmoid functions
+        def sigmoid(z):
+            """Numerically stable sigmoid."""
+            return np.where(
+                z >= 0,
+                1 / (1 + np.exp(-z)),
+                np.exp(z) / (1 + np.exp(z))
+            )
+        
+        def sigmoid_prime(z):
+            """Derivative of sigmoid."""
+            s = sigmoid(z)
+            return s * (1 - s)
+        
+        # Compute wealth for all scenarios given X
+        def compute_wealth_all(X_flat):
+            """
+            Compute W: (n_sims, T+1, M) using affine formula.
+            
+            W_t^m = W0^m * F_{0,t}^m + Σ_{s<t} A_s * x_s^m * F_{s,t}^m
+            """
+            X = X_flat.reshape(T, M)
+            W = np.zeros((n_sims, T + 1, M))
+            
+            # Initial wealth
+            W[:, 0, :] = W0
+            
+            # Affine formula for each time step
+            for t in range(1, T + 1):
+                # Initial wealth term
+                W[:, t, :] = W0 * F[:, 0, t, :]
+                
+                # Contribution term
+                for s in range(t):
+                    # A_s * x_s^m: (n_sims, 1) * (1, M) → (n_sims, M)
+                    contrib = A[:, s, None] * X[s, :]
+                    # contrib * F_{s,t}^m
+                    W[:, t, :] += contrib * F[:, s, t, :]
+            
+            return W
+        
+        # Objective function (negative for minimization)
+        def objective(X_flat):
+            X = X_flat.reshape(T, M)
+            W = compute_wealth_all(X_flat)
+            obj_value = self._compute_objective(W, X, T, M)
+            return -obj_value  # Negative for minimization
+        
+        # Gradient of objective (analytical)
+        def objective_grad(X_flat):
+            """
+            Gradient of objective w.r.t. X (flattened).
+            
+            For terminal_wealth: ∂E[W_T]/∂x_s^m = E[A_s * F_{s,T}^m]
+            """
+            X = X_flat.reshape(T, M)
+            grad = np.zeros((T, M))
+            
+            if self.objective == "terminal_wealth":
+                # ∂E[Σ_m W_T^m]/∂x_s^m = E[A_s * F_{s,T}^m]
+                for s in range(T):
+                    for m in range(M):
+                        grad[s, m] = (A[:, s] * F[:, s, T, m]).mean()
+            
+            elif self.objective == "low_turnover":
+                # Terminal wealth gradient + turnover penalty gradient
+                lambda_ = self.objective_params.get("lambda", 0.1)
+                
+                # Terminal wealth part
+                for s in range(T):
+                    for m in range(M):
+                        grad[s, m] = (A[:, s] * F[:, s, T, m]).mean()
+                
+                # Turnover penalty: -λ * sign(x_{t+1} - x_t)
+                if T > 1:
+                    for t in range(T - 1):
+                        grad[t, :] -= lambda_ * np.sign(X[t + 1, :] - X[t, :])
+                        grad[t + 1, :] += lambda_ * np.sign(X[t + 1, :] - X[t, :])
+            
+            else:
+                # For complex objectives, use numerical approximation
+                eps = 1e-6
+                for i in range(T * M):
+                    X_plus = X_flat.copy()
+                    X_plus[i] += eps
+                    grad.flat[i] = (objective(X_plus) - objective(X_flat)) / eps
+            
+            return -grad.flatten()  # Negative because we minimize -obj
+        
+        # Constraint: smoothed intermediate goal
+        def constraint_intermediate_goal(X_flat, goal: IntermediateGoal, m: int, t: int):
+            """
+            Smoothed intermediate goal constraint (≥ 0 for feasibility).
+            
+            c(X) = (1/n)Σ_i σ((W_t^{m,i} - b)/τ) - (1 - ε) ≥ 0
+            """
+            W = compute_wealth_all(X_flat)
+            W_t_m = W[:, t, m]  # (n_sims,)
+            
+            z = (W_t_m - goal.threshold) / self.tau
+            satisfaction = sigmoid(z).mean()
+            
+            return satisfaction - (1 - goal.epsilon)
+        
+        # Gradient of intermediate goal constraint
+        def constraint_intermediate_goal_grad(X_flat, goal: IntermediateGoal, m: int, t: int):
+            """
+            Gradient of smoothed intermediate constraint.
+            
+            ∂c/∂x_s^m = (1/(n·τ)) Σ_i σ'((W_t^i - b)/τ) * A_s * F_{s,t}^m
+            """
+            W = compute_wealth_all(X_flat)
+            W_t_m = W[:, t, m]
+            
+            z = (W_t_m - goal.threshold) / self.tau
+            sigmoid_deriv = sigmoid_prime(z) / self.tau  # (n_sims,)
+            
+            grad = np.zeros(T * M)
+            for s in range(t):  # Only s < t contribute
+                for m_idx in range(M):
+                    idx = s * M + m_idx
+                    if m_idx == m:
+                        # Gradient component
+                        grad[idx] = (sigmoid_deriv * A[:, s] * F[:, s, t, m]).mean()
+            
+            return grad
+        
+        # Constraint: smoothed terminal goal
+        def constraint_terminal_goal(X_flat, goal: TerminalGoal, m: int):
+            """
+            Smoothed terminal goal constraint (≥ 0 for feasibility).
+            
+            c(X) = (1/n)Σ_i σ((W_T^{m,i} - b)/τ) - (1 - ε) ≥ 0
+            """
+            W = compute_wealth_all(X_flat)
+            W_T_m = W[:, T, m]  # (n_sims,)
+            
+            z = (W_T_m - goal.threshold) / self.tau
+            satisfaction = sigmoid(z).mean()
+            
+            return satisfaction - (1 - goal.epsilon)
+        
+        # Gradient of terminal goal constraint
+        def constraint_terminal_goal_grad(X_flat, goal: TerminalGoal, m: int):
+            """
+            Gradient of smoothed terminal constraint.
+            
+            ∂c/∂x_s^m = (1/(n·τ)) Σ_i σ'((W_T^i - b)/τ) * A_s * F_{s,T}^m
+            """
+            W = compute_wealth_all(X_flat)
+            W_T_m = W[:, T, m]
+            
+            z = (W_T_m - goal.threshold) / self.tau
+            sigmoid_deriv = sigmoid_prime(z) / self.tau  # (n_sims,)
+            
+            grad = np.zeros(T * M)
+            for s in range(T):
+                for m_idx in range(M):
+                    idx = s * M + m_idx
+                    if m_idx == m:
+                        # Gradient component
+                        grad[idx] = (sigmoid_deriv * A[:, s] * F[:, s, T, m]).mean()
+            
+            return grad
+        
+        # Constraint: simplex (Σ_m x_t^m = 1)
+        def constraint_simplex(X_flat):
+            """Equality constraint: row sums = 1."""
+            X = X_flat.reshape(T, M)
+            return X.sum(axis=1) - 1.0  # Shape: (T,)
+        
+        def constraint_simplex_jac(X_flat):
+            """Jacobian of simplex constraint: (T, T*M)."""
+            jac = np.zeros((T, T * M))
+            for t in range(T):
+                jac[t, t * M:(t + 1) * M] = 1.0
+            return jac
+        
+        # Build constraints list
+        constraints = []
+        
+        # Simplex constraints
+        constraints.append({
+            'type': 'eq',
+            'fun': constraint_simplex,
+            'jac': constraint_simplex_jac
+        })
+        
+        # Intermediate goal constraints
+        for goal in goal_set.intermediate_goals:
+            m = goal_set.get_account_index(goal)
+            t = goal_set.get_resolved_month(goal)
+            
+            constraints.append({
+                'type': 'ineq',
+                'fun': lambda X, g=goal, m_=m, t_=t: 
+                    constraint_intermediate_goal(X, g, m_, t_),
+                'jac': lambda X, g=goal, m_=m, t_=t:
+                    constraint_intermediate_goal_grad(X, g, m_, t_)
+            })
+        
+        # Terminal goal constraints
+        for goal in goal_set.terminal_goals:
+            m = goal_set.get_account_index(goal)
+            
+            constraints.append({
+                'type': 'ineq',
+                'fun': lambda X, g=goal, m_=m: constraint_terminal_goal(X, g, m_),
+                'jac': lambda X, g=goal, m_=m: constraint_terminal_goal_grad(X, g, m_)
+            })
+        
+        # Initial guess
+        if X_init is None:
+            X0 = np.ones((T, M)) / M  # Uniform allocation
+        else:
+            if X_init.shape != (T, M):
+                raise ValueError(f"X_init shape {X_init.shape} != (T={T}, M={M})")
+            X0 = X_init.copy()
+        
+        X0_flat = X0.flatten()
+        
+        # Bounds: x_t^m ∈ [0, 1]
+        bounds = [(0.0, 1.0) for _ in range(T * M)]
+        
+        # Solve
+        result = minimize(
+            objective,
+            X0_flat,
+            method='SLSQP',
+            jac=objective_grad,
+            constraints=constraints,
+            bounds=bounds,
+            options={
+                'maxiter': maxiter,
+                'ftol': ftol,
+                'disp': verbose
+            }
+        )
+        
+        solve_time = time.time() - start_time
+        
+        # Extract solution
+        X_star = result.x.reshape(T, M)
+        obj_value = -result.fun  # Convert back to maximization
+        
+        # Check feasibility with exact SAA
+        feasible = self._check_feasibility(X_star, A, R, W0, goal_set)
+        
+        # Diagnostics
+        diagnostics = {
+            'convergence_status': result.message,
+            'success': result.success,
+            'final_gradient_norm': np.linalg.norm(result.jac) if result.jac is not None else None,
+        }
+        
+        return OptimizationResult(
+            X=X_star,
+            T=T,
+            objective_value=obj_value,
+            feasible=feasible,
+            goals=goals,
+            solve_time=solve_time,
+            n_iterations=result.nit,
+            diagnostics=diagnostics
+        )
 
-# ===========================================================================
-# Manual quick test (integration smoke tests)
-# ===========================================================================
-if __name__ == "__main__":
-    from datetime import date
-    import numpy as np
-    import pandas as pd
 
-    from .income import FixedIncome, VariableIncome, IncomeModel
-    from .investment import simulate_portfolio
-    from .goals import Goal
-    from .optimization import MinTimeAllocationInput, min_time_with_allocation
+# ---------------------------------------------------------------------------
+# Goal Seeker (Bilevel Solver)
+# ---------------------------------------------------------------------------
 
-    # Example: 2 goals (housing + emergency), 24 months horizon
-    accounts = ["housing", "emergency"]
-    income = IncomeModel(
-        fixed=FixedIncome(base=1_400_000.0, annual_growth=0.00),
-        variable=VariableIncome(base=200_000.0, sigma=0.00),
-    )
-
-    inp = MinTimeAllocationInput(
-        accounts=accounts,
-        targets_by_account={"housing": 20_000_000.0, "emergency": 6_000_000.0},
-        start_wealth_by_account=0.0,
-        income_model=income,
-        start=date(2025, 9, 1),
-        alpha_fixed=0.35,
-        beta_variable=1.0,
-        returns_by_account={"housing": 0.004, "emergency": 0.002},
-        T_max=36,
-        t_min="auto",        # <-- test new feature
-        backend="greedy",    # try greedy backend
-    )
-
-    res = min_time_with_allocation(inp)
-    print("[MinTimeAllocation] T_star:", res.T_star)
-    print("[MinTimeAllocation] feasible:", res.feasible)
-    print("[MinTimeAllocation] margins:")
-    print(res.margin_at_T)
-    print(res.C_star.head())
+class GoalSeeker:
+    """
+    Bilevel optimizer: find minimum horizon T* for goal feasibility.
+    
+    Outer problem: min T ∈ ℕ
+    Inner problem: AllocationOptimizer.solve(T) → feasible X*
+    
+    Uses linear search with warm start for efficiency.
+    
+    Parameters
+    ----------
+    optimizer : AllocationOptimizer
+        Inner problem solver (e.g., SAAOptimizer, CVaROptimizer)
+    T_max : int, default 240
+        Maximum search horizon (20 years)
+    verbose : bool, default True
+        Print iteration progress
+    
+    Examples
+    --------
+    >>> optimizer = SAAOptimizer(n_accounts=2, tau=0.1)
+    >>> seeker = GoalSeeker(optimizer, T_max=120, verbose=True)
+    >>> 
+    >>> def A_gen(T, n, s):
+    ...     return model.income.contributions(T, n_sims=n, seed=s, output="array")
+    >>> def R_gen(T, n, s):
+    ...     return model.returns.generate(T, n_sims=n, seed=s)
+    >>> 
+    >>> result = seeker.seek(goals, A_gen, R_gen, W0, 
+    ...                     start_date=date(2025, 1, 1),
+    ...                     n_sims=500, seed=42)
+    >>> print(f"Optimal horizon: T*={result.T} months")
+    """
+    
+    def __init__(
+        self,
+        optimizer: AllocationOptimizer,
+        T_max: int = 240,
+        verbose: bool = True
+    ):
+        if not isinstance(optimizer, AllocationOptimizer):
+            raise TypeError(
+                f"optimizer must be AllocationOptimizer subclass, "
+                f"got {type(optimizer)}"
+            )
+        if T_max < 1:
+            raise ValueError(f"T_max must be ≥ 1, got {T_max}")
+        
+        self.optimizer = optimizer
+        self.T_max = T_max
+        self.verbose = verbose
+    
+    def seek(
+        self,
+        goals: List[Union[IntermediateGoal, TerminalGoal]],
+        A_generator: Callable[[int, int, Optional[int]], np.ndarray],
+        R_generator: Callable[[int, int, Optional[int]], np.ndarray],
+        W0: np.ndarray,
+        start_date,
+        n_sims: int = 500,
+        seed: Optional[int] = None,
+        **solver_kwargs
+    ) -> OptimizationResult:
+        """
+        Find minimum horizon T* for goal feasibility via linear search.
+        
+        Parameters
+        ----------
+        goals : List[Union[IntermediateGoal, TerminalGoal]]
+            Goal specifications
+        A_generator : Callable[[int, int, Optional[int]], np.ndarray]
+            Function: (T, n_sims, seed) → A array (n_sims, T)
+        R_generator : Callable[[int, int, Optional[int]], np.ndarray]
+            Function: (T, n_sims, seed) → R array (n_sims, T, M)
+        W0 : np.ndarray, shape (M,)
+            Initial wealth vector
+        start_date : datetime.date
+            Simulation start date for goal resolution
+        n_sims : int, default 500
+            Number of Monte Carlo scenarios
+        seed : int, optional
+            Random seed for reproducibility
+        **solver_kwargs
+            Additional parameters for optimizer.solve()
+        
+        Returns
+        -------
+        OptimizationResult
+            Optimal solution at minimum feasible T*
+        
+        Raises
+        ------
+        ValueError
+            If T_min > T_max or no feasible solution found
+        """
+        if not goals:
+            raise ValueError("goals list cannot be empty")
+        
+        goal_set = GoalSet(goals, self.optimizer.account_names, start_date)
+        T_min = goal_set.T_min
+        
+        if T_min > self.T_max:
+            raise ValueError(
+                f"T_min={T_min} (from intermediate goals) > T_max={self.T_max}. "
+                f"Increase T_max or reduce intermediate goal months."
+            )
+        
+        if self.verbose:
+            print(f"\n=== GoalSeeker: Linear search T ∈ [{T_min}, {self.T_max}] ===\n")
+        
+        # Linear search with warm start
+        X_prev = None
+        
+        for T in range(T_min, self.T_max + 1):
+            if self.verbose:
+                print(f"[Iter {T - T_min + 1}] Testing T={T}...")
+            
+            # Generate scenarios for current T
+            A = A_generator(T, n_sims, seed)
+            R = R_generator(T, n_sims, None if seed is None else seed + 1)
+            
+            # Solve inner problem
+            result = self.optimizer.solve(
+                T=T,
+                A=A,
+                R=R,
+                W0=W0,
+                goals=goals,
+                goal_set=goal_set,
+                X_init=X_prev,
+                **solver_kwargs
+            )
+            
+            if self.verbose:
+                status = "✓ Feasible" if result.feasible else "✗ Infeasible"
+                print(f"    {status}, obj={result.objective_value:.2f}, "
+                      f"time={result.solve_time:.3f}s\n")
+            
+            if result.feasible:
+                if self.verbose:
+                    print(f"=== Optimal: T*={T} ===\n")
+                return result
+            
+            # Warm start: extend previous X for next iteration
+            if result.X is not None:
+                X_prev = np.vstack([result.X, result.X[-1:, :]])  # Repeat last row
+        
+        raise ValueError(
+            f"No feasible solution found in T ∈ [{T_min}, {self.T_max}]. "
+            f"Try increasing T_max or relaxing goal constraints."
+        )
