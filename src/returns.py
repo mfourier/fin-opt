@@ -840,7 +840,7 @@ class ReturnModel:
         else:
             # ===== MULTIPLE ACCOUNTS MODE =====
             fig, axes = plt.subplots(self.M, 2, figsize=(figsize[0], figsize[1] * self.M * 0.75))
-            colors = plt.cm.tab10(np.linspace(0, 1, self.M))
+            colors = plt.cm.Dark2(np.linspace(0, 1, self.M))
             
             for m in range(self.M):
                 mu_monthly = self.accounts[m].monthly_params["mu"]  # Usar monthly_params
@@ -932,30 +932,44 @@ class ReturnModel:
 
 
 def _print_horizon_table(horizons, expected_return, volatility, prob_loss, snr, account_label):
-    """Helper function to print horizon analysis table."""
+    """Helper function to display horizon analysis as DataFrame."""
     from scipy import stats
-
-    print("\n" + "="*85)
+    import pandas as pd
+    from IPython.display import display
+    
+    # Calcular percentiles P25-P75
+    p25 = stats.norm.ppf(0.25, expected_return, volatility) * 100
+    p75 = stats.norm.ppf(0.75, expected_return, volatility) * 100
+    p_range = p75 - p25
+    
+    # Construir DataFrame
+    df = pd.DataFrame({
+        'Horizon (years)': horizons,
+        'Expected Return (%)': expected_return * 100,
+        'Volatility (%)': volatility * 100,
+        'P(Loss) (%)': prob_loss * 100,
+        'P25-P75 Range (%)': p_range,
+        'SNR': snr
+    })
+    
+    # Formatear columnas
+    df = df.round({
+        'Horizon (years)': 1,
+        'Expected Return (%)': 1,
+        'Volatility (%)': 1,
+        'P(Loss) (%)': 1,
+        'P25-P75 Range (%)': 1,
+        'SNR': 2
+    })
+    
+    print(f"\n{'='*60}")
     print(f"HORIZON ANALYSIS - {account_label}")
-    print("="*85)
-    print(f"{'Horizon':>8} | {'Expected':>9} | {'Volatility':>10} | {'P(Loss)':>8} | {'P25-P75':>10} | {'SNR':>6}")
-    print(f"{'(years)':>8} | {'Return':>9} | {'(±1σ)':>10} | {'':>8} | {'Range':>10} | {'':>6}")
-    print("-"*85)
-
-    for i, T in enumerate(horizons):
-        exp_ret = expected_return[i] * 100
-        vol = volatility[i] * 100
-        p_loss = prob_loss[i] * 100
-        
-        p25 = stats.norm.ppf(0.25, expected_return[i], volatility[i]) * 100
-        p75 = stats.norm.ppf(0.75, expected_return[i], volatility[i]) * 100
-        p_range = p75 - p25
-        
-        snr_val = snr[i]
-        
-        print(f"{T:7.1f}  | {exp_ret:8.1f}% | {vol:9.1f}% | {p_loss:7.1f}% | {p_range:9.1f}% | {snr_val:5.2f}")
-
-    print("="*85)
-    if account_label == _print_horizon_table.__dict__.get('_last_account'):
-        return  # Skip notes for subsequent tables
-    _print_horizon_table.__dict__['_last_account'] = account_label
+    print(f"{'='*60}")
+    
+    try:
+        display(df)
+    except NameError:
+        # Fallback si no está en Jupyter
+        print(df.to_string(index=False))
+    
+    print(f"{'='*60}\n")

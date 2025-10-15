@@ -812,7 +812,6 @@ class Portfolio:
         if X.shape != (T, M):
             raise ValueError(f"X shape {X.shape} != expected ({T}, {M})")
         
-        # ========== Construcción del eje temporal ==========
         if start is not None:
             from .utils import month_index
             time_axis = month_index(start, T_plus_1)
@@ -824,7 +823,7 @@ class Portfolio:
         # Setup colors
         if colors is None:
             colors = {}
-        default_colors = plt.cm.tab10(np.linspace(0, 1, M))
+        default_colors = plt.cm.Dark2(np.linspace(0, 1, M))
         account_colors = []
         for i, acc in enumerate(self.accounts):
             if acc.name in colors:
