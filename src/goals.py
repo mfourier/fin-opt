@@ -410,13 +410,16 @@ class GoalSet:
         """
         Minimum feasible horizon from intermediate goals.
         
-        Returns max(g.resolve_month() for g in intermediate_goals).
-        If no intermediate goals, returns 1 (minimum planning horizon).
+        Returns
+        -------
+        int
+            Maximum month among intermediate goals, or 1 if none exist.
         
         Notes
         -----
-        Terminal goals do NOT contribute to T_min since they are
-        evaluated at variable T (the optimization target).
+        Terminal goals do NOT contribute to T_min since they are evaluated
+        at variable T (the optimization target). Use estimate_minimum_horizon()
+        for terminal goal horizon estimation with contribution/return assumptions.
         """
         if not self.intermediate_goals:
             return 1
@@ -424,6 +427,99 @@ class GoalSet:
         return max(
             g.resolve_month(self.start_date) for g in self.intermediate_goals
         )
+
+    def estimate_minimum_horizon(
+        self,
+        monthly_contribution: float,
+        expected_return: float = 0.0,
+        safety_margin: float = 1.2,
+        T_max: int = 999999
+    ) -> int:
+        """
+        Estimate minimum horizon for terminal goals via worst-case analysis.
+        
+        Uses closed-form wealth accumulation formula under constant contributions
+        to solve for T given the maximum terminal goal threshold.
+        
+        Parameters
+        ----------
+        monthly_contribution : float
+            Expected average monthly contribution across all accounts.
+            Must be > 0.
+        expected_return : float, default 0.0
+            Expected monthly arithmetic return. Use 0 for worst-case (no growth).
+        safety_margin : float, default 1.2
+            Multiplicative time buffer (1.2 = +20% cushion for uncertainty).
+            Must be ≥ 1.0.
+        T_max : int, default 999999
+            Maximum allowable horizon to cap estimate and prevent overflow.
+            Used as fallback for infeasible cases.
+        
+        Returns
+        -------
+        int
+            Estimated minimum horizon in months, respecting intermediate goal
+            constraints. Returns T_max if problem is infeasible.
+        
+        Notes
+        -----
+        Accumulation formulas (assuming W_0 = 0):
+            r = 0:  W_T = A·T  →  T = b/A
+            r > 0:  W_T = A·[(1+r)^T - 1]/r  →  T = log(1 + b·r/A) / log(1+r)
+        
+        Returns T_max if ratio = b·r/A ≤ -1 (infeasible).
+        
+        Examples
+        --------
+        >>> goal_set = GoalSet([TerminalGoal(...)], accounts, start_date)
+        >>> T_est = goal_set.estimate_minimum_horizon(
+        ...     monthly_contribution=500_000,
+        ...     expected_return=0.005,  # ~6% annual
+        ...     safety_margin=1.5,
+        ...     T_max=240
+        ... )
+        """
+        # Input validation
+        if monthly_contribution <= 0:
+            raise ValueError(
+                f"monthly_contribution must be > 0, got {monthly_contribution}"
+            )
+        if safety_margin < 1.0:
+            raise ValueError(
+                f"safety_margin must be ≥ 1.0, got {safety_margin}"
+            )
+        if not isinstance(T_max, int) or T_max < 1:
+            raise ValueError(
+                f"T_max must be positive int, got {T_max}"
+            )
+        
+        # Early return: no terminal goals means no estimation needed
+        if not self.terminal_goals:
+            return self.T_min
+        
+        # Find the most stringent terminal goal
+        max_threshold = max(g.threshold for g in self.terminal_goals)
+        
+        # Solve for T based on expected return model
+        if expected_return == 0:
+            # Linear accumulation: W_T = A·T
+            T_est = max_threshold / monthly_contribution
+        else:
+            # Geometric accumulation: W_T = A·[(1+r)^T - 1]/r
+            ratio = max_threshold * expected_return / monthly_contribution
+            
+            if ratio <= -1:
+                # Infeasible: logarithm argument would be non-positive
+                return T_max
+            
+            T_est = np.log1p(ratio) / np.log1p(expected_return)
+        
+        # Apply safety margin and enforce upper bound
+        T_est_safe = int(np.ceil(T_est * safety_margin))
+        T_est_safe = min(T_est_safe, T_max)
+        
+        # Respect intermediate goal constraints (T_min) and ensure positive
+        return max(self.T_min, T_est_safe, 1)
     
     def __len__(self) -> int:
         """Total number of goals (intermediate + terminal)."""
