@@ -32,6 +32,7 @@ Design principles
 - Auto-simulation: plot() simulates internally when needed
 - Loose coupling: components remain independently usable
 - Type safety: SimulationResult as explicit dataclass (not dict)
+- Portfolio-aware: Uses Account objects throughout for type safety
 
 Example
 -------
@@ -84,7 +85,7 @@ from .income import IncomeModel
 from .portfolio import Account, Portfolio
 from .returns import ReturnModel
 from .utils import compute_cagr, drawdown
-from .goals import IntermediateGoal, TerminalGoal  # ← NUEVO: necesario para type hints
+from .goals import IntermediateGoal, TerminalGoal
 
 __all__ = [
     "SimulationResult",
@@ -262,7 +263,7 @@ class SimulationResult:
     def _compute_metrics(self):
         """Lazy computation of financial metrics."""
         self._metrics = {}
-        self._aggregate_metrics = {}  # NEW: distribution-level statistics
+        self._aggregate_metrics = {}
         
         for m, acc_name in enumerate(self.account_names):
             W = self.wealth[:, :, m]  # (n_sims, T+1)
@@ -512,6 +513,7 @@ class FinancialModel:
     accounts : List[Account]
         Portfolio account specifications with return/volatility parameters.
         Used to construct ReturnModel and Portfolio instances.
+        Becomes canonical source of truth for account metadata throughout system.
     default_correlation : np.ndarray, shape (M, M), optional
         Default cross-sectional correlation matrix for returns.
         If None, assumes uncorrelated accounts (identity matrix).
@@ -524,7 +526,7 @@ class FinancialModel:
     income : IncomeModel
         Income generation component.
     accounts : List[Account]
-        Account metadata.
+        Account metadata (same reference as portfolio.accounts).
     returns : ReturnModel
         Stochastic return generator (correlated lognormal).
     portfolio : Portfolio
@@ -536,6 +538,12 @@ class FinancialModel:
     -------
     simulate(T, X, n_sims, start, seed, use_cache) -> SimulationResult
         Run complete Monte Carlo simulation with caching.
+    optimize(goals, optimizer, T_max, ...) -> OptimizationResult
+        Find minimum-horizon policy satisfying financial goals.
+    verify_goals(result, goals, start) -> dict
+        Validate goal satisfaction in simulation/optimization result.
+    simulate_from_optimization(opt_result, ...) -> SimulationResult
+        Convenience wrapper to simulate with optimal policy.
     plot(mode, ...) -> None or (fig, ax)
         Unified plotting interface with auto-simulation.
     cache_info() -> dict
@@ -550,6 +558,7 @@ class FinancialModel:
     - Default simulation method is "affine" (exposes gradients for optimization)
     - Cache key: SHA256 hash of (T, X, n_sims, start, seed)
     - Memory usage: ~(n_sims * T * M * 8 bytes) per cached simulation
+    - self.accounts and self.portfolio.accounts share same reference (no duplication)
     
     Examples
     --------
@@ -590,10 +599,11 @@ class FinancialModel:
         
         # Store components
         self.income = income
-        self.accounts = accounts
+        self.accounts = accounts  # Canonical source (shared with portfolio)
         self.M = len(accounts)
         
         # Build return generator and portfolio executor
+        # Note: self.accounts and self.portfolio.accounts are same reference
         self.returns = ReturnModel(accounts, default_correlation)
         self.portfolio = Portfolio(accounts)
         
@@ -853,7 +863,6 @@ class FinancialModel:
             'memory_mb': memory_bytes / (1024 ** 2)
         }
     
-
     def optimize(
         self,
         goals: List[Union[IntermediateGoal, TerminalGoal]],
@@ -912,6 +921,7 @@ class FinancialModel:
             - objective_value : float - terminal wealth at optimum
             - feasible : bool - goal satisfaction status
             - goals : List - original goal specifications
+            - goal_set : GoalSet - validated collection with accounts
             - solve_time : float - total execution time (seconds)
             - n_iterations : int - solver iterations
             - diagnostics : dict - convergence info
@@ -930,6 +940,7 @@ class FinancialModel:
         - Terminal-only goals trigger heuristic T_start estimation (saves iterations)
         - Warm start: X policy extended from previous T (faster convergence)
         - Feasibility check: exact SAA validation (non-smoothed indicators)
+        - Result.goal_set contains full Account objects for downstream use
         
         Algorithm Overview
         ------------------
@@ -1035,6 +1046,7 @@ class FinancialModel:
             A_generator=A_generator,
             R_generator=R_generator,
             W0=W0,
+            accounts=self.portfolio.accounts,  # ✅ CAMBIO CLAVE
             start_date=start_date,
             n_sims=n_sims,
             seed=seed,
@@ -1175,12 +1187,14 @@ class FinancialModel:
         # Extract start date
         start_date = start if start is not None else sim_result.start
         
+        # ✅ CAMBIO CLAVE: Pasar accounts en lugar de lista de strings
         return check_goals(
             sim_result,
             goals,
-            [acc.name for acc in self.accounts],
+            self.portfolio.accounts,  # ✅ En lugar de [acc.name for acc in self.accounts]
             start_date
         )
+    
     # -----------------------------------------------------------------------
     # Unified plotting interface
     # -----------------------------------------------------------------------
@@ -1381,7 +1395,7 @@ class FinancialModel:
             dispatch_kwargs.setdefault("n_sims", n_sims)
             if seed is not None:
                 dispatch_kwargs.setdefault("seed", seed)
-            if start is not None:  # ← NUEVO: propagación de start
+            if start is not None:
                 dispatch_kwargs.setdefault("start", start)
             # correlation comes from kwargs if provided
         
