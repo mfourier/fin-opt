@@ -1141,6 +1141,10 @@ class GoalSeeker:
         """
         Find minimum horizon T* for goal feasibility via linear search.
         
+        Uses intelligent starting point estimation for terminal-only goals:
+        - If only terminal goals exist: estimates T_start via heuristic
+        - If intermediate goals exist: uses T_min from intermediate constraints
+        
         Parameters
         ----------
         goals : List[Union[IntermediateGoal, TerminalGoal]]
@@ -1169,28 +1173,72 @@ class GoalSeeker:
         ------
         ValueError
             If T_min > T_max or no feasible solution found
+        
+        Notes
+        -----
+        For terminal-only goals, the method samples contributions to estimate
+        average monthly cash flow, then uses worst-case accumulation formula
+        to compute a conservative starting horizon. This avoids testing
+        infeasible horizons (e.g., T=1, 2, 3...) when goals require T >> 1.
         """
         if not goals:
             raise ValueError("goals list cannot be empty")
         
         goal_set = GoalSet(goals, self.optimizer.account_names, start_date)
-        T_min = goal_set.T_min
         
-        if T_min > self.T_max:
+        # Determine intelligent starting horizon
+        if goal_set.terminal_goals and not goal_set.intermediate_goals:
+            # Only terminal goals: use heuristic estimation
+            if self.verbose:
+                print("\n=== Estimating minimum horizon (terminal goals only) ===")
+            
+            # Sample contributions to estimate average monthly cash flow
+            # Use small sample for efficiency (12 months, min(100, n_sims) scenarios)
+            sample_months = 12
+            sample_sims = min(100, n_sims)
+            
+            A_sample = A_generator(sample_months, sample_sims, seed)
+            avg_contrib = float(np.mean(A_sample))
+            
+            if self.verbose:
+                print(f"  Sampled contributions: {sample_sims} scenarios × {sample_months} months")
+                print(f"  Average monthly contribution: ${avg_contrib:,.2f}")
+            
+            # Estimate minimum horizon via worst-case analysis
+            T_start = goal_set.estimate_minimum_horizon(
+                monthly_contribution=avg_contrib,
+                expected_return=0.0,      # Conservative: assume no growth
+                safety_margin=0.8,         # Start 20% earlier to avoid missing T*
+                T_max=self.T_max
+            )
+            
+            if self.verbose:
+                print(f"  Estimated minimum horizon: T={T_start} months")
+                print(f"  (using safety_margin=0.8 for conservative start)")
+        else:
+            # Has intermediate goals: use their constraint
+            T_start = goal_set.T_min
+        
+        # Validate starting horizon
+        if T_start > self.T_max:
             raise ValueError(
-                f"T_min={T_min} (from intermediate goals) > T_max={self.T_max}. "
-                f"Increase T_max or reduce intermediate goal months."
+                f"Estimated T_start={T_start} > T_max={self.T_max}. "
+                f"Increase T_max or reduce goal thresholds."
             )
         
+        # Display search range
         if self.verbose:
-            print(f"\n=== GoalSeeker: Linear search T ∈ [{T_min}, {self.T_max}] ===\n")
+            print(f"\n=== GoalSeeker: Linear search T ∈ [{T_start}, {self.T_max}] ===")
+            if T_start > goal_set.T_min:
+                print(f"    (T_start={T_start} from heuristic, T_min={goal_set.T_min} from constraints)")
+            print()
         
         # Linear search with warm start
         X_prev = None
         
-        for T in range(T_min, self.T_max + 1):
+        for T in range(T_start, self.T_max + 1):
             if self.verbose:
-                print(f"[Iter {T - T_min + 1}] Testing T={T}...")
+                print(f"[Iter {T - T_start + 1}] Testing T={T}...")
             
             # Generate scenarios for current T
             A = A_generator(T, n_sims, seed)
@@ -1211,7 +1259,7 @@ class GoalSeeker:
             if self.verbose:
                 status = "✓ Feasible" if result.feasible else "✗ Infeasible"
                 print(f"    {status}, obj={result.objective_value:.2f}, "
-                      f"time={result.solve_time:.3f}s\n")
+                    f"time={result.solve_time:.3f}s\n")
             
             if result.feasible:
                 if self.verbose:
@@ -1223,6 +1271,6 @@ class GoalSeeker:
                 X_prev = np.vstack([result.X, result.X[-1:, :]])  # Repeat last row
         
         raise ValueError(
-            f"No feasible solution found in T ∈ [{T_min}, {self.T_max}]. "
+            f"No feasible solution found in T ∈ [{T_start}, {self.T_max}]. "
             f"Try increasing T_max or relaxing goal constraints."
         )
