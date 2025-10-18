@@ -430,7 +430,20 @@ class Portfolio:
     
     @property
     def initial_wealth_vector(self) -> np.ndarray:
-        """Initial wealth W_0^m across all accounts, shape (M,)."""
+        """
+        Initial wealth vector W0 for all accounts.
+        
+        Returns
+        -------
+        np.ndarray, shape (M,)
+            W0[m] = initial_wealth of account m.
+        
+        Examples
+        --------
+        >>> portfolio = Portfolio(accounts)
+        >>> W0 = portfolio.initial_wealth_vector
+        >>> print(W0)  # [0., 0.]
+        """
         return np.array([acc.initial_wealth for acc in self.accounts])
     
     def simulate(
