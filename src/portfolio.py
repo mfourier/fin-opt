@@ -26,6 +26,7 @@ Key components
     Executor for wealth dynamics. Receives pre-generated contributions A and returns R,
     applies allocation policy X, and computes wealth trajectories W.
     Supports both recursive and affine (closed-form) computation methods.
+    Supports W0 override for optimization scenarios with varying initial conditions.
 
 Design principles
 -----------------
@@ -34,6 +35,7 @@ Design principles
 - Optimization-ready: Affine representation exposes gradients ∂W/∂X analytically
 - Matching income.py pattern: Same batch processing structure
 - Annual parameters by default: Use .from_annual() for user-friendly API
+- Flexible initialization: W0_override enables optimization without dummy accounts
 
 Example
 -------
@@ -73,12 +75,16 @@ Example
 >>> W = result["wealth"]  # (500, 25, 2)
 >>> W_total = result["total_wealth"]  # (500, 25)
 >>>
->>> # 6. Visualize
+>>> # 6. Optimization scenario: override initial wealth
+>>> W0_scenario = np.array([5_000_000, 2_000_000])
+>>> result_opt = portfolio.simulate(A=A_sims, R=R_sims, X=X, W0_override=W0_scenario)
+>>>
+>>> # 7. Visualize
 >>> portfolio.plot(result=result, X=X, save_path="portfolio_analysis.png")
 """
 
 from __future__ import annotations
-from typing import List, Literal, Optional
+from typing import List, Literal, Optional, Dict
 from dataclasses import dataclass
 
 import numpy as np
@@ -376,9 +382,9 @@ class Portfolio:
     
     Methods
     -------
-    simulate(A, R, X, method="recursive") -> dict
+    simulate(A, R, X, method="affine", W0_override=None) -> dict
         Execute wealth dynamics for given contributions, returns, and allocations.
-        Supports batch processing of Monte Carlo samples.
+        Supports batch processing of Monte Carlo samples and W0 override.
     compute_accumulation_factors(R) -> np.ndarray
         Compute F_{s,t}^m = ∏_{r=s}^{t-1} (1 + R_r^m) for affine wealth representation.
     plot(result, X, **kwargs)
@@ -391,6 +397,7 @@ class Portfolio:
     - Portfolio only executes dynamics, never generates stochastic processes
     - Supports both recursive and affine (closed-form) wealth computation
     - Vectorized: processes full batches (n_sims, T, M) without Python loops
+    - W0_override enables optimization scenarios without creating dummy accounts
     
     Examples
     --------
@@ -408,10 +415,14 @@ class Portfolio:
     >>> R = returns.generate(T=24, n_sims=500, seed=42)
     >>> X = np.tile([0.6, 0.4], (24, 1))
     >>> 
-    >>> # Execute
+    >>> # Execute with default W0 (from accounts)
     >>> result = portfolio.simulate(A=A, R=R, X=X)
     >>> result["wealth"].shape
     (500, 25, 2)
+    >>> 
+    >>> # Execute with overridden W0 (optimization scenario)
+    >>> W0_custom = np.array([3_000_000, 1_500_000])
+    >>> result_opt = portfolio.simulate(A=A, R=R, X=X, W0_override=W0_custom)
     >>>
     >>> # Visualize
     >>> portfolio.plot(result, X)
@@ -451,12 +462,14 @@ class Portfolio:
         A: np.ndarray,  # Contributions: (T,) or (n_sims, T)
         R: np.ndarray,  # Returns: (n_sims, T, M)
         X: np.ndarray,  # Allocations: (T, M)
-        method: Literal["recursive", "affine"] = "affine"
+        method: Literal["recursive", "affine"] = "affine",
+        W0_override: Optional[np.ndarray] = None
     ) -> dict:
         """
         Execute wealth dynamics W_{t+1}^m = (W_t^m + A_t^m)(1 + R_t^m).
         
-        Supports batch processing of Monte Carlo samples with automatic broadcasting.
+        Supports batch processing of Monte Carlo samples with automatic broadcasting
+        and optional initial wealth override for optimization scenarios.
         
         Parameters
         ----------
@@ -472,7 +485,11 @@ class Portfolio:
         method : {"recursive", "affine"}, default "affine"
             Computation method:
             - "recursive": iterative W_{t+1} = (W_t + A_t)(1+R_t)
-            - "affine": closed-form W_t = W_0 F_{0,t} + ∑_s A_s x_s F_{s,t}
+            - "affine": closed-form W_t = W_0 F_{0,t} + Σ_s A_s x_s F_{s,t}
+        W0_override : np.ndarray, shape (M,), optional
+            Override initial wealth vector. If None, uses self.initial_wealth_vector.
+            Useful for optimization scenarios where W0 varies without creating
+            temporary Account objects.
         
         Returns
         -------
@@ -480,16 +497,18 @@ class Portfolio:
             - "wealth": np.ndarray, shape (n_sims, T+1, M)
                 Wealth trajectories including W_0.
             - "total_wealth": np.ndarray, shape (n_sims, T+1)
-                Sum across accounts: ∑_m W_t^m.
+                Sum across accounts: Σ_m W_t^m.
         
         Raises
         ------
         ValueError
             If shapes are incompatible or allocation policy violates constraints.
+            If W0_override has incorrect shape.
         
         Notes
         -----
-        - Initial wealth W_0^m from self.accounts[m].initial_wealth
+        - Initial wealth: W_0^m from self.accounts[m].initial_wealth (default)
+          or W0_override[m] if provided
         - Contributions split: A_t^m = A_t * X[t, m]
         - For deterministic A (shape (T,)), broadcast across simulations
         - Vectorized: no Python-level loops over simulations
@@ -501,13 +520,19 @@ class Portfolio:
         
         Examples
         --------
-        # Deterministic contributions, stochastic returns
+        # Default: use accounts' initial wealth
         >>> A = np.full(24, 100_000.0)  # (24,)
         >>> R = returns.generate(T=24, n_sims=500, seed=42)  # (500, 24, 2)
         >>> X = np.tile([0.6, 0.4], (24, 1))  # (24, 2)
         >>> result = portfolio.simulate(A, R, X)
         >>> result["wealth"].shape
         (500, 25, 2)
+        
+        # Override initial wealth (optimization scenario)
+        >>> W0_scenario = np.array([5_000_000, 2_000_000])
+        >>> result_opt = portfolio.simulate(A, R, X, W0_override=W0_scenario)
+        >>> np.allclose(result_opt["wealth"][:, 0, :], W0_scenario)
+        True
         
         # Stochastic contributions and returns
         >>> A = income.contributions(24, start=date(2025,1,1), n_sims=500)  # (500, 24)
@@ -526,6 +551,15 @@ class Portfolio:
             raise ValueError(f"R has {M} accounts, expected {self.M}")
         if X.shape != (T, M):
             raise ValueError(f"X shape {X.shape} != expected ({T}, {M})")
+        
+        # Validate W0_override if provided
+        if W0_override is not None:
+            if W0_override.shape != (self.M,):
+                raise ValueError(
+                    f"W0_override shape {W0_override.shape} != expected ({self.M},)"
+                )
+            if np.any(W0_override < 0):
+                raise ValueError("W0_override must be non-negative")
         
         # Validate allocation policy constraints
         if np.any(X < 0):
@@ -551,9 +585,9 @@ class Portfolio:
         
         # Dispatch to computation method
         if method == "recursive":
-            W = self._simulate_recursive(A_expanded, R, X)
+            W = self._simulate_recursive(A_expanded, R, X, W0_override)
         elif method == "affine":
-            W = self._simulate_affine(A_expanded, R, X)
+            W = self._simulate_affine(A_expanded, R, X, W0_override)
         else:
             raise ValueError(f"method must be 'recursive' or 'affine', got {method}")
         
@@ -569,19 +603,25 @@ class Portfolio:
         self,
         A: np.ndarray,  # (n_sims, T)
         R: np.ndarray,  # (n_sims, T, M)
-        X: np.ndarray   # (T, M)
+        X: np.ndarray,  # (T, M)
+        W0_override: Optional[np.ndarray] = None
     ) -> np.ndarray:
         """
         Recursive wealth dynamics: W_{t+1}^m = (W_t^m + A_t^m)(1 + R_t^m).
         
         Vectorized over simulations (no Python loops over n_sims).
         
+        Parameters
+        ----------
+        W0_override : np.ndarray, shape (M,), optional
+            Override initial wealth. If None, uses self.initial_wealth_vector.
+        
         Returns
         -------
         W : np.ndarray, shape (n_sims, T+1, M)
         """
         n_sims, T, M = R.shape
-        W0 = self.initial_wealth_vector  # (M,)
+        W0 = W0_override if W0_override is not None else self.initial_wealth_vector
         
         # Initialize wealth
         W = np.zeros((n_sims, T + 1, M))
@@ -603,19 +643,25 @@ class Portfolio:
         self,
         A: np.ndarray,  # (n_sims, T)
         R: np.ndarray,  # (n_sims, T, M)
-        X: np.ndarray   # (T, M)
+        X: np.ndarray,  # (T, M)
+        W0_override: Optional[np.ndarray] = None
     ) -> np.ndarray:
         """
-        Affine wealth representation: W_t^m = W_0^m F_{0,t}^m + ∑_s A_s x_s^m F_{s,t}^m.
+        Affine wealth representation: W_t^m = W_0^m F_{0,t}^m + Σ_s A_s x_s^m F_{s,t}^m.
         
         Closed-form formula, useful for optimization (wealth is linear in X).
+        
+        Parameters
+        ----------
+        W0_override : np.ndarray, shape (M,), optional
+            Override initial wealth. If None, uses self.initial_wealth_vector.
         
         Returns
         -------
         W : np.ndarray, shape (n_sims, T+1, M)
         """
         n_sims, T, M = R.shape
-        W0 = self.initial_wealth_vector  # (M,)
+        W0 = W0_override if W0_override is not None else self.initial_wealth_vector
         
         # Compute accumulation factors: (n_sims, T+1, T+1, M)
         F = self.compute_accumulation_factors(R)
@@ -630,7 +676,7 @@ class Portfolio:
             # Broadcasting: (M,) * (n_sims, M) → (n_sims, M)
             W[:, t, :] = W0 * F[:, 0, t, :]
             
-            # Contribution term: ∑_{s=0}^{t-1} A_s x_s^m F_{s,t}^m
+            # Contribution term: Σ_{s=0}^{t-1} A_s x_s^m F_{s,t}^m
             for s in range(t):
                 # Allocate: A_s * X[s,:]: (n_sims, 1) * (1, M) → (n_sims, M)
                 contrib = A[:, s, None] * X[s, :]
@@ -664,7 +710,7 @@ class Portfolio:
            Enables analytical computation of sensitivities for convex solvers.
            
         2. **Chance constraint reformulation**: For goals P(W_t^m ≥ b) ≥ 1-ε,
-           Sample Average Approximation uses: (1/N)∑_i 1{W_t^i(X) ≥ b} ≥ 1-ε
+           Sample Average Approximation uses: (1/N)Σ_i 1{W_t^i(X) ≥ b} ≥ 1-ε
            where each W_t^i is computed via affine formula using F.
            
         3. **CVaR optimization**: For risk-adjusted objectives like

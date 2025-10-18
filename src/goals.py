@@ -25,11 +25,18 @@ Design Principles
 - Type-safe resolution: Supports int indices or str names
 - Calendar-aware: IntermediateGoal resolves dates to month offsets
 - Optimization-ready: GoalSet provides T_min for constraint generation
+- Portfolio-aware: GoalSet consumes Account objects for type safety
 
 Example
 -------
 >>> from datetime import date
+>>> from finopt.src.portfolio import Account
 >>> from finopt.src.goals import IntermediateGoal, TerminalGoal, GoalSet
+>>> 
+>>> accounts = [
+...     Account.from_annual("Emergency", 0.04, 0.05),
+...     Account.from_annual("Housing", 0.07, 0.12)
+... ]
 >>> 
 >>> goals = [
 ...     IntermediateGoal(month=6, account="Emergency", 
@@ -38,7 +45,7 @@ Example
 ...     TerminalGoal(account="Housing", threshold=7_000_000, confidence=0.90)
 ... ]
 >>> 
->>> goal_set = GoalSet(goals, ["Emergency", "Housing"], date(2025, 1, 1))
+>>> goal_set = GoalSet(goals, accounts, date(2025, 1, 1))
 >>> goal_set.T_min  # minimum horizon from intermediate goal
 >>> 6
 """
@@ -51,6 +58,7 @@ import numpy as np
 
 if TYPE_CHECKING:
     from .model import SimulationResult
+    from .portfolio import Account
 
 __all__ = [
     "IntermediateGoal",
@@ -278,20 +286,42 @@ class GoalSet:
     ----------
     goals : List[Union[IntermediateGoal, TerminalGoal]]
         Mixed list of goal specifications
-    account_names : List[str]
-        Account name mapping (e.g., ["Emergency", "Housing"])
+    accounts : List[Account]
+        Portfolio accounts (source of truth for account metadata)
     start_date : datetime.date
         Simulation start date for intermediate goal resolution
+    
+    Attributes
+    ----------
+    accounts : List[Account]
+        Reference to portfolio accounts (enables future metadata access)
+    account_names : List[str]
+        Derived account name list (for backward compatibility)
+    M : int
+        Number of accounts
+    start_date : datetime.date
+        Simulation start date
+    intermediate_goals : List[IntermediateGoal]
+        Filtered list of intermediate goals
+    terminal_goals : List[TerminalGoal]
+        Filtered list of terminal goals
     
     Raises
     ------
     ValueError
         - If goals list is empty
+        - If accounts list is empty
         - If account reference invalid
         - If duplicate goals exist within type
     
     Examples
     --------
+    >>> from finopt.src.portfolio import Account
+    >>> accounts = [
+    ...     Account.from_annual("Emergency", 0.04, 0.05),
+    ...     Account.from_annual("Housing", 0.07, 0.12)
+    ... ]
+    >>> 
     >>> goals = [
     ...     IntermediateGoal(month=6, account="Emergency", 
     ...                     threshold=5_500_000, confidence=0.90),
@@ -300,28 +330,33 @@ class GoalSet:
     ...     TerminalGoal(account="Housing", threshold=7_000_000, confidence=0.90)
     ... ]
     >>> 
-    >>> goal_set = GoalSet(goals, ["Emergency", "Housing"], date(2025, 1, 1))
+    >>> goal_set = GoalSet(goals, accounts, date(2025, 1, 1))
     >>> goal_set.T_min  # From intermediate goal
     6
-    >>> goal_set.intermediate_goals  # Filtered list
-    [IntermediateGoal(month=6, ...)]
-    >>> goal_set.terminal_goals  # Filtered list
-    [TerminalGoal(account='Emergency', ...), TerminalGoal(account='Housing', ...)]
+    >>> goal_set.accounts  # Access to Account objects
+    [Account('Emergency': ...), Account('Housing': ...)]
+    >>> goal_set.account_names  # Derived property
+    ['Emergency', 'Housing']
     """
     
     def __init__(
         self,
         goals: List[Union[IntermediateGoal, TerminalGoal]],
-        account_names: List[str],
+        accounts: List[Account],
         start_date: date
     ):
         if not goals:
             raise ValueError("goals list cannot be empty")
-        if not account_names:
-            raise ValueError("account_names list cannot be empty")
+        if not accounts:
+            raise ValueError("accounts list cannot be empty")
         
-        self.account_names = account_names
-        self.M = len(account_names)
+        # Store accounts as canonical source
+        self.accounts = accounts
+        self.M = len(accounts)
+        
+        # Derive account_names for backward compatibility and string resolution
+        self.account_names = [acc.name for acc in accounts]
+        
         self.start_date = start_date
         
         # Separate goal types
@@ -539,7 +574,7 @@ class GoalSet:
 def check_goals(
     result: SimulationResult,
     goals: List[Union[IntermediateGoal, TerminalGoal]],
-    account_names: List[str],
+    accounts: List[Account],
     start_date: date
 ) -> Dict[Union[IntermediateGoal, TerminalGoal], Dict[str, float]]:
     """
@@ -557,8 +592,8 @@ def check_goals(
         Simulation output with wealth trajectories
     goals : List[Union[IntermediateGoal, TerminalGoal]]
         Goals to validate
-    account_names : List[str]
-        Account name mapping for resolution
+    accounts : List[Account]
+        Portfolio accounts for name resolution
     start_date : datetime.date
         Simulation start date for intermediate goal resolution
     
@@ -587,19 +622,26 @@ def check_goals(
     
     Examples
     --------
+    >>> from finopt.src.portfolio import Account
+    >>> accounts = [
+    ...     Account.from_annual("Emergency", 0.04, 0.05),
+    ...     Account.from_annual("Housing", 0.07, 0.12)
+    ... ]
+    >>> 
     >>> goals = [
     ...     IntermediateGoal(month=12, account="Emergency", 
     ...                     threshold=2_000_000, confidence=0.95),
     ...     TerminalGoal(account="Housing", threshold=15_000_000, confidence=0.90)
     ... ]
+    >>> 
     >>> result = model.simulate(T=24, X=X, n_sims=500, seed=42)
-    >>> status = check_goals(result, goals, model.account_names, date(2025, 1, 1))
+    >>> status = check_goals(result, goals, accounts, date(2025, 1, 1))
     >>> 
     >>> for goal, metrics in status.items():
     ...     print(f"{goal}: {'✓' if metrics['satisfied'] else '✗'}")
     """
     # Validate goal structure
-    goal_set = GoalSet(goals, account_names, start_date)
+    goal_set = GoalSet(goals, accounts, start_date)
     
     # Check horizon compatibility for intermediate goals
     if goal_set.intermediate_goals:
@@ -660,7 +702,7 @@ def check_goals(
 def goal_progress(
     result: SimulationResult,
     goals: List[Union[IntermediateGoal, TerminalGoal]],
-    account_names: List[str],
+    accounts: List[Account],
     start_date: date
 ) -> Dict[Union[IntermediateGoal, TerminalGoal], float]:
     """
@@ -675,8 +717,8 @@ def goal_progress(
         Simulation output with wealth trajectories
     goals : List[Union[IntermediateGoal, TerminalGoal]]
         Goals to track
-    account_names : List[str]
-        Account name mapping
+    accounts : List[Account]
+        Portfolio accounts for name resolution
     start_date : datetime.date
         Simulation start date for intermediate goal resolution
     
@@ -690,14 +732,20 @@ def goal_progress(
     
     Examples
     --------
+    >>> from finopt.src.portfolio import Account
+    >>> accounts = [
+    ...     Account.from_annual("Emergency", 0.04, 0.05),
+    ...     Account.from_annual("Housing", 0.07, 0.12)
+    ... ]
+    >>> 
     >>> result = model.simulate(T=24, X=X, n_sims=500, seed=42)
-    >>> progress = goal_progress(result, goals, model.account_names, date(2025, 1, 1))
+    >>> progress = goal_progress(result, goals, accounts, date(2025, 1, 1))
     >>> 
     >>> for goal, pct in progress.items():
     ...     print(f"{goal.account} @ {goal.month if hasattr(goal, 'month') else 'T'}: "
     ...           f"{pct:.1%} progress")
     """
-    goal_set = GoalSet(goals, account_names, start_date)
+    goal_set = GoalSet(goals, accounts, start_date)
     
     progress = {}
     for goal in goals:
@@ -725,7 +773,7 @@ def goal_progress(
 def print_goal_status(
     result: SimulationResult,
     goals: List[Union[IntermediateGoal, TerminalGoal]],
-    account_names: List[str],
+    accounts: List[Account],
     start_date: date
 ):
     """
@@ -737,15 +785,21 @@ def print_goal_status(
         Simulation output
     goals : List[Union[IntermediateGoal, TerminalGoal]]
         Goals to display
-    account_names : List[str]
-        Account name mapping
+    accounts : List[Account]
+        Portfolio accounts for name resolution
     start_date : datetime.date
         Simulation start date
     
     Examples
     --------
+    >>> from finopt.src.portfolio import Account
+    >>> accounts = [
+    ...     Account.from_annual("Emergency", 0.04, 0.05),
+    ...     Account.from_annual("Housing", 0.07, 0.12)
+    ... ]
+    >>> 
     >>> result = model.simulate(T=24, X=X, n_sims=500, seed=42)
-    >>> print_goal_status(result, goals, model.account_names, date(2025, 1, 1))
+    >>> print_goal_status(result, goals, accounts, date(2025, 1, 1))
     
     === Goal Status ===
     
@@ -760,7 +814,7 @@ def print_goal_status(
         Violation rate: 13.1% (66 scenarios)
         Median shortfall: $1,234,567
     """
-    status = check_goals(result, goals, account_names, start_date)
+    status = check_goals(result, goals, accounts, start_date)
     
     print("\n=== Goal Status ===\n")
     
@@ -778,9 +832,9 @@ def print_goal_status(
             location = f"@ T={result.T}"
         
         # Resolve account name
-        goal_set = GoalSet([goal], account_names, start_date)
+        goal_set = GoalSet([goal], accounts, start_date)
         account_idx = goal_set.get_account_index(goal)
-        account_name = account_names[account_idx]
+        account_name = goal_set.account_names[account_idx]
         
         print(f"[{symbol}] {goal_type}: {account_name} {location}")
         print(f"    Target: ${goal.threshold:,.0f} | "

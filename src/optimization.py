@@ -22,7 +22,7 @@ Inner problem: Convex program via affine wealth representation (AllocationOptimi
 
 Key Components
 --------------
-- OptimizationResult: Container for X*, T*, objective value, and diagnostics
+- OptimizationResult: Container for X*, T*, objective value, goal_set, and diagnostics
 - AllocationOptimizer: Abstract base with parametrizable objectives f(X)
 - CVaROptimizer: Risk-adjusted optimization (stub for future CVXPY implementation)
 - SAAOptimizer: Sample Average Approximation with sigmoid smoothing
@@ -34,6 +34,7 @@ Design Principles
 - Scenario-driven: Receives pre-generated (A, R) from FinancialModel
 - Solver-agnostic: Abstract base allows scipy, CVXPY, or custom solvers
 - Optimization-ready: Exploits affine wealth W_t^m(X) for analytical gradients
+- Portfolio-aware: Consumes Account objects for type safety and metadata access
 - Reproducible: Explicit seed management for stochastic scenarios
 """
 
@@ -48,6 +49,7 @@ from .goals import IntermediateGoal, TerminalGoal, GoalSet, check_goals
 
 if TYPE_CHECKING:
     from .model import SimulationResult
+    from .portfolio import Account
 
 __all__ = [
     "OptimizationResult",
@@ -75,7 +77,7 @@ class OptimizationResult:
     Container for allocation optimization output.
     
     Immutable dataclass holding optimal policy X*, horizon T*, objective value,
-    feasibility status, and solver diagnostics.
+    feasibility status, goal_set reference, and solver diagnostics.
     
     Attributes
     ----------
@@ -93,6 +95,9 @@ class OptimizationResult:
         False → at least one goal violated (infeasible solution).
     goals : List[Union[IntermediateGoal, TerminalGoal]]
         Original goal specifications from problem formulation.
+    goal_set : GoalSet
+        Validated goal collection with resolved accounts and metadata.
+        Provides access to accounts, start_date, and resolved indices.
     solve_time : float
         Total solver execution time (seconds).
     n_iterations : int, optional
@@ -102,7 +107,10 @@ class OptimizationResult:
     
     Examples
     --------
-    >>> result = optimizer.solve(T=24, A=A, R=R, W0=W0, goals=goals, goal_set=gs)
+    >>> from finopt.src.portfolio import Account
+    >>> accounts = [Account.from_annual("Emergency", 0.04, 0.05)]
+    >>> result = optimizer.solve(T=24, A=A, R=R, W0=W0, goals=goals, 
+    ...                          accounts=accounts, start_date=date(2025,1,1))
     >>> print(result.summary())
     OptimizationResult(
       Status: ✓ Feasible
@@ -112,12 +120,17 @@ class OptimizationResult:
       Solve time: 0.342s
       Iterations: 18
     )
+    >>> 
+    >>> # Access accounts via goal_set
+    >>> result.goal_set.accounts
+    [Account('Emergency': 4.0%/year, ...)]
     """
     X: np.ndarray
     T: int
     objective_value: float
     feasible: bool
     goals: List[Union[IntermediateGoal, TerminalGoal]]
+    goal_set: GoalSet
     solve_time: float
     n_iterations: Optional[int] = None
     diagnostics: Optional[Dict[str, Any]] = None
@@ -136,6 +149,14 @@ class OptimizationResult:
             raise TypeError(f"feasible must be bool, got {type(self.feasible)}")
         if not isinstance(self.solve_time, (int, float)) or self.solve_time < 0:
             raise ValueError(f"solve_time must be non-negative, got {self.solve_time}")
+        
+        # Validate goal_set consistency
+        if not isinstance(self.goal_set, GoalSet):
+            raise TypeError(f"goal_set must be GoalSet, got {type(self.goal_set)}")
+        if self.goal_set.M != M:
+            raise ValueError(
+                f"goal_set.M={self.goal_set.M} != X.shape[1]={M}"
+            )
     
     def summary(self) -> str:
         """Human-readable optimization summary."""
@@ -166,17 +187,37 @@ class OptimizationResult:
     
     def validate_goals(
         self,
-        result: SimulationResult,
-        account_names: List[str],
-        start_date
+        result: SimulationResult
     ) -> Dict[Union[IntermediateGoal, TerminalGoal], Dict[str, float]]:
-        """Validate goal satisfaction in simulation result using X*."""
+        """
+        Validate goal satisfaction in simulation result using X*.
+        
+        Parameters
+        ----------
+        result : SimulationResult
+            Simulation output to validate against goals
+        
+        Returns
+        -------
+        dict
+            Goal satisfaction metrics (from check_goals)
+        
+        Notes
+        -----
+        Uses self.goal_set.accounts and self.goal_set.start_date internally,
+        eliminating the need to pass these parameters explicitly.
+        """
         if result.T != self.T:
             raise ValueError(
                 f"Result horizon mismatch: result.T={result.T} != self.T={self.T}"
             )
         
-        return check_goals(result, self.goals, account_names, start_date)
+        return check_goals(
+            result, 
+            self.goals, 
+            self.goal_set.accounts,
+            self.goal_set.start_date
+        )
     
     def is_valid_allocation(self, tol: float = 1e-6) -> bool:
         """Check if X satisfies allocation constraints."""
@@ -228,7 +269,8 @@ class AllocationOptimizer(ABC):
     Notes
     -----
     Subclasses must implement:
-    - solve(T, A, R, W0, goals, goal_set, X_init, **kwargs) → OptimizationResult
+    - solve(T, A, R, W0, goals, accounts, start_date, goal_set, X_init, **kwargs) 
+      → OptimizationResult
     
     Provided utilities:
     - _validate_inputs(...) → GoalSet
@@ -265,7 +307,9 @@ class AllocationOptimizer(ABC):
         R: np.ndarray,
         W0: np.ndarray,
         goals: List[Union[IntermediateGoal, TerminalGoal]],
-        goal_set: GoalSet,
+        accounts: List[Account],
+        start_date,
+        goal_set: Optional[GoalSet] = None,
         X_init: Optional[np.ndarray] = None,
         **solver_kwargs
     ) -> OptimizationResult:
@@ -284,8 +328,12 @@ class AllocationOptimizer(ABC):
             Initial wealth vector
         goals : List[Union[IntermediateGoal, TerminalGoal]]
             Goal specifications
-        goal_set : GoalSet
-            Pre-validated goal collection
+        accounts : List[Account]
+            Portfolio accounts (source of truth for metadata)
+        start_date : datetime.date
+            Simulation start date for goal resolution
+        goal_set : GoalSet, optional
+            Pre-validated goal collection. If None, constructed internally.
         X_init : np.ndarray, optional
             Warm start allocation (T, M)
         **solver_kwargs
@@ -294,7 +342,7 @@ class AllocationOptimizer(ABC):
         Returns
         -------
         OptimizationResult
-            Optimal X*, objective value, feasibility, diagnostics
+            Optimal X*, objective value, feasibility, goal_set, diagnostics
         """
         pass
     
@@ -305,9 +353,24 @@ class AllocationOptimizer(ABC):
         R: np.ndarray,
         W0: np.ndarray,
         goals: List[Union[IntermediateGoal, TerminalGoal]],
+        accounts: List[Account],
         start_date
     ) -> GoalSet:
-        """Validate inputs and return GoalSet."""
+        """
+        Validate inputs and return GoalSet.
+        
+        Parameters
+        ----------
+        accounts : List[Account]
+            Portfolio accounts for GoalSet construction
+        start_date : datetime.date
+            Simulation start date for goal resolution
+        
+        Returns
+        -------
+        GoalSet
+            Validated goal collection with resolved accounts
+        """
         if not isinstance(T, int) or T < 1:
             raise ValueError(f"T must be positive int, got {T}")
         
@@ -328,7 +391,16 @@ class AllocationOptimizer(ABC):
         if not goals:
             raise ValueError("goals list cannot be empty")
         
-        goal_set = GoalSet(goals, self.account_names, start_date)
+        if not accounts:
+            raise ValueError("accounts list cannot be empty")
+        
+        if len(accounts) != self.M:
+            raise ValueError(
+                f"accounts length {len(accounts)} != n_accounts {self.M}"
+            )
+        
+        # Construct GoalSet with Account objects
+        goal_set = GoalSet(goals, accounts, start_date)
         
         if goal_set.T_min > T:
             raise ValueError(
@@ -344,30 +416,28 @@ class AllocationOptimizer(ABC):
         A: np.ndarray,
         R: np.ndarray,
         W0: np.ndarray,
+        accounts: List[Account],
         goal_set: GoalSet
     ) -> bool:
         """
         Check if allocation X satisfies all goals using exact SAA.
         
         Uses non-smoothed indicator function for final validation.
+        Uses Portfolio.simulate with W0_override to avoid creating dummy accounts.
+        
+        Parameters
+        ----------
+        accounts : List[Account]
+            Portfolio accounts (metadata only, W0 overridden)
         """
         # Import here to avoid circular dependency
         from .portfolio import Portfolio
         
-        # Create dummy accounts for Portfolio
-        class DummyAccount:
-            def __init__(self, name, wealth):
-                self.name = name
-                self.initial_wealth = wealth
+        # Create portfolio with accounts (W0 will be overridden)
+        portfolio = Portfolio(accounts)
         
-        accounts_dummy = [
-            DummyAccount(name, W0[i])
-            for i, name in enumerate(self.account_names)
-        ]
-        portfolio = Portfolio(accounts_dummy)
-        
-        # Simulate wealth with X
-        result = portfolio.simulate(A=A, R=R, X=X, method="affine")
+        # Simulate wealth with W0 override
+        result = portfolio.simulate(A=A, R=R, X=X, method="affine", W0_override=W0)
         W = result["wealth"]  # (n_sims, T+1, M)
         
         n_sims = W.shape[0]
@@ -590,7 +660,9 @@ class CVaROptimizer(AllocationOptimizer):
         R: np.ndarray,
         W0: np.ndarray,
         goals: List[Union[IntermediateGoal, TerminalGoal]],
-        goal_set: GoalSet,
+        accounts: List[Account],
+        start_date,
+        goal_set: Optional[GoalSet] = None,
         X_init: Optional[np.ndarray] = None,
         **solver_kwargs
     ) -> OptimizationResult:
@@ -600,9 +672,11 @@ class CVaROptimizer(AllocationOptimizer):
             "Implementation checklist:\n"
             "1. Install CVXPY: pip install cvxpy\n"
             "2. Import: import cvxpy as cp\n"
-            "3. Validate inputs: goal_set = self._validate_inputs(...)\n"
-            "4. Compute F: from .portfolio import Portfolio; "
-            "F = portfolio.compute_accumulation_factors(R)\n"
+            "3. Validate inputs:\n"
+            "   goal_set = self._validate_inputs(T, A, R, W0, goals, accounts, start_date)\n"
+            "4. Compute F: from .portfolio import Portfolio\n"
+            "   portfolio = Portfolio(accounts)\n"
+            "   F = portfolio.compute_accumulation_factors(R)\n"
             "5. Variables:\n"
             "   - X = cp.Variable((T, M), nonneg=True)\n"
             "   - ξ_obj = cp.Variable()\n"
@@ -622,8 +696,9 @@ class CVaROptimizer(AllocationOptimizer):
             "   - cp.sum(X[t,:]) == 1 for all t\n"
             "9. Solve: prob.solve(solver=solver_kwargs.get('solver', 'ECOS'), ...)\n"
             "10. Extract: X_star = X.value, obj = prob.value\n"
-            "11. Validate: feasible = self._check_feasibility(X_star, A, R, W0, goal_set)\n"
-            "12. Return OptimizationResult(...)\n\n"
+            "11. Validate:\n"
+            "    feasible = self._check_feasibility(X_star, A, R, W0, accounts, goal_set)\n"
+            "12. Return OptimizationResult(X=X_star, T=T, ..., goal_set=goal_set)\n\n"
             "Reference: Rockafellar & Uryasev (2000), "
             "'Optimization of conditional value-at-risk'"
         )
@@ -697,7 +772,8 @@ class SAAOptimizer(AllocationOptimizer):
     >>> opt = SAAOptimizer(n_accounts=2, tau=0.1, 
     ...                   objective="low_turnover",
     ...                   objective_params={"lambda": 0.1})
-    >>> result = opt.solve(T=24, A=A, R=R, W0=W0, goals=goals, goal_set=gs)
+    >>> result = opt.solve(T=24, A=A, R=R, W0=W0, goals=goals, 
+    ...                   accounts=accounts, start_date=date(2025,1,1))
     
     References
     ----------
@@ -727,7 +803,9 @@ class SAAOptimizer(AllocationOptimizer):
         R: np.ndarray,
         W0: np.ndarray,
         goals: List[Union[IntermediateGoal, TerminalGoal]],
-        goal_set: GoalSet,
+        accounts: List[Account],
+        start_date,
+        goal_set: Optional[GoalSet] = None,
         X_init: Optional[np.ndarray] = None,
         **solver_kwargs
     ) -> OptimizationResult:
@@ -749,8 +827,12 @@ class SAAOptimizer(AllocationOptimizer):
             Initial wealth vector
         goals : List[Union[IntermediateGoal, TerminalGoal]]
             Goal specifications
-        goal_set : GoalSet
-            Pre-validated goal collection with resolved indices
+        accounts : List[Account]
+            Portfolio accounts (metadata and initial wealth reference)
+        start_date : datetime.date
+            Simulation start date for goal resolution
+        goal_set : GoalSet, optional
+            Pre-validated goal collection. If None, constructed internally.
         X_init : np.ndarray, optional
             Warm start allocation (T, M). If None, uses uniform (1/M).
         **solver_kwargs
@@ -763,7 +845,7 @@ class SAAOptimizer(AllocationOptimizer):
         Returns
         -------
         OptimizationResult
-            Optimal X*, objective value, feasibility, diagnostics
+            Optimal X*, objective value, feasibility, goal_set, diagnostics
         
         Raises
         ------
@@ -781,6 +863,10 @@ class SAAOptimizer(AllocationOptimizer):
         
         start_time = time.time()
         
+        # Validate inputs and construct GoalSet if not provided
+        if goal_set is None:
+            goal_set = self._validate_inputs(T, A, R, W0, goals, accounts, start_date)
+        
         # Extract parameters
         n_sims = A.shape[0]
         M = self.M
@@ -792,16 +878,7 @@ class SAAOptimizer(AllocationOptimizer):
         # Compute accumulation factors F: (n_sims, T+1, T+1, M)
         from .portfolio import Portfolio
         
-        class DummyAccount:
-            def __init__(self, name, wealth):
-                self.name = name
-                self.initial_wealth = wealth
-        
-        accounts_dummy = [
-            DummyAccount(name, W0[i])
-            for i, name in enumerate(self.account_names)
-        ]
-        portfolio = Portfolio(accounts_dummy)
+        portfolio = Portfolio(accounts)
         F = portfolio.compute_accumulation_factors(R)
         
         # Sigmoid functions
@@ -1050,7 +1127,7 @@ class SAAOptimizer(AllocationOptimizer):
         obj_value = -result.fun  # Convert back to maximization
         
         # Check feasibility with exact SAA
-        feasible = self._check_feasibility(X_star, A, R, W0, goal_set)
+        feasible = self._check_feasibility(X_star, A, R, W0, accounts, goal_set)
         
         # Diagnostics
         diagnostics = {
@@ -1065,6 +1142,7 @@ class SAAOptimizer(AllocationOptimizer):
             objective_value=obj_value,
             feasible=feasible,
             goals=goals,
+            goal_set=goal_set,
             solve_time=solve_time,
             n_iterations=result.nit,
             diagnostics=diagnostics
@@ -1095,6 +1173,12 @@ class GoalSeeker:
     
     Examples
     --------
+    >>> from finopt.src.portfolio import Account
+    >>> accounts = [
+    ...     Account.from_annual("Emergency", 0.04, 0.05),
+    ...     Account.from_annual("Housing", 0.07, 0.12)
+    ... ]
+    >>> 
     >>> optimizer = SAAOptimizer(n_accounts=2, tau=0.1)
     >>> seeker = GoalSeeker(optimizer, T_max=120, verbose=True)
     >>> 
@@ -1103,7 +1187,7 @@ class GoalSeeker:
     >>> def R_gen(T, n, s):
     ...     return model.returns.generate(T, n_sims=n, seed=s)
     >>> 
-    >>> result = seeker.seek(goals, A_gen, R_gen, W0, 
+    >>> result = seeker.seek(goals, A_gen, R_gen, W0, accounts,
     ...                     start_date=date(2025, 1, 1),
     ...                     n_sims=500, seed=42)
     >>> print(f"Optimal horizon: T*={result.T} months")
@@ -1133,6 +1217,7 @@ class GoalSeeker:
         A_generator: Callable[[int, int, Optional[int]], np.ndarray],
         R_generator: Callable[[int, int, Optional[int]], np.ndarray],
         W0: np.ndarray,
+        accounts: List[Account],
         start_date,
         n_sims: int = 500,
         seed: Optional[int] = None,
@@ -1155,6 +1240,8 @@ class GoalSeeker:
             Function: (T, n_sims, seed) → R array (n_sims, T, M)
         W0 : np.ndarray, shape (M,)
             Initial wealth vector
+        accounts : List[Account]
+            Portfolio accounts (metadata for goal resolution and simulation)
         start_date : datetime.date
             Simulation start date for goal resolution
         n_sims : int, default 500
@@ -1184,7 +1271,11 @@ class GoalSeeker:
         if not goals:
             raise ValueError("goals list cannot be empty")
         
-        goal_set = GoalSet(goals, self.optimizer.account_names, start_date)
+        if not accounts:
+            raise ValueError("accounts list cannot be empty")
+        
+        # Construct GoalSet with accounts
+        goal_set = GoalSet(goals, accounts, start_date)
         
         # Determine intelligent starting horizon
         if goal_set.terminal_goals and not goal_set.intermediate_goals:
@@ -1251,6 +1342,8 @@ class GoalSeeker:
                 R=R,
                 W0=W0,
                 goals=goals,
+                accounts=accounts,
+                start_date=start_date,
                 goal_set=goal_set,
                 X_init=X_prev,
                 **solver_kwargs
