@@ -70,15 +70,21 @@ import pickle
 import sys
 from dataclasses import dataclass, field
 from datetime import date
-from typing import List, Optional
+from typing import List, Optional, Union, Dict, TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
 
+# Lazy imports for optimization (avoid circular dependencies)
+if TYPE_CHECKING:
+    from .optimization import AllocationOptimizer, OptimizationResult
+
+# Direct imports (always available)
 from .income import IncomeModel
 from .portfolio import Account, Portfolio
 from .returns import ReturnModel
 from .utils import compute_cagr, drawdown
+from .goals import IntermediateGoal, TerminalGoal  # ← NUEVO: necesario para type hints
 
 __all__ = [
     "SimulationResult",
@@ -847,6 +853,334 @@ class FinancialModel:
             'memory_mb': memory_bytes / (1024 ** 2)
         }
     
+
+    def optimize(
+        self,
+        goals: List[Union[IntermediateGoal, TerminalGoal]],
+        optimizer: AllocationOptimizer,
+        T_max: int = 240,
+        n_sims: int = 500,
+        seed: Optional[int] = None,
+        start: Optional[date] = None,
+        verbose: bool = True,
+        **solver_kwargs
+    ) -> OptimizationResult:
+        """
+        Find minimum-horizon allocation policy satisfying financial goals.
+        
+        Executes bilevel optimization:
+        - Outer problem: min T (via linear search)
+        - Inner problem: find feasible X* at horizon T
+        
+        Uses intelligent horizon estimation for terminal-only goals via
+        heuristic in goals.py (avoids testing infeasible T=1,2,3...).
+        
+        Parameters
+        ----------
+        goals : List[Union[IntermediateGoal, TerminalGoal]]
+            Financial objectives as chance constraints.
+            - IntermediateGoal: ℙ(W_t^m ≥ b) ≥ 1-ε at fixed month t
+            - TerminalGoal: ℙ(W_T^m ≥ b) ≥ 1-ε at variable horizon T
+        optimizer : AllocationOptimizer
+            Inner problem solver. Available implementations:
+            - SAAOptimizer: Sigmoid-smoothed SAA (recommended)
+            - CVaROptimizer: Risk-adjusted (requires CVXPY, stub)
+        T_max : int, default 240
+            Maximum search horizon (months). Typical: 120-240 (10-20 years).
+        n_sims : int, default 500
+            Monte Carlo scenarios for chance constraint approximation.
+            Higher → better approximation, slower. Minimum: 100.
+        seed : int, optional
+            Random seed for reproducibility. Propagated to income (seed)
+            and returns (seed+1) generators.
+        start : date, optional
+            Calendar start date for goal resolution. If None, uses today.
+        verbose : bool, default True
+            Print iteration progress (horizon testing, feasibility status).
+        **solver_kwargs
+            Forwarded to AllocationOptimizer.solve():
+            - maxiter : int, default 1000 (SLSQP iterations)
+            - gtol : float, default 1e-6 (gradient tolerance)
+            - ftol : float, default 1e-9 (function tolerance)
+        
+        Returns
+        -------
+        OptimizationResult
+            Dataclass containing:
+            - X : np.ndarray (T*, M) - optimal allocation policy
+            - T : int - minimum feasible horizon
+            - objective_value : float - terminal wealth at optimum
+            - feasible : bool - goal satisfaction status
+            - goals : List - original goal specifications
+            - solve_time : float - total execution time (seconds)
+            - n_iterations : int - solver iterations
+            - diagnostics : dict - convergence info
+        
+        Raises
+        ------
+        ValueError
+            If goals list is empty.
+            If T_min (from intermediate goals) > T_max.
+        RuntimeError
+            If no feasible solution found in [T_min, T_max].
+        
+        Notes
+        -----
+        - Optimization uses model's income/returns generators internally
+        - Terminal-only goals trigger heuristic T_start estimation (saves iterations)
+        - Warm start: X policy extended from previous T (faster convergence)
+        - Feasibility check: exact SAA validation (non-smoothed indicators)
+        
+        Algorithm Overview
+        ------------------
+        1. Create GoalSeeker with optimizer
+        2. Build generators: A(T,n,s) → contributions, R(T,n,s) → returns
+        3. Linear search T ∈ [T_start, T_max]:
+        a. If terminal-only goals: estimate T_start via heuristic
+        b. Generate (A, R) scenarios for current T
+        c. Solve inner problem: find X* satisfying goals
+        d. Check feasibility (exact SAA)
+        e. If feasible: return X*, else T++
+        4. If T > T_max: raise ValueError (no solution)
+        
+        Examples
+        --------
+        >>> from finopt.src.optimization import SAAOptimizer
+        >>> from finopt.src.goals import IntermediateGoal, TerminalGoal
+        >>> from datetime import date
+        >>> 
+        >>> # Define goals
+        >>> goals = [
+        ...     IntermediateGoal(
+        ...         month=12, 
+        ...         account="Emergency",
+        ...         threshold=5_500_000,
+        ...         confidence=0.90
+        ...     ),
+        ...     TerminalGoal(
+        ...         account="Housing",
+        ...         threshold=20_000_000,
+        ...         confidence=0.90
+        ...     )
+        ... ]
+        >>> 
+        >>> # Create optimizer
+        >>> optimizer = SAAOptimizer(
+        ...     n_accounts=model.M,
+        ...     tau=0.1,
+        ...     objective="terminal_wealth"
+        ... )
+        >>> 
+        >>> # Optimize
+        >>> result = model.optimize(
+        ...     goals=goals,
+        ...     optimizer=optimizer,
+        ...     T_max=120,
+        ...     n_sims=500,
+        ...     seed=42,
+        ...     start=date(2025, 1, 1),
+        ...     verbose=True
+        ... )
+        >>> 
+        >>> print(f"Optimal horizon: T*={result.T} months")
+        >>> print(f"Feasible: {result.feasible}")
+        >>> print(result.summary())
+        >>> 
+        >>> # Simulate with optimal policy for validation
+        >>> sim_result = model.simulate_from_optimization(result, n_sims=1000, seed=100)
+        >>> status = model.verify_goals(sim_result, goals)
+        """
+        from .optimization import GoalSeeker, AllocationOptimizer, OptimizationResult
+        
+        # Validate inputs
+        if not goals:
+            raise ValueError("goals list cannot be empty")
+        if not hasattr(optimizer, 'solve') or not callable(optimizer.solve):
+            raise TypeError(
+                f"optimizer must implement AllocationOptimizer interface "
+                f"(requires .solve() method), got {type(optimizer)}"
+            )
+        if not hasattr(optimizer, 'M') or optimizer.M != self.M:
+            raise ValueError(
+                f"optimizer.M={getattr(optimizer, 'M', None)} must match "
+                f"model.M={self.M}"
+            )
+        
+        # Create bilevel solver
+        seeker = GoalSeeker(optimizer, T_max=T_max, verbose=verbose)
+        
+        # Build generators using model components
+        start_date = start if start is not None else date.today()
+        
+        def A_generator(T: int, n: int, s: Optional[int]) -> np.ndarray:
+            """Generate contribution scenarios."""
+            return self.income.contributions(
+                months=T,
+                n_sims=n,
+                seed=s,
+                output="array",
+                start=start_date
+            )
+        
+        def R_generator(T: int, n: int, s: Optional[int]) -> np.ndarray:
+            """Generate return scenarios."""
+            return self.returns.generate(T, n_sims=n, seed=s)
+        
+        # Extract initial wealth
+        W0 = self.portfolio.initial_wealth_vector
+        
+        # Execute bilevel optimization
+        return seeker.seek(
+            goals=goals,
+            A_generator=A_generator,
+            R_generator=R_generator,
+            W0=W0,
+            start_date=start_date,
+            n_sims=n_sims,
+            seed=seed,
+            **solver_kwargs
+        )
+
+    def simulate_from_optimization(
+        self,
+        opt_result: OptimizationResult,
+        n_sims: int = 500,
+        seed: Optional[int] = None,
+        start: Optional[date] = None
+    ) -> SimulationResult:
+        """
+        Simulate wealth using optimal policy from optimization.
+        
+        Convenience wrapper that extracts X* and T from OptimizationResult
+        and runs full Monte Carlo simulation for analysis/validation.
+        
+        Parameters
+        ----------
+        opt_result : OptimizationResult
+            Optimization output from model.optimize().
+        n_sims : int, default 500
+            Number of Monte Carlo scenarios. Can differ from optimization
+            n_sims for higher-fidelity validation.
+        seed : int, optional
+            Random seed (independent from optimization seed).
+        start : date, optional
+            Calendar start date. If None, uses today.
+        
+        Returns
+        -------
+        SimulationResult
+            Full simulation output with X=opt_result.X.
+        
+        Notes
+        -----
+        - Uses same T as optimization
+        - Generates fresh scenarios (independent from optimization)
+        - Useful for out-of-sample goal validation
+        
+        Examples
+        --------
+        >>> opt_result = model.optimize(goals, optimizer, T_max=120, n_sims=500, seed=42)
+        >>> # Validate with 1000 fresh scenarios
+        >>> sim_result = model.simulate_from_optimization(opt_result, n_sims=1000, seed=999)
+        >>> status = model.verify_goals(sim_result, goals)
+        >>> print(f"Goal satisfaction rate: {status}")
+        """
+        from .optimization import OptimizationResult
+        if not isinstance(opt_result, OptimizationResult):
+            raise TypeError(
+                f"opt_result must be OptimizationResult, got {type(opt_result)}"
+            )
+        
+        return self.simulate(
+            T=opt_result.T,
+            X=opt_result.X,
+            n_sims=n_sims,
+            seed=seed,
+            start=start if start is not None else date.today()
+        )
+
+    def verify_goals(
+        self,
+        result: Union[SimulationResult, OptimizationResult],
+        goals: List[Union[IntermediateGoal, TerminalGoal]],
+        start: Optional[date] = None
+    ) -> Dict[Union[IntermediateGoal, TerminalGoal], Dict[str, float]]:
+        """
+        Verify goal satisfaction in simulation/optimization result.
+        
+        Computes empirical violation rates and compares against goal
+        confidence levels. Handles both result types automatically.
+        
+        Parameters
+        ----------
+        result : SimulationResult or OptimizationResult
+            Result to validate. If OptimizationResult, automatically
+            simulates with X* first.
+        goals : List[Union[IntermediateGoal, TerminalGoal]]
+            Goals to check.
+        start : date, optional
+            Calendar start date for intermediate goal resolution.
+            If None, extracts from result (SimulationResult) or uses today.
+        
+        Returns
+        -------
+        dict : {Goal: metrics}
+            For each goal, returns:
+            - satisfied : bool
+            - violation_rate : float (empirical ℙ(W < threshold))
+            - required_rate : float (goal's ε = 1 - confidence)
+            - margin : float (positive → satisfied)
+            - median_shortfall : float
+            - n_violations : int
+        
+        Examples
+        --------
+        >>> opt_result = model.optimize(goals, optimizer)
+        >>> status = model.verify_goals(opt_result, goals)
+        >>> 
+        >>> for goal, metrics in status.items():
+        ...     if not metrics['satisfied']:
+        ...         print(f"VIOLATED: {goal}")
+        ...         print(f"  Violation rate: {metrics['violation_rate']:.2%}")
+        ...         print(f"  Shortfall: ${metrics['median_shortfall']:,.0f}")
+        
+        Notes
+        -----
+        OptimizationResult is automatically converted to SimulationResult internally
+        by calling simulate_from_optimization() with 500 fresh scenarios.
+        The union type accepts both for user convenience.
+
+        For higher-fidelity validation, manually call:
+        >>> sim_result = model.simulate_from_optimization(opt_result, n_sims=1000)
+        >>> model.verify_goals(sim_result, goals)
+        """
+        from .goals import check_goals
+        from .optimization import OptimizationResult
+
+        # Handle OptimizationResult: simulate first
+        if isinstance(result, OptimizationResult):
+            sim_result = self.simulate_from_optimization(
+                result, 
+                n_sims=500,  # Default for validation
+                seed=None  # Fresh scenarios
+            )
+        elif isinstance(result, SimulationResult):
+            sim_result = result
+        else:
+            raise TypeError(
+                f"result must be SimulationResult or OptimizationResult, "
+                f"got {type(result)}"
+            )
+        
+        # Extract start date
+        start_date = start if start is not None else sim_result.start
+        
+        return check_goals(
+            sim_result,
+            goals,
+            [acc.name for acc in self.accounts],
+            start_date
+        )
     # -----------------------------------------------------------------------
     # Unified plotting interface
     # -----------------------------------------------------------------------
@@ -1158,7 +1492,7 @@ class FinancialModel:
         results: dict[str, SimulationResult],
         metric: str = "total_wealth",
         **kwargs
-    ):
+    ) -> Optional[tuple]:
         """
         Compare multiple strategies side-by-side.
         
