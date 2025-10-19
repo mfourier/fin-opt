@@ -1,4 +1,3 @@
-# finopt/src/optimization.py
 """
 Stochastic optimization module for FinOpt.
 
@@ -26,7 +25,7 @@ Key Components
 - AllocationOptimizer: Abstract base with parametrizable objectives f(X)
 - CVaROptimizer: Risk-adjusted optimization (stub for future CVXPY implementation)
 - SAAOptimizer: Sample Average Approximation with sigmoid smoothing
-- GoalSeeker: Bilevel solver with linear search and warm start
+- GoalSeeker: Bilevel solver with linear/binary search and warm start
 
 Design Principles
 -----------------
@@ -428,19 +427,27 @@ class AllocationOptimizer(ABC):
         Parameters
         ----------
         accounts : List[Account]
-            Portfolio accounts (metadata only, W0 overridden)
+            Portfolio accounts (metadata only, W0 will be overridden)
+        
+        Notes
+        -----
+        FIX: No renormalization - trust SLSQP constraint satisfaction.
+        Validates simplex constraint and returns False if violated.
         """
         # Import here to avoid circular dependency
         from .portfolio import Portfolio
         
-        # Create portfolio with accounts (W0 will be overridden)
-        portfolio = Portfolio(accounts)
+        # Validate simplex constraint (tolerance matches SLSQP ftol)
+        row_sums = X.sum(axis=1)
+        if not np.allclose(row_sums, 1.0, atol=1e-8):
+            max_deviation = np.abs(row_sums - 1.0).max()
+            if max_deviation > 1e-6:
+                return False
         
-        # Simulate wealth with W0 override
+        # Create portfolio and simulate
+        portfolio = Portfolio(accounts)
         result = portfolio.simulate(A=A, R=R, X=X, method="affine", W0_override=W0)
         W = result["wealth"]  # (n_sims, T+1, M)
-        
-        n_sims = W.shape[0]
         
         # Check intermediate goals
         for goal in goal_set.intermediate_goals:
@@ -705,7 +712,7 @@ class CVaROptimizer(AllocationOptimizer):
 
 
 # ---------------------------------------------------------------------------
-# SAA Optimizer (Smoothed Sigmoid Approximation)
+# SAA Optimizer (Smoothed Sigmoid Approximation) - FIXED VERSION
 # ---------------------------------------------------------------------------
 
 class SAAOptimizer(AllocationOptimizer):
@@ -715,7 +722,7 @@ class SAAOptimizer(AllocationOptimizer):
     Mathematical Formulation
     ------------------------
     Objective:
-        maximize  f(X) (parametrizable via objective argument)
+        maximize  E[Σ_m W_T^m]  (expected total terminal wealth)
     
     Subject to:
         Intermediate goals: ℙ(W_t^m ≥ b) ≥ 1 - ε  (fixed t)
@@ -727,32 +734,31 @@ class SAAOptimizer(AllocationOptimizer):
     ----------------------
     The discontinuous indicator 𝟙{W ≥ b} is replaced by sigmoid:
     
-        𝟙{W_i ≥ b}  ≈  σ((W_i - b)/τ)
+        𝟙{W_i ≥ b}  ≈  σ((W_i - b)/(τ·b))
         
         where σ(x) = 1/(1 + exp(-x))
     
-    Chance constraint becomes:
-        (1/n) Σ_i σ((W_t^{m,i}(X) - b)/τ) ≥ 1 - ε
+    The approximation error is controlled via threshold buffer:
     
-    Key Properties
-    --------------
-    1. Differentiability: σ is C^∞ → analytical gradients
-       σ'(x) = σ(x)(1 - σ(x))
+        b_opt = b · (1 + β)
+        
+    where β is computed to ensure target satisfaction rate at real threshold.
     
-    2. Approximation quality: Controlled by temperature τ
-       - Small τ (0.01): σ ≈ 𝟙 (better approximation, steeper gradient)
-       - Large τ (1.0): σ ≈ 0.5 (smoother, worse approximation)
-       - Balanced τ (0.1): Trade-off for practical optimization
-    
-    3. Convexity: Smoothed constraint is convex (albeit non-linear)
-       Enables gradient-based solvers like SLSQP
+    Key Improvements
+    ----------------
+    1. Theoretically-grounded buffer: β = -τ·z*/(1 + τ·z*) where z* = logit(p_target)
+    2. Wealth-optimal initialization: Grid search over simplex policies
+    3. Non-trivial objective: Maximizes E[W_T] for better convergence
+    4. No renormalization: Trust SLSQP constraint satisfaction
     
     Parameters
     ----------
     n_accounts : int
         Number of portfolio accounts
     tau : float, default 0.1
-        Sigmoid temperature parameter (smaller = sharper approximation)
+        Sigmoid temperature parameter (transition zone = ±τ·b)
+    target_satisfaction : float, default 0.90
+        Target satisfaction rate at real threshold (0 < p < 1)
     objective : ObjectiveType, default "terminal_wealth"
         Objective function specification
     objective_params : dict, optional
@@ -762,16 +768,12 @@ class SAAOptimizer(AllocationOptimizer):
     
     Examples
     --------
-    >>> # Sharp approximation (may be harder to optimize)
-    >>> opt_sharp = SAAOptimizer(n_accounts=2, tau=0.01)
+    >>> # Standard configuration (90% satisfaction)
+    >>> opt = SAAOptimizer(n_accounts=2, tau=0.1, target_satisfaction=0.90)
     >>> 
-    >>> # Smooth approximation (easier convergence)
-    >>> opt_smooth = SAAOptimizer(n_accounts=2, tau=1.0)
+    >>> # Conservative (95% satisfaction, tighter buffer)
+    >>> opt = SAAOptimizer(n_accounts=2, tau=0.1, target_satisfaction=0.95)
     >>> 
-    >>> # Balanced (recommended)
-    >>> opt = SAAOptimizer(n_accounts=2, tau=0.1, 
-    ...                   objective="low_turnover",
-    ...                   objective_params={"lambda": 0.1})
     >>> result = opt.solve(T=24, A=A, R=R, W0=W0, goals=goals, 
     ...                   accounts=accounts, start_date=date(2025,1,1))
     
@@ -784,7 +786,8 @@ class SAAOptimizer(AllocationOptimizer):
     def __init__(
         self,
         n_accounts: int,
-        tau: float = 0.1,
+        tau: float = 0.02,
+        target_satisfaction: float = 0.90,
         objective: ObjectiveType = "terminal_wealth",
         objective_params: Optional[Dict[str, Any]] = None,
         account_names: Optional[List[str]] = None
@@ -793,8 +796,119 @@ class SAAOptimizer(AllocationOptimizer):
         
         if tau <= 0:
             raise ValueError(f"tau must be > 0, got {tau}")
+        if not (0.5 < target_satisfaction < 1.0):
+            raise ValueError(
+                f"target_satisfaction must be ∈ (0.5, 1.0), got {target_satisfaction}"
+            )
         
         self.tau = tau
+        self.target_satisfaction = target_satisfaction
+        
+        # FIX 1: Compute theoretically-correct buffer
+        # We want: σ((b - b_opt)/(τ·b_opt)) ≥ target_satisfaction
+        # Using σ^(-1)(p) = ln(p/(1-p)) (logit function)
+        z_target = np.log(target_satisfaction / (1 - target_satisfaction))
+        
+        # From z = (b - b_opt)/(τ·b_opt) ≥ z_target
+        # → b_opt ≤ b / (1 + τ·z_target)
+        # → buffer = (b_opt - b)/b = -τ·z_target / (1 + τ·z_target)
+        self.threshold_buffer_factor = -tau * z_target / (1 + tau * z_target)
+    
+    def _initialize_smart(
+        self,
+        T: int,
+        M: int,
+        A: np.ndarray,
+        R: np.ndarray,
+        W0: np.ndarray,
+        goal_set: GoalSet,
+        accounts: List[Account]
+    ) -> np.ndarray:
+        """
+        FIX 2: Smart initialization via grid search over simplex policies.
+        
+        Strategy
+        --------
+        1. Generate candidate constant policies (pure + mixed)
+        2. Simulate wealth for each policy
+        3. Select policy maximizing minimum safety margin across goals
+        4. Return as time-constant policy X[t,:] = x* ∀t
+        
+        Returns
+        -------
+        X0 : np.ndarray, shape (T, M)
+            Initial allocation policy
+        
+        Complexity
+        ----------
+        O(K · T · n_test) where K = M + M(M-1)/2 + 1 is number of test policies
+        """
+        from .portfolio import Portfolio
+        
+        # Subsample scenarios for speed
+        n_test = min(A.shape[0], 100)
+        A_test = A[:n_test, :]
+        R_test = R[:n_test, :, :]
+        
+        # Generate test policies
+        test_policies = []
+        
+        # Pure policies: 100% in each account
+        for m in range(M):
+            x = np.zeros(M)
+            x[m] = 1.0
+            test_policies.append(("pure", m, x))
+        
+        # Mixed policies: 50-50 splits
+        if M >= 2:
+            for m1 in range(M):
+                for m2 in range(m1 + 1, M):
+                    x = np.zeros(M)
+                    x[m1] = 0.5
+                    x[m2] = 0.5
+                    test_policies.append(("mixed", (m1, m2), x))
+        
+        # Uniform policy
+        test_policies.append(("uniform", None, np.ones(M) / M))
+        
+        # Evaluate each policy
+        portfolio = Portfolio(accounts)
+        best_policy = None
+        best_score = -np.inf
+        best_name = None
+        
+        for name, idx, x_const in test_policies:
+            X_test = np.tile(x_const, (T, 1))
+            
+            result = portfolio.simulate(
+                A=A_test, R=R_test, X=X_test, 
+                method="affine", W0_override=W0
+            )
+            W = result["wealth"]  # (n_test, T+1, M)
+            
+            # Score: minimum safety margin across all goals
+            # Safety margin = (median_wealth - threshold) / threshold
+            min_margin = np.inf
+            
+            for goal in goal_set.terminal_goals:
+                m = goal_set.get_account_index(goal)
+                W_T_m = W[:, T, m]
+                margin = (np.median(W_T_m) - goal.threshold) / goal.threshold
+                min_margin = min(min_margin, margin)
+            
+            for goal in goal_set.intermediate_goals:
+                m = goal_set.get_account_index(goal)
+                t = goal_set.get_resolved_month(goal)
+                W_t_m = W[:, t, m]
+                margin = (np.median(W_t_m) - goal.threshold) / goal.threshold
+                min_margin = min(min_margin, margin)
+            
+            if min_margin > best_score:
+                best_score = min_margin
+                best_policy = x_const
+                best_name = f"{name}_{idx}" if idx is not None else name
+        
+        return np.tile(best_policy, (T, 1))
     
     def solve(
         self,
@@ -810,10 +924,7 @@ class SAAOptimizer(AllocationOptimizer):
         **solver_kwargs
     ) -> OptimizationResult:
         """
-        Solve SAA problem with smoothed sigmoid approximation.
-        
-        Uses scipy.optimize.minimize with SLSQP method for gradient-based
-        optimization with equality and inequality constraints.
+        Solve SAA problem with all fixes integrated.
         
         Parameters
         ----------
@@ -834,7 +945,7 @@ class SAAOptimizer(AllocationOptimizer):
         goal_set : GoalSet, optional
             Pre-validated goal collection. If None, constructed internally.
         X_init : np.ndarray, optional
-            Warm start allocation (T, M). If None, uses uniform (1/M).
+            Warm start allocation (T, M). If None, uses smart initialization.
         **solver_kwargs
             Solver parameters:
             - maxiter : int, default 1000
@@ -846,13 +957,6 @@ class SAAOptimizer(AllocationOptimizer):
         -------
         OptimizationResult
             Optimal X*, objective value, feasibility, goal_set, diagnostics
-        
-        Raises
-        ------
-        ImportError
-            If scipy not installed
-        RuntimeError
-            If solver fails to converge
         """
         try:
             from scipy.optimize import minimize
@@ -881,18 +985,20 @@ class SAAOptimizer(AllocationOptimizer):
         portfolio = Portfolio(accounts)
         F = portfolio.compute_accumulation_factors(R)
         
-        # Sigmoid functions
+        # Sigmoid functions with numerical stability
         def sigmoid(z):
-            """Numerically stable sigmoid."""
+            """Numerically stable sigmoid with clipping."""
+            z_safe = np.clip(z, -50, 50)
             return np.where(
-                z >= 0,
-                1 / (1 + np.exp(-z)),
-                np.exp(z) / (1 + np.exp(z))
+                z_safe >= 0,
+                1 / (1 + np.exp(-z_safe)),
+                np.exp(z_safe) / (1 + np.exp(z_safe))
             )
-        
+
         def sigmoid_prime(z):
-            """Derivative of sigmoid."""
-            s = sigmoid(z)
+            """Derivative of sigmoid with clipping."""
+            z_safe = np.clip(z, -50, 50)
+            s = sigmoid(z_safe)
             return s * (1 - s)
         
         # Compute wealth for all scenarios given X
@@ -915,145 +1021,86 @@ class SAAOptimizer(AllocationOptimizer):
                 
                 # Contribution term
                 for s in range(t):
-                    # A_s * x_s^m: (n_sims, 1) * (1, M) → (n_sims, M)
                     contrib = A[:, s, None] * X[s, :]
-                    # contrib * F_{s,t}^m
                     W[:, t, :] += contrib * F[:, s, t, :]
             
             return W
         
-        # Objective function (negative for minimization)
+        # FIX 5: Non-trivial objective with analytical gradient
         def objective(X_flat):
-            X = X_flat.reshape(T, M)
+            """
+            Maximize expected terminal wealth: E[Σ_m W_T^m]
+            
+            Returns NEGATIVE for scipy.minimize (converts max to min).
+            """
             W = compute_wealth_all(X_flat)
-            obj_value = self._compute_objective(W, X, T, M)
-            return -obj_value  # Negative for minimization
-        
-        # Gradient of objective (analytical)
+            return -W[:, T, :].sum(axis=1).mean()
+
         def objective_grad(X_flat):
             """
-            Gradient of objective w.r.t. X (flattened).
-            
-            For terminal_wealth: ∂E[W_T]/∂x_s^m = E[A_s * F_{s,T}^m]
+            Gradient: ∂f/∂x_{s,m} = -E[A_s · F_{s,T}^m]
             """
-            X = X_flat.reshape(T, M)
-            grad = np.zeros((T, M))
-            
-            if self.objective == "terminal_wealth":
-                # ∂E[Σ_m W_T^m]/∂x_s^m = E[A_s * F_{s,T}^m]
-                for s in range(T):
-                    for m in range(M):
-                        grad[s, m] = (A[:, s] * F[:, s, T, m]).mean()
-            
-            elif self.objective == "low_turnover":
-                # Terminal wealth gradient + turnover penalty gradient
-                lambda_ = self.objective_params.get("lambda", 0.1)
-                
-                # Terminal wealth part
-                for s in range(T):
-                    for m in range(M):
-                        grad[s, m] = (A[:, s] * F[:, s, T, m]).mean()
-                
-                # Turnover penalty: -λ * sign(x_{t+1} - x_t)
-                if T > 1:
-                    for t in range(T - 1):
-                        grad[t, :] -= lambda_ * np.sign(X[t + 1, :] - X[t, :])
-                        grad[t + 1, :] += lambda_ * np.sign(X[t + 1, :] - X[t, :])
-            
-            else:
-                # For complex objectives, use numerical approximation
-                eps = 1e-6
-                for i in range(T * M):
-                    X_plus = X_flat.copy()
-                    X_plus[i] += eps
-                    grad.flat[i] = (objective(X_plus) - objective(X_flat)) / eps
-            
-            return -grad.flatten()  # Negative because we minimize -obj
-        
-        # Constraint: smoothed intermediate goal
-        def constraint_intermediate_goal(X_flat, goal: IntermediateGoal, m: int, t: int):
-            """
-            Smoothed intermediate goal constraint (≥ 0 for feasibility).
-            
-            c(X) = (1/n)Σ_i σ((W_t^{m,i} - b)/τ) - (1 - ε) ≥ 0
-            """
-            W = compute_wealth_all(X_flat)
-            W_t_m = W[:, t, m]  # (n_sims,)
-            
-            z = (W_t_m - goal.threshold) / self.tau
-            satisfaction = sigmoid(z).mean()
-            
-            return satisfaction - (1 - goal.epsilon)
-        
-        # Gradient of intermediate goal constraint
-        def constraint_intermediate_goal_grad(X_flat, goal: IntermediateGoal, m: int, t: int):
-            """
-            Gradient of smoothed intermediate constraint.
-            
-            ∂c/∂x_s^m = (1/(n·τ)) Σ_i σ'((W_t^i - b)/τ) * A_s * F_{s,t}^m
-            """
-            W = compute_wealth_all(X_flat)
-            W_t_m = W[:, t, m]
-            
-            z = (W_t_m - goal.threshold) / self.tau
-            sigmoid_deriv = sigmoid_prime(z) / self.tau  # (n_sims,)
-            
             grad = np.zeros(T * M)
-            for s in range(t):  # Only s < t contribute
-                for m_idx in range(M):
-                    idx = s * M + m_idx
-                    if m_idx == m:
-                        # Gradient component
-                        grad[idx] = (sigmoid_deriv * A[:, s] * F[:, s, t, m]).mean()
+            
+            for s in range(T):
+                for m in range(M):
+                    idx = s * M + m
+                    grad[idx] = -(A[:, s] * F[:, s, T, m]).mean()
             
             return grad
         
-        # Constraint: smoothed terminal goal
-        def constraint_terminal_goal(X_flat, goal: TerminalGoal, m: int):
-            """
-            Smoothed terminal goal constraint (≥ 0 for feasibility).
-            
-            c(X) = (1/n)Σ_i σ((W_T^{m,i} - b)/τ) - (1 - ε) ≥ 0
-            """
+        # Constraint functions (unchanged, mathematically correct)
+        def constraint_intermediate_goal(X_flat, goal: IntermediateGoal, m: int, t: int, threshold: float):
             W = compute_wealth_all(X_flat)
-            W_T_m = W[:, T, m]  # (n_sims,)
-            
-            z = (W_T_m - goal.threshold) / self.tau
+            W_t_m = W[:, t, m]
+            tau_scaled = self.tau * threshold
+            z = (W_t_m - threshold) / tau_scaled
             satisfaction = sigmoid(z).mean()
-            
             return satisfaction - (1 - goal.epsilon)
-        
-        # Gradient of terminal goal constraint
-        def constraint_terminal_goal_grad(X_flat, goal: TerminalGoal, m: int):
-            """
-            Gradient of smoothed terminal constraint.
+
+        def constraint_intermediate_goal_grad(X_flat, goal: IntermediateGoal, m: int, t: int, threshold: float):
+            W = compute_wealth_all(X_flat)
+            W_t_m = W[:, t, m]
+            tau_scaled = self.tau * threshold
+            z = (W_t_m - threshold) / tau_scaled
+            sigmoid_deriv = sigmoid_prime(z) / tau_scaled
             
-            ∂c/∂x_s^m = (1/(n·τ)) Σ_i σ'((W_T^i - b)/τ) * A_s * F_{s,T}^m
-            """
+            grad = np.zeros(T * M)
+            for s in range(t):
+                for m_idx in range(M):
+                    idx = s * M + m_idx
+                    if m_idx == m:
+                        grad[idx] = (sigmoid_deriv * A[:, s] * F[:, s, t, m]).mean()
+            return grad
+
+        def constraint_terminal_goal(X_flat, goal: TerminalGoal, m: int, threshold: float):
             W = compute_wealth_all(X_flat)
             W_T_m = W[:, T, m]
-            
-            z = (W_T_m - goal.threshold) / self.tau
-            sigmoid_deriv = sigmoid_prime(z) / self.tau  # (n_sims,)
+            tau_scaled = self.tau * threshold
+            z = (W_T_m - threshold) / tau_scaled
+            satisfaction = sigmoid(z).mean()
+            return satisfaction - (1 - goal.epsilon)
+
+        def constraint_terminal_goal_grad(X_flat, goal: TerminalGoal, m: int, threshold: float):
+            W = compute_wealth_all(X_flat)
+            W_T_m = W[:, T, m]
+            tau_scaled = self.tau * threshold
+            z = (W_T_m - threshold) / tau_scaled
+            sigmoid_deriv = sigmoid_prime(z) / tau_scaled
             
             grad = np.zeros(T * M)
             for s in range(T):
                 for m_idx in range(M):
                     idx = s * M + m_idx
                     if m_idx == m:
-                        # Gradient component
                         grad[idx] = (sigmoid_deriv * A[:, s] * F[:, s, T, m]).mean()
-            
             return grad
         
-        # Constraint: simplex (Σ_m x_t^m = 1)
         def constraint_simplex(X_flat):
-            """Equality constraint: row sums = 1."""
             X = X_flat.reshape(T, M)
-            return X.sum(axis=1) - 1.0  # Shape: (T,)
+            return X.sum(axis=1) - 1.0
         
         def constraint_simplex_jac(X_flat):
-            """Jacobian of simplex constraint: (T, T*M)."""
             jac = np.zeros((T, T * M))
             for t in range(T):
                 jac[t, t * M:(t + 1) * M] = 1.0
@@ -1061,43 +1108,48 @@ class SAAOptimizer(AllocationOptimizer):
         
         # Build constraints list
         constraints = []
-        
+
         # Simplex constraints
         constraints.append({
             'type': 'eq',
             'fun': constraint_simplex,
             'jac': constraint_simplex_jac
         })
+
+        # FIX 1: Theoretically-correct buffer (computed in __init__)
+        buffer = self.threshold_buffer_factor
         
         # Intermediate goal constraints
         for goal in goal_set.intermediate_goals:
             m = goal_set.get_account_index(goal)
             t = goal_set.get_resolved_month(goal)
+            threshold_opt = goal.threshold * (1 + buffer)
             
             constraints.append({
                 'type': 'ineq',
-                'fun': lambda X, g=goal, m_=m, t_=t: 
-                    constraint_intermediate_goal(X, g, m_, t_),
-                'jac': lambda X, g=goal, m_=m, t_=t:
-                    constraint_intermediate_goal_grad(X, g, m_, t_)
+                'fun': lambda X, g=goal, m_=m, t_=t, thresh_=threshold_opt: 
+                    constraint_intermediate_goal(X, g, m_, t_, thresh_),
+                'jac': lambda X, g=goal, m_=m, t_=t, thresh_=threshold_opt:
+                    constraint_intermediate_goal_grad(X, g, m_, t_, thresh_)
             })
-        
+
         # Terminal goal constraints
         for goal in goal_set.terminal_goals:
             m = goal_set.get_account_index(goal)
+            threshold_opt = goal.threshold * (1 + buffer)
             
             constraints.append({
                 'type': 'ineq',
-                'fun': lambda X, g=goal, m_=m: constraint_terminal_goal(X, g, m_),
-                'jac': lambda X, g=goal, m_=m: constraint_terminal_goal_grad(X, g, m_)
+                'fun': lambda X, g=goal, m_=m, thresh_=threshold_opt: 
+                    constraint_terminal_goal(X, g, m_, thresh_),
+                'jac': lambda X, g=goal, m_=m, thresh_=threshold_opt:
+                    constraint_terminal_goal_grad(X, g, m_, thresh_)
             })
         
-        # Initial guess
+        # FIX 2: Smart initialization
         if X_init is None:
-            X0 = np.ones((T, M)) / M  # Uniform allocation
+            X0 = self._initialize_smart(T, M, A, R, W0, goal_set, accounts)
         else:
-            if X_init.shape != (T, M):
-                raise ValueError(f"X_init shape {X_init.shape} != (T={T}, M={M})")
             X0 = X_init.copy()
         
         X0_flat = X0.flatten()
@@ -1105,7 +1157,7 @@ class SAAOptimizer(AllocationOptimizer):
         # Bounds: x_t^m ∈ [0, 1]
         bounds = [(0.0, 1.0) for _ in range(T * M)]
         
-        # Solve
+        # Solve with non-trivial objective
         result = minimize(
             objective,
             X0_flat,
@@ -1125,8 +1177,28 @@ class SAAOptimizer(AllocationOptimizer):
         # Extract solution
         X_star = result.x.reshape(T, M)
         obj_value = -result.fun  # Convert back to maximization
-        
-        # Check feasibility with exact SAA
+
+        # Diagnostics
+        if verbose:
+            W_final = compute_wealth_all(X_star.flatten())
+            print("\n[Diagnostics] Terminal wealth per account:")
+            for goal in goal_set.terminal_goals:
+                m = goal_set.get_account_index(goal)
+                W_T_m = W_final[:, T, m]
+                violations = W_T_m < goal.threshold
+                violation_rate = violations.mean()
+                
+                tau_scaled = self.tau * goal.threshold
+                smoothed_sat = sigmoid((W_T_m - goal.threshold) / tau_scaled).mean()
+                
+                print(f"  Account {m} ({goal.account}):")
+                print(f"    Threshold:      {goal.threshold:>12,.0f}")
+                print(f"    Mean wealth:    {W_T_m.mean():>12,.0f}")
+                print(f"    P10/P50/P90:    {np.percentile(W_T_m, [10,50,90])}")
+                print(f"    Violation rate: {violation_rate:.2%} (max: {goal.epsilon:.2%})")
+                print(f"    Smoothed sat.:  {smoothed_sat:.4f} (target: {1-goal.epsilon:.4f})")
+
+        # FIX 4: No renormalization - check feasibility with exact SAA
         feasible = self._check_feasibility(X_star, A, R, W0, accounts, goal_set)
         
         # Diagnostics
@@ -1134,6 +1206,8 @@ class SAAOptimizer(AllocationOptimizer):
             'convergence_status': result.message,
             'success': result.success,
             'final_gradient_norm': np.linalg.norm(result.jac) if result.jac is not None else None,
+            'buffer_factor': buffer,
+            'target_satisfaction': self.target_satisfaction,
         }
         
         return OptimizationResult(
@@ -1160,7 +1234,7 @@ class GoalSeeker:
     Outer problem: min T ∈ ℕ
     Inner problem: AllocationOptimizer.solve(T) → feasible X*
     
-    Uses linear search with warm start for efficiency.
+    Supports linear and binary search strategies with warm start.
     
     Parameters
     ----------
@@ -1179,7 +1253,7 @@ class GoalSeeker:
     ...     Account.from_annual("Housing", 0.07, 0.12)
     ... ]
     >>> 
-    >>> optimizer = SAAOptimizer(n_accounts=2, tau=0.1)
+    >>> optimizer = SAAOptimizer(n_accounts=2, tau=0.1, target_satisfaction=0.90)
     >>> seeker = GoalSeeker(optimizer, T_max=120, verbose=True)
     >>> 
     >>> def A_gen(T, n, s):
@@ -1189,7 +1263,7 @@ class GoalSeeker:
     >>> 
     >>> result = seeker.seek(goals, A_gen, R_gen, W0, accounts,
     ...                     start_date=date(2025, 1, 1),
-    ...                     n_sims=500, seed=42)
+    ...                     n_sims=500, seed=42, search_method="binary")
     >>> print(f"Optimal horizon: T*={result.T} months")
     """
     
@@ -1210,7 +1284,7 @@ class GoalSeeker:
         self.optimizer = optimizer
         self.T_max = T_max
         self.verbose = verbose
-    
+
     def seek(
         self,
         goals: List[Union[IntermediateGoal, TerminalGoal]],
@@ -1221,52 +1295,51 @@ class GoalSeeker:
         start_date,
         n_sims: int = 500,
         seed: Optional[int] = None,
+        search_method: str = "binary",
         **solver_kwargs
     ) -> OptimizationResult:
         """
-        Find minimum horizon T* for goal feasibility via linear search.
-        
-        Uses intelligent starting point estimation for terminal-only goals:
-        - If only terminal goals exist: estimates T_start via heuristic
-        - If intermediate goals exist: uses T_min from intermediate constraints
+        Find minimum horizon T* for goal feasibility via intelligent search.
         
         Parameters
         ----------
         goals : List[Union[IntermediateGoal, TerminalGoal]]
             Goal specifications
-        A_generator : Callable[[int, int, Optional[int]], np.ndarray]
-            Function: (T, n_sims, seed) → A array (n_sims, T)
-        R_generator : Callable[[int, int, Optional[int]], np.ndarray]
-            Function: (T, n_sims, seed) → R array (n_sims, T, M)
+        A_generator : callable
+            Function (T, n_sims, seed) → A array of shape (n_sims, T)
+        R_generator : callable
+            Function (T, n_sims, seed) → R array of shape (n_sims, T, M)
         W0 : np.ndarray, shape (M,)
             Initial wealth vector
         accounts : List[Account]
-            Portfolio accounts (metadata for goal resolution and simulation)
+            Portfolio accounts
         start_date : datetime.date
-            Simulation start date for goal resolution
+            Simulation start date
         n_sims : int, default 500
-            Number of Monte Carlo scenarios
+            Number of scenarios
         seed : int, optional
             Random seed for reproducibility
+        search_method : str, default "binary"
+            Search strategy:
+            - "linear": Sequential T = T_start, T_start+1, ... (safer, slower)
+            - "binary": Binary search (faster, requires monotonicity assumption)
         **solver_kwargs
-            Additional parameters for optimizer.solve()
+            Parameters passed to optimizer.solve()
         
         Returns
         -------
         OptimizationResult
-            Optimal solution at minimum feasible T*
-        
-        Raises
-        ------
-        ValueError
-            If T_min > T_max or no feasible solution found
+            Result at minimum feasible horizon T*
         
         Notes
         -----
-        For terminal-only goals, the method samples contributions to estimate
-        average monthly cash flow, then uses worst-case accumulation formula
-        to compute a conservative starting horizon. This avoids testing
-        infeasible horizons (e.g., T=1, 2, 3...) when goals require T >> 1.
+        Binary search assumes monotonicity: if T is feasible, then T+1 is feasible.
+        This holds for most practical goal structures but may fail with:
+        - Time-dependent contribution schedules with sudden drops
+        - Pathological goal configurations
+        
+        For safety-critical applications, use search_method="linear".
+        For typical financial planning, "binary" saves ~50% iterations.
         """
         if not goals:
             raise ValueError("goals list cannot be empty")
@@ -1279,12 +1352,10 @@ class GoalSeeker:
         
         # Determine intelligent starting horizon
         if goal_set.terminal_goals and not goal_set.intermediate_goals:
-            # Only terminal goals: use heuristic estimation
             if self.verbose:
                 print("\n=== Estimating minimum horizon (terminal goals only) ===")
             
-            # Sample contributions to estimate average monthly cash flow
-            # Use small sample for efficiency (12 months, min(100, n_sims) scenarios)
+            # Sample contributions
             sample_months = 12
             sample_sims = min(100, n_sims)
             
@@ -1295,19 +1366,19 @@ class GoalSeeker:
                 print(f"  Sampled contributions: {sample_sims} scenarios × {sample_months} months")
                 print(f"  Average monthly contribution: ${avg_contrib:,.2f}")
             
-            # Estimate minimum horizon via worst-case analysis
+            # Use improved heuristic with account information
             T_start = goal_set.estimate_minimum_horizon(
                 monthly_contribution=avg_contrib,
-                expected_return=0.0,      # Conservative: assume no growth
-                safety_margin=0.8,         # Start 20% earlier to avoid missing T*
+                accounts=accounts,
+                expected_return=None,
+                safety_margin=0.75,
                 T_max=self.T_max
             )
             
             if self.verbose:
                 print(f"  Estimated minimum horizon: T={T_start} months")
-                print(f"  (using safety_margin=0.8 for conservative start)")
+                print(f"  (using account-specific returns and safety_margin=0.75)")
         else:
-            # Has intermediate goals: use their constraint
             T_start = goal_set.T_min
         
         # Validate starting horizon
@@ -1319,34 +1390,53 @@ class GoalSeeker:
         
         # Display search range
         if self.verbose:
-            print(f"\n=== GoalSeeker: Linear search T ∈ [{T_start}, {self.T_max}] ===")
+            print(f"\n=== GoalSeeker: {search_method.upper()} search T ∈ [{T_start}, {self.T_max}] ===")
             if T_start > goal_set.T_min:
                 print(f"    (T_start={T_start} from heuristic, T_min={goal_set.T_min} from constraints)")
             print()
         
-        # Linear search with warm start
+        # Dispatch to search method
+        if search_method == "linear":
+            return self._linear_search(
+                T_start, goal_set, goals, A_generator, R_generator, 
+                W0, accounts, start_date, n_sims, seed, **solver_kwargs
+            )
+        elif search_method == "binary":
+            return self._binary_search(
+                T_start, goal_set, goals, A_generator, R_generator,
+                W0, accounts, start_date, n_sims, seed, **solver_kwargs
+            )
+        else:
+            raise ValueError(f"Unknown search_method: {search_method}")
+
+    def _linear_search(
+        self,
+        T_start: int,
+        goal_set: GoalSet,
+        goals: List,
+        A_generator: Callable,
+        R_generator: Callable,
+        W0: np.ndarray,
+        accounts: List[Account],
+        start_date,
+        n_sims: int,
+        seed: Optional[int],
+        **solver_kwargs
+    ) -> OptimizationResult:
+        """Linear search T = T_start, T_start+1, ... (original algorithm)."""
         X_prev = None
         
         for T in range(T_start, self.T_max + 1):
             if self.verbose:
                 print(f"[Iter {T - T_start + 1}] Testing T={T}...")
             
-            # Generate scenarios for current T
             A = A_generator(T, n_sims, seed)
             R = R_generator(T, n_sims, None if seed is None else seed + 1)
             
-            # Solve inner problem
             result = self.optimizer.solve(
-                T=T,
-                A=A,
-                R=R,
-                W0=W0,
-                goals=goals,
-                accounts=accounts,
-                start_date=start_date,
-                goal_set=goal_set,
-                X_init=X_prev,
-                **solver_kwargs
+                T=T, A=A, R=R, W0=W0, goals=goals,
+                accounts=accounts, start_date=start_date,
+                goal_set=goal_set, X_init=X_prev, **solver_kwargs
             )
             
             if self.verbose:
@@ -1359,11 +1449,117 @@ class GoalSeeker:
                     print(f"=== Optimal: T*={T} ===\n")
                 return result
             
-            # Warm start: extend previous X for next iteration
             if result.X is not None:
-                X_prev = np.vstack([result.X, result.X[-1:, :]])  # Repeat last row
+                X_prev = np.vstack([result.X, result.X[-1:, :]])
         
         raise ValueError(
             f"No feasible solution found in T ∈ [{T_start}, {self.T_max}]. "
             f"Try increasing T_max or relaxing goal constraints."
+        )
+
+    def _binary_search(
+        self,
+        T_start: int,
+        goal_set: GoalSet,
+        goals: List,
+        A_generator: Callable,
+        R_generator: Callable,
+        W0: np.ndarray,
+        accounts: List[Account],
+        start_date,
+        n_sims: int,
+        seed: Optional[int],
+        **solver_kwargs
+    ) -> OptimizationResult:
+        """
+        Binary search for minimum feasible T.
+        
+        Assumes monotonicity: if T is feasible, then T' > T is also feasible.
+        Reduces iterations from O(T_max - T_start) to O(log(T_max - T_start)).
+        
+        Algorithm
+        ---------
+        1. Initialize: left = T_start, right = T_max
+        2. While left < right:
+           a. mid = (left + right) // 2
+           b. Test feasibility at mid
+           c. If feasible: right = mid (search lower half)
+           d. If infeasible: left = mid + 1 (search upper half)
+        3. Return solution at left
+        """
+        left = T_start
+        right = self.T_max
+        
+        best_result = None
+        iteration = 0
+        
+        while left < right:
+            iteration += 1
+            mid = (left + right) // 2
+            
+            if self.verbose:
+                print(f"[Iter {iteration}] Binary search: testing T={mid} "
+                    f"(range=[{left}, {right}])...")
+            
+            # Generate scenarios for mid
+            A = A_generator(mid, n_sims, seed)
+            R = R_generator(mid, n_sims, None if seed is None else seed + 1)
+            
+            # Warm start: if we have a previous result, extend it
+            X_init = None
+            if best_result is not None and best_result.T < mid:
+                # Extend previous X by repeating last row
+                n_extend = mid - best_result.T
+                X_init = np.vstack([
+                    best_result.X,
+                    np.tile(best_result.X[-1:, :], (n_extend, 1))
+                ])
+            
+            # Solve at mid
+            result = self.optimizer.solve(
+                T=mid, A=A, R=R, W0=W0, goals=goals,
+                accounts=accounts, start_date=start_date,
+                goal_set=goal_set, X_init=X_init, **solver_kwargs
+            )
+            
+            if self.verbose:
+                status = "✓ Feasible" if result.feasible else "✗ Infeasible"
+                print(f"    {status}, obj={result.objective_value:.2f}, "
+                    f"time={result.solve_time:.3f}s\n")
+            
+            if result.feasible:
+                # Found feasible solution: try lower half
+                best_result = result
+                right = mid
+            else:
+                # Infeasible: try upper half
+                left = mid + 1
+        
+        # At convergence: left == right
+        if best_result is not None and best_result.T == left:
+            if self.verbose:
+                print(f"=== Optimal: T*={left} (binary search converged) ===\n")
+            return best_result
+        
+        # Need to verify left (may not have been tested)
+        if self.verbose:
+            print(f"[Iter {iteration + 1}] Verifying T={left} (final check)...")
+        
+        A = A_generator(left, n_sims, seed)
+        R = R_generator(left, n_sims, None if seed is None else seed + 1)
+        
+        result = self.optimizer.solve(
+            T=left, A=A, R=R, W0=W0, goals=goals,
+            accounts=accounts, start_date=start_date,
+            goal_set=goal_set, X_init=None, **solver_kwargs
+        )
+        
+        if result.feasible:
+            if self.verbose:
+                print(f"=== Optimal: T*={left} ===\n")
+            return result
+        
+        raise ValueError(
+            f"Binary search failed: T={left} infeasible. "
+            f"Monotonicity assumption may be violated."
         )

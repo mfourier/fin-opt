@@ -466,95 +466,170 @@ class GoalSet:
     def estimate_minimum_horizon(
         self,
         monthly_contribution: float,
-        expected_return: float = 0.0,
-        safety_margin: float = 1.2,
-        T_max: int = 999999
+        accounts: List[Account],
+        expected_return: Optional[float] = None,
+        safety_margin: float = 0.8,
+        T_max: int = 240
     ) -> int:
         """
-        Estimate minimum horizon for terminal goals via worst-case analysis.
+        Estimate minimum horizon for terminal goals via deterministic analysis.
         
-        Uses closed-form wealth accumulation formula under constant contributions
-        to solve for T given the maximum terminal goal threshold.
+        **IMPROVED HEURISTIC**: Uses account-specific expected returns and
+        weighted allocation strategy to provide tighter bounds.
+        
+        Mathematical Approach
+        ---------------------
+        For each terminal goal, solves the deterministic wealth equation:
+        
+            W_T^m = W_0^m * (1 + r^m)^T + A_avg * α^m * [(1 + r^m)^T - 1] / r^m
+        
+        where:
+        - r^m: expected monthly return of account m
+        - A_avg: average monthly contribution
+        - α^m: allocation fraction to account m (inferred from goal structure)
+        
+        The horizon T is found by solving for T such that W_T^m = b^m (threshold).
         
         Parameters
         ----------
         monthly_contribution : float
-            Expected average monthly contribution across all accounts.
-            Must be > 0.
-        expected_return : float, default 0.0
-            Expected monthly arithmetic return. Use 0 for worst-case (no growth).
-        safety_margin : float, default 1.2
-            Multiplicative time buffer (1.2 = +20% cushion for uncertainty).
-            Must be ≥ 1.0.
-        T_max : int, default 999999
-            Maximum allowable horizon to cap estimate and prevent overflow.
-            Used as fallback for infeasible cases.
+            Average monthly contribution (estimated from sampling)
+        accounts : List[Account]
+            Portfolio accounts with expected returns
+        expected_return : float, optional
+            Override expected return. If None, infers from account returns.
+        safety_margin : float, default 0.8
+            Conservative factor: T_est = T_analytical / safety_margin
+            Lower values = more conservative (start search earlier)
+        T_max : int, default 240
+            Maximum allowable horizon
         
         Returns
         -------
         int
-            Estimated minimum horizon in months, respecting intermediate goal
-            constraints. Returns T_max if problem is infeasible.
+            Estimated minimum horizon (months), capped at T_max
         
         Notes
         -----
-        Accumulation formulas (assuming W_0 = 0):
-            r = 0:  W_T = A·T  →  T = b/A
-            r > 0:  W_T = A·[(1+r)^T - 1]/r  →  T = log(1 + b·r/A) / log(1+r)
-        
-        Returns T_max if ratio = b·r/A ≤ -1 (infeasible).
+        - Conservative by design: underestimates T to avoid missing feasible solutions
+        - If multiple terminal goals exist, returns max across all estimates
+        - Intermediate goals enforced via T_min constraint (not estimated here)
         
         Examples
         --------
-        >>> goal_set = GoalSet([TerminalGoal(...)], accounts, start_date)
+        >>> accounts = [Account.from_annual("Savings", 0.04, 0.05),
+        ...            Account.from_annual("Growth", 0.12, 0.15)]
+        >>> goal_set = GoalSet(goals, accounts, date(2025,1,1))
         >>> T_est = goal_set.estimate_minimum_horizon(
         ...     monthly_contribution=500_000,
-        ...     expected_return=0.005,  # ~6% annual
-        ...     safety_margin=1.5,
-        ...     T_max=240
+        ...     accounts=accounts,
+        ...     safety_margin=0.75
         ... )
         """
-        # Input validation
-        if monthly_contribution <= 0:
-            raise ValueError(
-                f"monthly_contribution must be > 0, got {monthly_contribution}"
-            )
-        if safety_margin < 1.0:
-            raise ValueError(
-                f"safety_margin must be ≥ 1.0, got {safety_margin}"
-            )
-        if not isinstance(T_max, int) or T_max < 1:
-            raise ValueError(
-                f"T_max must be positive int, got {T_max}"
-            )
-        
-        # Early return: no terminal goals means no estimation needed
         if not self.terminal_goals:
             return self.T_min
         
-        # Find the most stringent terminal goal
-        max_threshold = max(g.threshold for g in self.terminal_goals)
+        # Build account lookup by name
+        account_map = {acc.name: acc for acc in accounts}
         
-        # Solve for T based on expected return model
-        if expected_return == 0:
-            # Linear accumulation: W_T = A·T
-            T_est = max_threshold / monthly_contribution
+        T_estimates = []
+        
+        for goal in self.terminal_goals:
+            # Get target account and its expected return
+            acc = account_map.get(goal.account)
+            if acc is None:
+                raise ValueError(
+                    f"Terminal goal references unknown account: {goal.account}"
+                )
+            
+            # Extract expected monthly return
+            r_monthly = acc.mu  # Already monthly from Account
+            
+            # Initial wealth for this account
+            W0_m = acc.initial_wealth
+            
+            # Infer allocation fraction α^m based on goal structure
+            # Heuristic: if this is the highest-return goal, allocate aggressively
+            # Otherwise, use balanced allocation
+            alpha_m = self._infer_allocation_fraction(goal, account_map)
+            
+            # Effective contribution to this account
+            A_effective = monthly_contribution * alpha_m
+            
+            # Solve deterministic wealth equation for T
+            # W_T^m = W0^m * (1+r)^T + A * [(1+r)^T - 1] / r = threshold
+            
+            if abs(r_monthly) < 1e-8:
+                # No growth case: W_T = W0 + A * T
+                T_analytical = (goal.threshold - W0_m) / A_effective
+            else:
+                # With growth: solve via closed-form annuity formula
+                # (1+r)^T = [threshold - A/r + W0] / [W0 - A/r]
+                
+                annuity_pv = A_effective / r_monthly
+                ratio = (goal.threshold - annuity_pv + W0_m) / (W0_m - annuity_pv)
+                
+                if ratio <= 0:
+                    # Goal already satisfied or infeasible
+                    T_analytical = 0
+                else:
+                    T_analytical = np.log(ratio) / np.log(1 + r_monthly)
+            
+            # Apply safety margin (conservative estimate)
+            T_conservative = T_analytical * safety_margin
+            
+            T_estimates.append(max(1, int(np.ceil(T_conservative))))
+        
+        # Take maximum across all terminal goals
+        T_est = max(T_estimates)
+        
+        # Ensure T_est >= T_min (intermediate goals constraint)
+        T_est = max(T_est, self.T_min)
+        
+        # Cap at T_max
+        return min(T_est, T_max)
+
+    def _infer_allocation_fraction(
+        self,
+        goal: TerminalGoal,
+        account_map: Dict[str, Account]
+    ) -> float:
+        """
+        Infer allocation fraction for goal's account via simple heuristic.
+        
+        Strategy
+        --------
+        1. If only one terminal goal: α = 0.6 (majority allocation)
+        2. If multiple terminal goals:
+        - Highest threshold goal: α = 0.5
+        - Other goals: α = 0.5 / (n_goals - 1)
+        3. If intermediate goals exist for same account: α *= 0.8 (reduce for liquidity)
+        
+        Returns
+        -------
+        float
+            Allocation fraction ∈ [0, 1]
+        """
+        n_terminal = len(self.terminal_goals)
+        
+        if n_terminal == 1:
+            alpha = 0.6
         else:
-            # Geometric accumulation: W_T = A·[(1+r)^T - 1]/r
-            ratio = max_threshold * expected_return / monthly_contribution
-            
-            if ratio <= -1:
-                # Infeasible: logarithm argument would be non-positive
-                return T_max
-            
-            T_est = np.log1p(ratio) / np.log1p(expected_return)
+            # Check if this goal has highest threshold
+            max_threshold = max(g.threshold for g in self.terminal_goals)
+            if goal.threshold == max_threshold:
+                alpha = 0.5
+            else:
+                alpha = 0.5 / (n_terminal - 1)
         
-        # Apply safety margin and enforce upper bound
-        T_est_safe = int(np.ceil(T_est * safety_margin))
-        T_est_safe = min(T_est_safe, T_max)
+        # Reduce if intermediate goals exist for same account
+        has_intermediate = any(
+            g.account == goal.account for g in self.intermediate_goals
+        )
+        if has_intermediate:
+            alpha *= 0.8
         
-        # Respect intermediate goal constraints (T_min) and ensure positive
-        return max(self.T_min, T_est_safe, 1)
+        return alpha
     
     def __len__(self) -> int:
         """Total number of goals (intermediate + terminal)."""

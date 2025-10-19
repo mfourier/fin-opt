@@ -872,6 +872,7 @@ class FinancialModel:
         seed: Optional[int] = None,
         start: Optional[date] = None,
         verbose: bool = True,
+        search_method: str = "binary",
         **solver_kwargs
     ) -> OptimizationResult:
         """
@@ -906,6 +907,10 @@ class FinancialModel:
             Calendar start date for goal resolution. If None, uses today.
         verbose : bool, default True
             Print iteration progress (horizon testing, feasibility status).
+        search_method : str, default "binary"
+            Horizon search strategy:
+            - "binary": Binary search (faster, ~50% fewer iterations)
+            - "linear": Sequential search (safer, guaranteed to find solution)
         **solver_kwargs
             Forwarded to AllocationOptimizer.solve():
             - maxiter : int, default 1000 (SLSQP iterations)
@@ -1046,10 +1051,11 @@ class FinancialModel:
             A_generator=A_generator,
             R_generator=R_generator,
             W0=W0,
-            accounts=self.portfolio.accounts,  # ✅ CAMBIO CLAVE
+            accounts=self.portfolio.accounts,
             start_date=start_date,
             n_sims=n_sims,
             seed=seed,
+            search_method=search_method,
             **solver_kwargs
         )
 
