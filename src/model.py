@@ -1197,7 +1197,7 @@ class FinancialModel:
         return check_goals(
             sim_result,
             goals,
-            self.portfolio.accounts,  # ✅ En lugar de [acc.name for acc in self.accounts]
+            self.portfolio.accounts,
             start_date
         )
     
