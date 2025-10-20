@@ -1,29 +1,26 @@
-# `optimization` — Mathematical Framework and Implementation
+# `optimization` — Convex Programming for Goal-Driven Portfolios
 
-> **Core idea:** Turn **financial goals** into **optimization problems**, searching over time horizons and allocation strategies to determine if, when, and how they can be satisfied.  
-> `optimization.py` acts as the **decision layer**: while other modules simulate wealth paths, `optimization.py` asks *what allocations make goals feasible, and in the shortest time possible?*
+> **Core idea:** Transform financial goals into convex optimization problems via CVaR reformulation, searching over horizons to find minimum feasible time and optimal allocations.
 
 ---
 
-## Philosophy and Role in FinOpt
+## Philosophy and Role
 
 ### Separation of Concerns
 
-- **`income.py`** → How much money is available (cash flow modeling)
-- **`portfolio.py`** → How capital grows given contributions and returns (wealth dynamics)
-- **`optimization.py`** → Searches over *time* and *allocations* to satisfy goals (decision synthesis)
+- **`income.py`** → Contribution scenarios $A_t$
+- **`portfolio.py`** → Wealth dynamics $W_t^m(X)$ via affine representation
+- **`optimization.py`** → Decision synthesis: minimize $T$, optimize allocations $X$
 
-### Why a Dedicated Optimization Module?
+### Inversion of Traditional Planning
 
-Traditional financial planning answers: *"If I save X per month for Y years, how much will I have?"*
+**Traditional:** Given savings $X$ and horizon $T$, compute terminal wealth  
+**FinOpt:** Given wealth goals, find minimum $T^*$ and optimal $X^*$
 
-FinOpt inverts this: *"I need Z by a certain time—what's the minimum horizon and optimal allocation to achieve it?"*
-
-This requires:
-1. **Goal specification** (what we want)
-2. **Uncertainty quantification** (stochastic income and returns)
-3. **Chance-constrained optimization** (probabilistic guarantees)
-4. **Bilevel search** (minimize time, maximize objective)
+Requires:
+1. Chance-constrained formulation: $\mathbb{P}(W_t^m \geq b) \geq 1-\varepsilon$
+2. Convex reformulation via CVaR
+3. Bilevel optimization: outer (minimize $T$), inner (convex program)
 
 ---
 
@@ -31,44 +28,13 @@ This requires:
 
 ### Wealth Evolution
 
-Multiple accounts $m \in \{1,\dots,M\}$ evolve via:
+Multiple accounts $m \in \{1,\dots,M\}$:
 
 $$
 W_{t+1}^m = \big(W_t^m + A_t x_t^m\big)(1 + R_t^m)
 $$
 
-where:
-- $W_t^m$ = wealth in account $m$ at month $t$
-- $A_t x_t^m$ = allocated contribution ($x_t^m$ fraction of total $A_t$)
-- $R_t^m$ = stochastic return of account $m$
-
-**Key insight:** Wealth is **linear in the allocation policy** $X = \{x_t^m\}$ when returns are fixed.
-
-### Allocation Simplex
-
-Decision variables must satisfy budget and non-negativity:
-
-$$
-x_t^m \ge 0, \quad \sum_{m=1}^M x_t^m = 1, \quad \forall t
-$$
-
-The **feasible allocation set** at horizon $T$ is:
-
-$$
-\mathcal{X}_T = \left\{ X \in \mathbb{R}^{T \times M} : 
-\begin{aligned}
-& x_t^m \ge 0 \\
-& \sum_{m=1}^M x_t^m = 1 \\
-& \forall t = 0, \dots, T-1
-\end{aligned}
-\right\}
-$$
-
-This is the **Cartesian product of $T$ probability simplices**: $\mathcal{X}_T = \Delta^{M-1} \times \cdots \times \Delta^{M-1}$.
-
-### Affine Wealth Representation
-
-The recursive formula can be rewritten in **closed-form**:
+**Closed-form (affine representation):**
 
 $$
 \boxed{
@@ -76,31 +42,26 @@ W_t^m(X) = W_0^m F_{0,t}^m + \sum_{s=0}^{t-1} A_s \, x_s^m \, F_{s,t}^m
 }
 $$
 
-where the **accumulation factor** is:
+where accumulation factor:
 
 $$
-F_{s,t}^m := \prod_{r=s}^{t-1} (1 + R_r^m)
+F_{s,t}^m := \prod_{\tau=s+1}^{t} (1 + R_\tau^m)
 $$
 
-**Critical consequences:**
+**Key consequences:**
+- **Affinity:** $W_t^m(X)$ linear in $X$ → enables convex programming
+- **Gradient:** $\frac{\partial W_t^m}{\partial x_s^m} = A_s F_{s,t}^m$ → analytical derivatives
+- **Efficiency:** $O(1)$ wealth evaluation, no recursion
 
-1. **Affinity:** $W_t^m(X)$ is affine in $X$ → wealth constraints are linear-affine
-2. **Analytical gradient:** $\frac{\partial W_t^m}{\partial x_s^m} = A_s F_{s,t}^m$ → enables gradient-based optimization
-3. **Convexity:** For deterministic constraints $W_t^m(X) \ge b$, feasible set is a convex polytope
-4. **Computational efficiency:** Closed-form evaluation without recursive loops
+### Allocation Simplex
 
-**Proof sketch:**
+Decision variables satisfy budget constraint:
+
 $$
-\begin{aligned}
-W_1^m &= (W_0^m + A_0 x_0^m)(1 + R_0^m) \\
-&= W_0^m(1 + R_0^m) + A_0 x_0^m (1 + R_0^m) \\
-W_2^m &= (W_1^m + A_1 x_1^m)(1 + R_1^m) \\
-&= W_0^m(1+R_0^m)(1+R_1^m) + A_0 x_0^m (1+R_0^m)(1+R_1^m) + A_1 x_1^m (1+R_1^m) \\
-&= W_0^m F_{0,2}^m + A_0 x_0^m F_{0,2}^m + A_1 x_1^m F_{1,2}^m
-\end{aligned}
+\mathcal{X}_T = \left\{ X \in \mathbb{R}^{T \times M} : x_t^m \geq 0, \; \sum_{m=1}^M x_t^m = 1, \; \forall t \right\}
 $$
 
-Induction completes the proof.
+Cartesian product of $T$ probability simplices: $\mathcal{X}_T = \Delta^{M-1} \times \cdots \times \Delta^{M-1}$.
 
 ---
 
@@ -108,81 +69,46 @@ Induction completes the proof.
 
 ### Goal Primitives
 
-FinOpt supports two goal types:
-
-**Intermediate Goal** (fixed time constraint):
+**IntermediateGoal** (fixed time $t$):
 $$
-\text{IntermediateGoal}(t, m, b, \varepsilon) \implies \mathbb{P}(W_t^m(X) \ge b) \ge 1 - \varepsilon
+\mathbb{P}(W_t^m(X) \geq b_t) \geq 1 - \varepsilon_t
 $$
 
-- $t$: fixed target month (e.g., $t=12$ for 1-year emergency fund)
-- $m$: target account index
-- $b$: wealth threshold
-- $\varepsilon$: maximum violation probability (e.g., $\varepsilon=0.10$ for 90% confidence)
-
-**Terminal Goal** (variable horizon):
+**TerminalGoal** (variable horizon $T$):
 $$
-\text{TerminalGoal}(m, b, \varepsilon) \implies \mathbb{P}(W_T^m(X) \ge b) \ge 1 - \varepsilon
+\mathbb{P}(W_T^m(X) \geq b) \geq 1 - \varepsilon
 $$
-
-- $T$: optimization variable (decision)
-- Other parameters same as intermediate
 
 **Example:**
 ```python
 goals = [
     IntermediateGoal(month=12, account="Emergency", 
-                    threshold=5_500_000, confidence=0.90),
+                     threshold=5_500_000, confidence=0.90),
     TerminalGoal(account="Housing", 
-                threshold=20_000_000, confidence=0.90)
+                 threshold=20_000_000, confidence=0.90)
 ]
 ```
 
-This specifies:
-1. Must have ≥5.5M in Emergency at month 12 with 90% probability (fixed constraint)
-2. Want ≥20M in Housing at minimum horizon $T^*$ with 90% probability (objective)
+### GoalSet Algebra
 
-### Goal Set Algebra
+Partition: $\mathcal{G} = \mathcal{G}_{\text{int}} \cup \mathcal{G}_{\text{term}}$
 
-The **goal set** $\mathcal{G}$ partitions into:
-
-$$
-\mathcal{G} = \mathcal{G}_{\text{int}} \cup \mathcal{G}_{\text{term}}
-$$
-
-**Key property (minimum horizon constraint):**
+**Minimum horizon constraint:**
 $$
 T \geq T_{\min} := \max_{g \in \mathcal{G}_{\text{int}}} t_g
 $$
 
-Any allocation policy for horizon $T < T_{\min}$ is **automatically infeasible** (cannot satisfy all intermediate goals).
+**Heuristic for terminal-only goals:**
 
-**GoalSet** class provides:
-- Account name → index mapping
-- Calendar date → month index resolution
-- Automatic $T_{\min}$ computation
-- Validation of goal consistency
+Uses conservative accumulation analysis with account-specific returns:
 
-### Horizon Estimation Heuristic
-
-**Problem:** For terminal-only goals ($\mathcal{G}_{\text{int}} = \emptyset$), naive linear search starts at $T=1$, wasting iterations on obviously infeasible horizons.
-
-**Solution:** Conservative lower bound via worst-case accumulation analysis.
-
-**Heuristic formula:**
 $$
-T_{\text{start}} = \max_{g \in \mathcal{G}_{\text{term}}} \left\lceil \frac{b_g - W_0^m (1 + \mu)^{T_{\min}}}{A_{\text{avg}} \cdot x_{\min}^m \cdot (1 + \mu - \sigma)} \right\rceil
+T_{\text{start}} = \max_{g \in \mathcal{G}_{\text{term}}} \left\lceil \frac{b_g - W_0^m (1+\mu_m)^{T_{\min}}}{A_{\text{avg}} \cdot 0.75 \cdot (1+\mu_m - \sigma_m)} \right\rceil
 $$
 
-where:
-- $A_{\text{avg}}$: average monthly contribution (empirically sampled)
-- $\mu, \sigma$: expected return and volatility of account $m$
-- $x_{\min}^m$: conservative minimum allocation (default: 0.1)
-- Safety margin: multiply by 0.8 (start 20% earlier)
+where $\mu_m$, $\sigma_m$ from `Account` objects, safety margin 0.75.
 
-**Intuition:** How many months of contributions (at conservative return) needed to accumulate target wealth?
-
-**Implementation:** `GoalSet.estimate_minimum_horizon()`
+**Implementation:** `GoalSet.estimate_minimum_horizon(accounts=...)`
 
 ---
 
@@ -190,229 +116,131 @@ where:
 
 ### Problem Statement
 
-Find the **minimum time** $T^*$ to achieve all goals while optimizing objective $f(X)$:
-
 $$
 \boxed{
-\min_{T \in \mathbb{N}} \;\; T \quad \text{s.t.} \quad \max_{X \in \mathcal{F}_T} f(X) > -\infty
+\min_{T \in \mathbb{N}} \;\; T \quad \text{s.t.} \quad \mathcal{F}_T \neq \emptyset
 }
 $$
 
-where the **goal-feasible set** is:
+where goal-feasible set:
 
 $$
 \mathcal{F}_T := \left\{ X \in \mathcal{X}_T : \begin{aligned}
-& \mathbb{P}\big(W_t^m(X) \ge b_t^m\big) \ge 1-\varepsilon_t^m, \; \forall g \in \mathcal{G}_{\text{int}}, \\
-& \mathbb{P}\big(W_T^m(X) \ge b^m\big) \ge 1-\varepsilon^m, \; \forall g \in \mathcal{G}_{\text{term}}
+& \mathbb{P}\big(W_t^m(X) \geq b_t^m\big) \geq 1-\varepsilon_t^m, \; \forall g \in \mathcal{G}_{\text{int}} \\
+& \mathbb{P}\big(W_T^m(X) \geq b^m\big) \geq 1-\varepsilon^m, \; \forall g \in \mathcal{G}_{\text{term}}
 \end{aligned} \right\}
 $$
 
-**Decomposition:**
-
-- **Outer problem:** Discrete search $T \in [T_{\text{start}}, T_{\max}]$ for non-empty $\mathcal{F}_T$
-- **Inner problem:** For fixed $T$, solve:
+**Inner problem** (fixed $T$):
 $$
-\begin{aligned}
-\max_{X \in \mathcal{X}_T} \;\; & f(X) \\
-\text{s.t.} \;\; & X \in \mathcal{F}_T
-\end{aligned}
+\max_{X \in \mathcal{F}_T} f(X)
 $$
 
 ### Inner Problem Objectives
 
-The objective $f(X)$ is parametrizable:
+All objectives exploit affine wealth $W_t^m(X) = b + \Phi X$ for convexity:
 
-**1. Terminal wealth (default):**
+**1. terminal_wealth** (linear program):
 $$
 f(X) = \mathbb{E}\left[\sum_{m=1}^M W_T^m(X)\right]
 $$
 
-**2. Low turnover:**
+**2. min_cvar** (risk-averse):
 $$
-f(X) = \mathbb{E}[W_T] - \lambda \sum_{t=0}^{T-1} \sum_{m=1}^M |x_{t+1,m} - x_t^m|
-$$
-Penalizes frequent rebalancing with parameter $\lambda > 0$.
-
-**3. Risk-adjusted (mean-variance):**
-$$
-f(X) = \mathbb{E}[W_T] - \lambda \cdot \text{Std}(W_T)
-$$
-Sharpe-like objective with risk aversion $\lambda > 0$.
-
-**4. Balanced:**
-$$
-f(X) = \mathbb{E}[W_T] - \lambda_{\text{risk}} \cdot \text{Std}(W_T) - \lambda_{\text{turn}} \cdot \text{Turnover}(X)
+f(X) = -\sum_{g \in \mathcal{G}} \text{CVaR}_{\varepsilon_g}(\text{threshold}_g - W_t^m(X))
 $$
 
-**5. Custom:**
-User-provided callable `f(W, X, T, M) → float`.
+**3. low_turnover** (L1 penalty):
+$$
+f(X) = \mathbb{E}[W_T] - \lambda \sum_{t,m} |x_{t+1,m} - x_t^m|
+$$
+
+**4. risk_adjusted** (mean-variance):
+$$
+f(X) = \mathbb{E}[W_T] - \lambda \cdot \text{Var}(W_T)
+$$
+
+**5. balanced** (multi-objective):
+$$
+f(X) = \mathbb{E}[W_T] - \lambda_r \cdot \text{Var}(W_T) - \lambda_t \cdot \|\Delta X\|_1
+$$
+
+**6. min_variance** (Markowitz):
+$$
+\min \text{Var}(W_T) \quad \text{s.t.} \quad \mathbb{E}[W_T] \geq \text{target}
+$$
 
 ---
 
-## Chance Constraint Reformulation
+## CVaR Reformulation
 
-### The Challenge
+### Epigraphic Formulation (Rockafellar & Uryasev 2000)
 
-Probabilistic constraints $\mathbb{P}(W_t^m(X) \ge b) \ge 1 - \varepsilon$ involve:
-
-1. **Indicator function:** $\mathbb{1}\{W \ge b\}$ is discontinuous → no gradient
-2. **Expectation over scenarios:** $\mathbb{E}[\mathbb{1}\{W \ge b\}] = \mathbb{P}(W \ge b)$ requires integration
-3. **Non-convexity:** Even with affine $W(X)$, indicator destroys convexity
-
-### Sample Average Approximation (SAA)
-
-Replace expectation with sample mean over $N$ scenarios $\omega^{(i)}$:
+Transform chance constraint $\mathbb{P}(W \geq b) \geq 1-\varepsilon$ into convex constraint:
 
 $$
-\mathbb{P}(W_t^m(X) \ge b) \ge 1 - \varepsilon \quad \approx \quad \frac{1}{N} \sum_{i=1}^N \mathbb{1}\{W_t^m(X; \omega^{(i)}) \ge b\} \ge 1 - \varepsilon
+\text{CVaR}_\varepsilon(b - W) \leq 0
 $$
 
-**Problem:** Still discontinuous (no gradient).
-
-**Theoretical guarantee (Consistency):**  
-Under regularity conditions, as $N \to \infty$:
+**Epigraphic representation:**
 $$
-\frac{1}{N}\sum_{i=1}^N \mathbb{1}\{W_t^m(X; \omega^{(i)}) \ge b\} \xrightarrow{a.s.} \mathbb{P}(W_t^m(X) \ge b)
+\text{CVaR}_\alpha(L) = \min_{\gamma, z} \left\{ \gamma + \frac{1}{\alpha N} \sum_{i=1}^N z^i \right\}
 $$
-
-### Sigmoid Smoothing (SAAOptimizer)
-
-**Key idea:** Replace $\mathbb{1}\{z \ge 0\}$ with smooth sigmoid $\sigma(z/\tau)$.
-
-**Sigmoid function:**
+subject to:
 $$
-\sigma(z) = \frac{1}{1 + e^{-z}}, \quad \sigma'(z) = \sigma(z)(1 - \sigma(z))
+z^i \geq L^i - \gamma, \quad z^i \geq 0, \quad \forall i
 $$
 
-**Smoothed constraint:**
-$$
-\boxed{
-\frac{1}{N} \sum_{i=1}^N \sigma\left(\frac{W_t^m(X; \omega^{(i)}) - b}{\tau}\right) \ge 1 - \varepsilon
-}
-$$
+where $L^i = b - W^i$ is shortfall in scenario $i$.
 
-**Temperature parameter $\tau$:**
+### Convex Program Formulation
 
-| $\tau$ | Approximation | Gradient | Use case |
-|--------|---------------|----------|----------|
-| 0.01 | $\sigma \approx \mathbb{1}$ (sharp) | Steep, oscillatory | High fidelity, may diverge |
-| 0.1 | Balanced | Smooth, stable | **Recommended** |
-| 1.0 | $\sigma \approx 0.5$ (loose) | Very smooth | Easy convergence, poor approximation |
+**Decision variables:**
+- $X \in \mathbb{R}^{T \times M}$: allocations
+- $\gamma_g \in \mathbb{R}$: VaR level per goal $g$
+- $z_g \in \mathbb{R}_+^N$: excess shortfall per goal $g$
 
-**Approximation error bound:**
-$$
-\left|\sigma\left(\frac{z}{\tau}\right) - \mathbb{1}\{z \ge 0\}\right| \le \frac{1}{2}
-$$
-with exponential decay in $|z|/\tau$.
+**Constraints:**
 
-### Gradient Computation
+1. **Simplex:** $\sum_m x_t^m = 1, \; x_t^m \geq 0$
 
-**Constraint function:**
-$$
-c(X) = \frac{1}{N} \sum_{i=1}^N \sigma\left(\frac{W_t^m(X; \omega^{(i)}) - b}{\tau}\right) - (1 - \varepsilon)
-$$
-
-**Gradient w.r.t. allocation $x_s^m$:**
-$$
-\boxed{
-\frac{\partial c}{\partial x_s^m} = \frac{1}{N\tau} \sum_{i=1}^N \sigma'\left(z^{(i)}\right) \cdot A_s^{(i)} \cdot F_{s,t}^{m,(i)}
-}
-$$
-
-where $z^{(i)} = (W_t^m(X; \omega^{(i)}) - b)/\tau$.
-
-**Derivation:**
+2. **CVaR (per goal):**
 $$
 \begin{aligned}
-\frac{\partial c}{\partial x_s^m} &= \frac{1}{N} \sum_{i=1}^N \frac{\partial}{\partial x_s^m} \sigma\left(\frac{W_t^m(X; \omega^{(i)}) - b}{\tau}\right) \\
-&= \frac{1}{N} \sum_{i=1}^N \sigma'(z^{(i)}) \cdot \frac{1}{\tau} \cdot \frac{\partial W_t^m(X; \omega^{(i)})}{\partial x_s^m} \\
-&= \frac{1}{N\tau} \sum_{i=1}^N \sigma'(z^{(i)}) \cdot A_s^{(i)} F_{s,t}^{m,(i)} \quad \text{(affine wealth gradient)}
+z_g^i &\geq (\text{threshold}_g - W_{t_g}^{m_g,i}(X)) - \gamma_g \\
+\gamma_g &+ \frac{1}{\varepsilon_g N} \sum_{i=1}^N z_g^i \leq 0
 \end{aligned}
 $$
 
-**Key properties:**
-1. **Analytical:** No finite differences needed
-2. **Vectorizable:** Batch computation over scenarios
-3. **Sparse:** $\partial W_t / \partial x_s = 0$ for $s \ge t$ (causality)
-
----
-
-## Solution Strategy
-
-### Outer Loop (GoalSeeker)
-
-**Linear search with intelligent start:**
-
+**Affine wealth construction:**
 ```python
-T_start = estimate_horizon(goals, A_generator, W0)  # Skip infeasible T
-
-for T in range(T_start, T_max + 1):
-    # Generate scenarios
-    A = A_generator(T, n_sims, seed)
-    R = R_generator(T, n_sims, seed+1)
-    
-    # Solve inner problem
-    result = optimizer.solve(T, A, R, W0, goals, X_init=X_prev)
-    
-    # Check feasibility (exact SAA)
-    if result.feasible:
-        return result  # Found T*
-    
-    # Warm start for next iteration
-    X_prev = extend_policy(result.X)
-
-raise ValueError("No feasible solution in [T_start, T_max]")
+def build_wealth_affine(t, m):
+    b = W0[m] * F[:, 0, t, m]
+    if t == 0:
+        return b
+    Phi = A[:, :t] * F[:, :t, t, m]
+    return b + Phi @ X[:t, m]
 ```
 
-**Features:**
-1. **Intelligent start:** Avoids testing $T=1,2,3,\dots$ when $T^* \gg 1$
-2. **Warm start:** Extends $X$ from $T$ to $T+1$ (repeat last row)
-3. **Exact validation:** Final check uses non-smoothed indicator (prevents false positives from sigmoid approximation)
+### DCP Compliance (Disciplined Convex Programming)
 
-### Inner Loop (SAAOptimizer)
+**Variance formulation:**
 
-**Gradient-based optimization (SLSQP):**
+Use $\text{Var}(W) = \mathbb{E}[(W - \mathbb{E}[W])^2]$ via `cp.sum_squares`:
 
 ```python
-# Decision variables: X ∈ ℝ^(T×M)
-X_flat = X.flatten()  # Vectorize for scipy
-
-# Objective: maximize f(X) → minimize -f(X)
-def objective(X_flat):
-    W = compute_wealth_affine(X_flat, A, R, F, W0)
-    return -f(W, X, T, M)
-
-def objective_grad(X_flat):
-    # Analytical gradient via affine formula
-    grad[s, m] = (A[:, s] * F[:, s, T, m]).mean()
-    return -grad.flatten()
-
-# Constraints
-constraints = [
-    # Simplex: Σ_m x_t^m = 1
-    {'type': 'eq', 'fun': simplex_constraint, 'jac': simplex_jacobian},
-    
-    # Intermediate goals (smoothed)
-    {'type': 'ineq', 'fun': intermediate_constraint, 'jac': intermediate_grad},
-    
-    # Terminal goals (smoothed)
-    {'type': 'ineq', 'fun': terminal_constraint, 'jac': terminal_grad}
-]
-
-# Solve
-result = scipy.optimize.minimize(
-    objective, X_flat, method='SLSQP',
-    jac=objective_grad, constraints=constraints,
-    bounds=[(0, 1)] * (T*M)
-)
-
-X_star = result.x.reshape(T, M)
+mean_wealth = cp.sum(W_T_total) / n_sims
+variance = cp.sum_squares(W_T_total - mean_wealth) / n_sims
 ```
 
-**Solver choice:** SLSQP (Sequential Least Squares Programming)
-- Handles inequality and equality constraints
-- Uses gradients for efficiency
-- Converges reliably for smooth problems
+**Convexity:** Sum of squares of affine expressions is convex (SOC representable).
+
+**Turnover formulation:**
+
+L1 norm is convex:
+```python
+turnover = cp.norm1(X[1:, :] - X[:-1, :])
+```
 
 ---
 
@@ -422,191 +250,270 @@ X_star = result.x.reshape(T, M)
 
 ```
 AllocationOptimizer (ABC)
-    ├─ solve(T, A, R, W0, goals, ...) → OptimizationResult
+    ├─ solve(T, A, R, W0, goals, accounts, ...) → OptimizationResult
     ├─ _validate_inputs(...) → GoalSet
     ├─ _check_feasibility(...) → bool
     └─ _compute_objective(...) → float
 
-SAAOptimizer(AllocationOptimizer)
-    ├─ tau: float (sigmoid temperature)
-    └─ solve() → [scipy.optimize.minimize + sigmoid smoothing]
-
-CVaROptimizer(AllocationOptimizer)  [STUB]
-    ├─ lambda_: float (risk aversion)
-    ├─ alpha: float (CVaR level)
-    └─ solve() → [NotImplementedError - requires CVXPY]
+CVaROptimizer(AllocationOptimizer)
+    ├─ cp: CVXPY module
+    ├─ objective: str ∈ {terminal_wealth, min_cvar, low_turnover, ...}
+    └─ solve() → OptimizationResult
 
 GoalSeeker
     ├─ optimizer: AllocationOptimizer
-    └─ seek(...) → OptimizationResult [bilevel search]
+    ├─ seek(..., search_method="binary") → OptimizationResult
+    ├─ _linear_search(...) → OptimizationResult
+    └─ _binary_search(...) → OptimizationResult
 ```
 
-### OptimizationResult
-
-**Immutable container** holding:
-- `X`: optimal allocation policy $(T, M)$
-- `T`: optimization horizon
-- `objective_value`: $f(X^*)$
-- `feasible`: bool (all goals satisfied?)
-- `goals`: original specifications
-- `solve_time`: seconds
-- `n_iterations`: solver iterations
-- `diagnostics`: dict (convergence info)
-
-**Methods:**
-- `summary()`: human-readable report
-- `is_valid_allocation()`: constraint validation
-- `validate_goals()`: detailed goal satisfaction metrics
-
-### Usage Pattern
+### CVaROptimizer.solve() Algorithm
 
 ```python
-from finopt.src.optimization import SAAOptimizer, GoalSeeker
-from finopt.src.goals import IntermediateGoal, TerminalGoal
+# 1. Precompute accumulation factors
+F = portfolio.compute_accumulation_factors(R)  # (n_sims, T+1, T+1, M)
 
-# 1. Define goals
-goals = [
-    IntermediateGoal(month=12, account="Emergency", 
-                    threshold=5_500_000, confidence=0.90),
-    TerminalGoal(account="Housing", 
-                threshold=20_000_000, confidence=0.90)
-]
+# 2. Decision variables
+X = cp.Variable((T, M), nonneg=True)
+gamma = {g: cp.Variable() for g in goals}
+z = {g: cp.Variable(n_sims, nonneg=True) for g in goals}
 
-# 2. Create optimizer
-optimizer = SAAOptimizer(
-    n_accounts=2,
-    tau=0.1,
-    objective="terminal_wealth"
-)
+# 3. Affine wealth expressions
+def build_wealth_affine(t, m):
+    b = W0[m] * F[:, 0, t, m]
+    Phi = A[:, :t] * F[:, :t, t, m]
+    return b + Phi @ X[:t, m]
 
-# 3. Create bilevel solver
-seeker = GoalSeeker(optimizer, T_max=120, verbose=True)
+# 4. Constraints
+constraints = [cp.sum(X, axis=1) == 1]  # Simplex
 
-# 4. Optimize (via FinancialModel)
-result = model.optimize(
-    goals=goals,
-    optimizer=optimizer,
-    T_max=120,
-    n_sims=500,
-    seed=42
-)
+for goal in goals:
+    W_t_m = build_wealth_affine(t, m)
+    shortfall = goal.threshold - W_t_m
+    constraints += [
+        z[goal] >= shortfall - gamma[goal],
+        gamma[goal] + cp.sum(z[goal])/(goal.epsilon * n_sims) <= 0
+    ]
 
-# 5. Validate
-sim_result = model.simulate_from_optimization(result, n_sims=1000, seed=999)
-status = model.verify_goals(sim_result, goals)
+# 5. Objective (e.g., terminal_wealth)
+W_T_total = sum(build_wealth_affine(T, m) for m in range(M))
+objective = cp.Maximize(cp.sum(W_T_total) / n_sims)
+
+# 6. Solve
+prob = cp.Problem(objective, constraints)
+prob.solve(solver=cp.ECOS)
 ```
+
+### GoalSeeker Search Strategies
+
+**Linear search** (safe, slower):
+```python
+for T in range(T_start, T_max + 1):
+    result = optimizer.solve(T, A, R, W0, goals, ...)
+    if result.feasible:
+        return result  # Found T*
+```
+
+**Binary search** (faster, assumes monotonicity):
+```python
+left, right = T_start, T_max
+while left < right:
+    mid = (left + right) // 2
+    result = optimizer.solve(mid, ...)
+    if result.feasible:
+        right = mid  # Search lower half
+    else:
+        left = mid + 1  # Search upper half
+return result_at_left
+```
+
+**Complexity:**
+- Linear: $O(T^* - T_{\text{start}})$ iterations
+- Binary: $O(\log(T_{\max} - T_{\text{start}}))$ iterations
+
+**Assumption:** Monotonicity $\mathcal{F}_T \subseteq \mathcal{F}_{T+1}$ (feasibility preserved as horizon increases).
 
 ---
 
-## Advanced Topics
+## Solver Configuration
 
-### CVaR Reformulation (Future Work)
+### CVXPY Solvers
 
-**Risk-adjusted objective:**
-$$
-\max \; \mathbb{E}[W_T] - \lambda \cdot \text{CVaR}_{\alpha}(-W_T)
-$$
+**ECOS** (default):
+- Type: Interior-point (LP/SOCP)
+- Speed: Fast (30-80ms typical)
+- Stability: Good for well-conditioned problems
 
-**CVaR auxiliary formulation (Rockafellar & Uryasev 2000):**
-$$
-\text{CVaR}_{\alpha}(L) = \min_{\xi} \left\{ \xi + \frac{1}{\alpha N} \sum_{i=1}^N \max(L_i - \xi, 0) \right\}
-$$
+**SCS** (robust):
+- Type: First-order conic solver
+- Speed: Moderate
+- Stability: Handles ill-conditioned problems
 
-**CVXPY implementation sketch:**
+**CLARABEL** (modern):
+- Type: Interior-point
+- Speed: Balanced
+- Stability: Good numerical properties
+
+### Solver Options
+
 ```python
-import cvxpy as cp
-
-X = cp.Variable((T, M), nonneg=True)
-xi = cp.Variable()
-u = cp.Variable(n_sims, nonneg=True)
-
-# Affine wealth (vectorized)
-W_T = W0 @ F[:, 0, T, :].T + sum(
-    A[:, s, None] * X[s, :] @ F[:, s, T, :].T
-    for s in range(T)
+optimizer.solve(
+    T=24, A=A, R=R, W0=W0, goals=goals,
+    accounts=accounts, start_date=date(2025,1,1),
+    solver='ECOS',
+    verbose=True,
+    max_iters=10000,
+    abstol=1e-7,  # Absolute tolerance
+    reltol=1e-6   # Relative tolerance
 )
-
-# Objective
-mean_wealth = cp.sum(W_T) / n_sims
-cvar = xi + cp.sum(u) / (alpha * n_sims)
-objective = cp.Maximize(mean_wealth - lambda_ * cvar)
-
-# Constraints
-constraints = [
-    u >= -W_T - xi,  # CVaR auxiliary
-    cp.sum(X, axis=1) == 1,  # Simplex
-    # Goals...
-]
-
-prob = cp.Problem(objective, constraints)
-prob.solve(solver='ECOS')
 ```
 
-### Robust Optimization
+### Complexity Analysis
 
-**Worst-case formulation:**
-$$
-\max_{X \in \mathcal{X}_T} \min_{\omega \in \Omega} f(X, \omega)
-$$
+**Variables:** $T \cdot M + G \cdot (1 + N)$
+- $T \cdot M$ allocations
+- $G$ VaR levels ($\gamma_g$)
+- $G \cdot N$ excess shortfalls ($z_g^i$)
 
-where $\Omega$ is an **uncertainty set** (e.g., ellipsoidal return distribution).
+**Constraints:** $T + G \cdot (N + 1)$
+- $T$ simplex constraints
+- $G \cdot N$ CVaR auxiliary constraints
+- $G$ CVaR threshold constraints
 
-### Multi-Period Rebalancing
+**Example:** $T=24, M=3, G=3, N=300$
+- Variables: $72 + 903 = 975$
+- Constraints: $24 + 903 = 927$
+- Solve time: 30-80ms (ECOS)
 
-Allow $X$ to vary arbitrarily (not constant policy):
-$$
-x_t^m = g_t(W_0, \dots, W_{t-1}, A_0, \dots, A_{t-1})
-$$
-
-Requires dynamic programming or model predictive control.
+**Interior-point complexity:** $O(n^{3.5})$ where $n$ = number of variables.
 
 ---
 
 ## Numerical Considerations
 
-### Accumulation Factor Computation
+### Memory Management
 
-**Memory:** $F \in \mathbb{R}^{N \times (T+1) \times (T+1) \times M}$ requires $N \cdot T^2 \cdot M \cdot 8$ bytes.
+Accumulation factor tensor $F \in \mathbb{R}^{N \times (T+1) \times (T+1) \times M}$:
 
-**Example:** $N=500, T=120, M=5$ → **14 GB** ⚠️
+**Size:** $N \cdot T^2 \cdot M \cdot 8$ bytes
+
+**Example:** $N=500, T=120, M=5$ → 14 GB ⚠️
 
 **Mitigation:**
-1. Use `method="recursive"` (no $F$ precomputation)
-2. Chunk scenarios (batch $N$ into smaller groups)
-3. Sparse storage (only needed $F_{s,t}$ pairs)
-4. On-the-fly gradient computation
+1. Use `portfolio.compute_accumulation_factors()` with sparse storage
+2. Batch scenarios (process $N$ in chunks)
+3. On-demand computation in optimizer (trade memory for compute)
 
-### Solver Stability
+### Simplex Projection
 
-**Common issues:**
+Due to finite solver tolerance, may have $|\sum_m x_t^m - 1| \approx 10^{-8}$:
 
-1. **Infeasible initial guess:**
-   - Solution: Use uniform allocation $X_0 = \mathbf{1}/M$
-   - Warm start from previous horizon
+```python
+for t in range(T):
+    if abs(X[t, :].sum() - 1.0) > 1e-6:
+        X[t, :] = np.maximum(X[t, :], 0)
+        X[t, :] /= X[t, :].sum()
+```
 
-2. **Gradient explosion:**
-   - Solution: Gradient clipping, smaller $\tau$
-   - Check $F_{s,t}$ magnitude (clip extreme returns)
+Applied automatically in `CVaROptimizer.solve()`.
 
-3. **Constraint satisfaction:**
-   - Solution: Exact SAA validation (non-smoothed)
-   - Tighten convergence tolerances
+### Feasibility Validation
 
-4. **Slow convergence:**
-   - Solution: Increase $\tau$ (smoother constraints)
-   - Better warm start, reduce $n_{\text{sims}}$ initially
+**Two-stage validation:**
+
+1. **CVXPY constraints:** CVaR constraints during solve (convex relaxation)
+2. **Exact SAA:** Non-smoothed indicator check via `_check_feasibility()`
+
+```python
+feasible = self._check_feasibility(X_star, A, R, W0, accounts, goal_set)
+```
+
+Prevents false positives from numerical tolerances.
 
 ---
 
 ## Theoretical Guarantees
 
-**Proposition 1 (SAA Convergence):**  
-Under Lipschitz continuity of $W_t^m(X)$ in $X$ and bounded returns, the SAA solution converges to the true solution as $N \to \infty$ with probability 1.
+**Theorem 1 (SAA Convergence):**  
+Under bounded returns and Lipschitz continuity in $X$, SAA solution converges to true solution as $N \to \infty$ almost surely.
 
-**Proposition 2 (Sigmoid Approximation):**  
-For fixed $\tau$, the sigmoid-smoothed solution $X_\tau^*$ approaches the exact SAA solution as $\tau \to 0^+$, but convergence may deteriorate (gradient explosion).
+**Theorem 2 (Convexity):**  
+All objectives maintain convexity via:
+- Affine wealth: $W(X)$ linear in $X$
+- Variance: $\text{Var}(W) = \mathbb{E}[W^2] - \mathbb{E}[W]^2$ is convex quadratic
+- L1 norm: $\|\Delta X\|_1$ convex
+- CVaR: Epigraphic representation convex
 
-**Proposition 3 (Bilevel Optimality):**  
-If the inner problem solver finds a global optimum (guaranteed for convex problems), then GoalSeeker's linear search finds the true $T^*$ (minimum feasible horizon).
+**Corollary (Global Optimality):**  
+CVXPY solvers return global optimum for convex programs (no local minima).
 
-**Corollary:** For terminal-only goals with conservative heuristic start, expected iterations ≈ $O(\log T^*)$ vs $O(T^*)$ for naive search.
+**Theorem 3 (Bilevel Optimality):**  
+Linear search finds true $T^*$ if inner solver succeeds. Binary search finds $T^*$ under monotonicity assumption.
+
+**Proposition (Iteration Reduction):**  
+Binary search reduces expected iterations from $O(T^* - T_{\text{start}})$ to $O(\log(T_{\max} - T_{\text{start}}))$.
+
+---
+
+## Diagnostics and Debugging
+
+### Verbose Output
+
+Enable `verbose=True` for detailed solver information:
+
+```
+[CVXPY Solution]
+  Status: optimal
+  Objective: 21543678.92
+  Solve time: 0.067s
+
+[Simplex Validation]
+  Max |Σx_t - 1|: 3.45e-09
+  X bounds: [0.0000, 1.0000]
+
+[Goal Satisfaction Diagnostics]
+  Account 0 (Emergency):
+    Threshold:        5,500,000
+    Mean wealth:      6,234,567
+    Violation rate: 8.20% (max: 10.00%)
+    CVaR value:         -1234.56 (target: ≤ 0)
+```
+
+### Common Issues
+
+**1. Infeasible problem:**
+```
+Status: infeasible
+```
+**Solutions:**
+- Increase $T_{\max}$
+- Relax goal thresholds
+- Increase $\varepsilon$ (lower confidence)
+
+**2. Numerical instability:**
+```
+Max |Σx_t - 1|: 1.23e-04
+```
+**Solutions:**
+- Tighten solver tolerances (`abstol`, `reltol`)
+- Switch solver (ECOS → SCS)
+- Check for extreme returns in $R$
+
+**3. Slow convergence:**
+```
+Solve time: 12.345s
+```
+**Solutions:**
+- Reduce $N$ (scenarios)
+- Simplify objective (terminal_wealth faster than balanced)
+- Use warm start from previous horizon
+
+---
+
+## References
+
+**Rockafellar, R.T. and Uryasev, S. (2000).** Optimization of conditional value-at-risk. *Journal of Risk*, 2, 21-42.
+
+**Markowitz, H. (1952).** Portfolio Selection. *The Journal of Finance*, 7(1), 77-91.
+
+**Ben-Tal, A. and Nemirovski, A. (1998).** Robust convex optimization. *Mathematics of Operations Research*, 23(4), 769-805.
