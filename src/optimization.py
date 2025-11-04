@@ -52,12 +52,6 @@ All objectives maintain convexity via:
 - L1 norm: ||ΔX||₁ is convex
 - Max-min: max_X min_i f_i(X) is convex when f_i are concave in X
 
-References
-----------
-Rockafellar, R.T. and Uryasev, S. (2000). Optimization of conditional 
-value-at-risk. Journal of Risk, 2, 21-42.
-
-Markowitz, H. (1952). Portfolio Selection. The Journal of Finance, 7(1), 77-91.
 """
 
 from __future__ import annotations
@@ -69,7 +63,7 @@ import time
 import numpy as np
 
 from .goals import IntermediateGoal, TerminalGoal, GoalSet, check_goals
-
+from .portfolio import Portfolio
 if TYPE_CHECKING:
     from .model import SimulationResult
     from .portfolio import Account
@@ -327,14 +321,13 @@ class AllocationOptimizer(ABC):
         A: np.ndarray,
         R: np.ndarray,
         W0: np.ndarray,
-        goal_set: GoalSet,  # ✅ MEJORA 2: Ya NO es Optional
+        goal_set: GoalSet,
         X_init: Optional[np.ndarray] = None,
         **solver_kwargs
     ) -> OptimizationResult:
         """
         Solve allocation optimization problem for fixed horizon T.
         
-        ✅ MEJORA 2: goal_set is now REQUIRED (not Optional).
         Caller (typically GoalSeeker) is responsible for creating GoalSet once.
         
         Parameters
@@ -387,17 +380,13 @@ class AllocationOptimizer(ABC):
         A: np.ndarray,
         R: np.ndarray,
         W0: np.ndarray,
-        portfolio: Portfolio,  # ✅ MEJORA 3: Recibe Portfolio (no accounts)
+        portfolio: Portfolio,
         goal_set: GoalSet
     ) -> bool:
         """
         Check if allocation X satisfies all goals using exact SAA.
         
         Uses non-smoothed indicator function for final validation.
-        Reuses existing Portfolio instance to avoid reconstruction overhead.
-        
-        ✅ MEJORA 3: Portfolio is now passed as parameter (not recreated).
-        This eliminates redundant Portfolio construction during feasibility checks.
         
         Parameters
         ----------
@@ -435,8 +424,6 @@ class AllocationOptimizer(ABC):
         >>> # Reused in multiple feasibility checks
         >>> feasible = optimizer._check_feasibility(X, A, R, W0, portfolio, goal_set)
         """
-        # ❌ ELIMINADO: from .portfolio import Portfolio
-        # ❌ ELIMINADO: portfolio = Portfolio(accounts)
         
         X_normalized = X.copy()
         row_sums = X_normalized.sum(axis=1, keepdims=True)
@@ -447,7 +434,6 @@ class AllocationOptimizer(ABC):
         
         X_normalized = X_normalized / row_sums
         
-        # ✅ MEJORA 3: Usa portfolio pasado como parámetro (no reconstruido)
         result = portfolio.simulate(
             A=A, R=R, X=X_normalized, 
             method="affine", 
@@ -710,13 +696,6 @@ class CVaROptimizer(AllocationOptimizer):
     using interior-point methods (ECOS, SCS, or CLARABEL). All objectives
     maintain convexity and global optimality guarantees.
     
-    References
-    ----------
-    Rockafellar, R.T. and Uryasev, S. (2000). Optimization of conditional 
-    value-at-risk. Journal of Risk, 2, 21-42.
-    
-    Markowitz, H. (1952). Portfolio Selection. The Journal of Finance, 7(1), 77-91.
-    
     Examples
     --------
     >>> # Standard wealth maximization
@@ -770,15 +749,12 @@ class CVaROptimizer(AllocationOptimizer):
         A: np.ndarray,
         R: np.ndarray,
         W0: np.ndarray,
-        goal_set: GoalSet,  # ✅ MEJORA 2: Ya NO es Optional
+        goal_set: GoalSet,
         X_init: Optional[np.ndarray] = None,
         **solver_kwargs
     ) -> OptimizationResult:
         """
         Solve the portfolio allocation problem using convex optimization.
-        
-        ✅ MEJORA 2: goal_set is now REQUIRED (not Optional).
-        Eliminates redundant validation and improves performance.
         
         Parameters
         ----------
@@ -853,15 +829,12 @@ class CVaROptimizer(AllocationOptimizer):
         
         start_time = time.time()
         
-        # ✅ MEJORA 2: Validación básica (ya NO crea goal_set)
-        # goal_set debe venir validado desde el caller (GoalSeeker)
-        
+        # Validation of inputs
         if not isinstance(goal_set, GoalSet):
             raise TypeError(
                 f"goal_set must be GoalSet instance, got {type(goal_set)}"
             )
         
-        # Validar horizonte mínimo
         if T < goal_set.T_min:
             raise ValueError(
                 f"T={T} < goal_set.T_min={goal_set.T_min} "
@@ -871,7 +844,6 @@ class CVaROptimizer(AllocationOptimizer):
         n_sims = A.shape[0]
         M = self.M
         
-        # Validar dimensiones de arrays
         if A.shape != (n_sims, T):
             raise ValueError(f"A must have shape ({n_sims}, {T}), got {A.shape}")
         if R.shape != (n_sims, T, M):
@@ -879,7 +851,6 @@ class CVaROptimizer(AllocationOptimizer):
         if W0.shape != (M,):
             raise ValueError(f"W0 must have shape ({M},), got {W0.shape}")
         
-        # Validar que goal_set.M coincida
         if goal_set.M != M:
             raise ValueError(
                 f"goal_set.M={goal_set.M} != n_accounts={M}"
@@ -893,7 +864,6 @@ class CVaROptimizer(AllocationOptimizer):
         reltol = solver_kwargs.get('reltol', 1e-6)
         
         # Precompute accumulation factors: (n_sims, T+1, T+1, M)
-        from .portfolio import Portfolio
         portfolio = Portfolio(goal_set.accounts)
         F = portfolio.compute_accumulation_factors(R)
         
@@ -1059,7 +1029,7 @@ class CVaROptimizer(AllocationOptimizer):
         elif self.objective == "balanced":
             # Combination: E[W] - λ_risk·Var(W) - λ_turnover·||ΔX||₁
             lambda_risk = self.objective_params.get("lambda_risk", 0.3)
-            lambda_turnover = self.objective_params.get("lambda_turnover", 0.05)
+            lambda_turnover = self.objective_params.get("lambda_turnover", 500)
             
             # Variance component (DCP-compliant formulation)
             variance = cp.sum_squares(W_T_total_per_scenario - mean_wealth) / n_sims
@@ -1240,11 +1210,10 @@ class CVaROptimizer(AllocationOptimizer):
                 print(f"    Violation rate: {violation_rate:.2%} (max: {goal.epsilon:.2%})")
                 print(f"    CVaR value:     {cvar_val:>12,.2f} (target: ≤ 0)")
         
-        # ✅ MEJORA 3: Pasar portfolio (no goal_set.accounts)
         # Exact feasibility check using base class validation
         feasible = self._check_feasibility(
             X_star, A, R, W0, 
-            portfolio,  # ✅ CAMBIO: Pasa portfolio (antes: goal_set.accounts)
+            portfolio,
             goal_set
         )
         
@@ -1341,7 +1310,7 @@ class GoalSeeker:
         R_generator: Callable[[int, int, Optional[int]], np.ndarray],
         W0: np.ndarray,
         accounts: List[Account],
-        start_date: date,  # ✅ MEJORA 4: Type hint explícito
+        start_date: date,
         n_sims: int = 500,
         seed: Optional[int] = None,
         search_method: str = "binary",
@@ -1349,9 +1318,6 @@ class GoalSeeker:
     ) -> OptimizationResult:
         """
         Find minimum horizon T* for goal feasibility via intelligent search.
-        
-        ✅ MEJORA 2: Creates GoalSet ONCE at the beginning and reuses it
-        throughout the search process for better performance.
         
         Parameters
         ----------
@@ -1399,7 +1365,6 @@ class GoalSeeker:
         if not accounts:
             raise ValueError("accounts list cannot be empty")
         
-        # ✅ MEJORA 2: Construir GoalSet UNA VEZ al inicio
         goal_set = GoalSet(goals, accounts, start_date)
         
         # Determine intelligent starting horizon
@@ -1463,7 +1428,7 @@ class GoalSeeker:
     def _linear_search(
         self,
         T_start: int,
-        goal_set: GoalSet,  # ✅ MEJORA 2: Recibe goal_set validado
+        goal_set: GoalSet,
         A_generator: Callable,
         R_generator: Callable,
         W0: np.ndarray,
@@ -1473,8 +1438,7 @@ class GoalSeeker:
     ) -> OptimizationResult:
         """
         Linear search T = T_start, T_start+1, ... (original algorithm).
-        
-        ✅ MEJORA 2: Reuses goal_set instead of re-creating it.
+
         """
         X_prev = None
         
@@ -1485,10 +1449,9 @@ class GoalSeeker:
             A = A_generator(T, n_sims, seed)
             R = R_generator(T, n_sims, None if seed is None else seed + 1)
             
-            # ✅ MEJORA 2: Pasar goal_set directamente (no recrear)
             result = self.optimizer.solve(
                 T=T, A=A, R=R, W0=W0,
-                goal_set=goal_set,  # ✅ Reusa la misma instancia
+                goal_set=goal_set,
                 X_init=X_prev,
                 **solver_kwargs
             )
@@ -1514,7 +1477,7 @@ class GoalSeeker:
     def _binary_search(
         self,
         T_start: int,
-        goal_set: GoalSet,  # ✅ MEJORA 2: Recibe goal_set validado
+        goal_set: GoalSet,
         A_generator: Callable,
         R_generator: Callable,
         W0: np.ndarray,
@@ -1524,8 +1487,6 @@ class GoalSeeker:
     ) -> OptimizationResult:
         """
         Binary search for minimum feasible T.
-        
-        ✅ MEJORA 2: Reuses goal_set instead of re-creating it.
         
         Assumes monotonicity: if T is feasible, then T' > T is also feasible.
         Reduces iterations from O(T_max - T_start) to O(log(T_max - T_start)).
@@ -1568,10 +1529,9 @@ class GoalSeeker:
                     np.tile(best_result.X[-1:, :], (n_extend, 1))
                 ])
             
-            # ✅ MEJORA 2: Pasar goal_set directamente
             result = self.optimizer.solve(
                 T=mid, A=A, R=R, W0=W0,
-                goal_set=goal_set,  # ✅ Reusa la misma instancia
+                goal_set=goal_set,
                 X_init=X_init,
                 **solver_kwargs
             )
@@ -1602,10 +1562,9 @@ class GoalSeeker:
         A = A_generator(left, n_sims, seed)
         R = R_generator(left, n_sims, None if seed is None else seed + 1)
         
-        # ✅ MEJORA 2: Pasar goal_set directamente
         result = self.optimizer.solve(
             T=left, A=A, R=R, W0=W0,
-            goal_set=goal_set,  # ✅ Reusa la misma instancia
+            goal_set=goal_set,
             X_init=None,
             **solver_kwargs
         )

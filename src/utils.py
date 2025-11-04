@@ -8,6 +8,7 @@ Contents
 - Finance helpers (drawdown, CAGR)
 - Scenario helpers (rescale_returns, bootstrap_returns, set_random_seed)
 - Reporting helpers (summary_metrics)
+- Matplotlib formatters (millions_formatter, format_currency)
 """
 
 from __future__ import annotations
@@ -40,6 +41,9 @@ __all__ = [
     "bootstrap_returns",
     # Reporting
     "summary_metrics",
+    # Matplotlib formatters
+    "millions_formatter",
+    "format_currency",
 ]
 
 # ---------------------------------------------------------------------------
@@ -129,20 +133,22 @@ def align_index_like(months: int, like: Optional[pd.Index | pd.Series | pd.DataF
     # Fallback
     return month_index(start=None, months=months)
 
+
 def normalize_start_month(start: Optional[date] | int) -> int:
-        """
-        Map start date or month to offset 0..11 (Jan=1→0).
-        If None, defaults to 0 (January).
-        """
-        if start is None:
-            return 0
-        if isinstance(start, date):
-            month = start.month
-        else:
-            month = int(start)
-        if not (1 <= month <= 12):
-            raise ValueError("start month must be in 1..12")
-        return (month - 1) % 12
+    """
+    Map start date or month to offset 0..11 (Jan=1→0).
+    If None, defaults to 0 (January).
+    """
+    if start is None:
+        return 0
+    if isinstance(start, date):
+        month = start.month
+    else:
+        month = int(start)
+    if not (1 <= month <= 12):
+        raise ValueError("start month must be in 1..12")
+    return (month - 1) % 12
+
 
 # ---------------------------------------------------------------------------
 # Finance helpers
@@ -252,6 +258,94 @@ def summary_metrics(results: Mapping[str, object]) -> pd.DataFrame:
     df = pd.DataFrame(rows).set_index("scenario").sort_index()
     return df
 
+
+# ---------------------------------------------------------------------------
+# Matplotlib formatters
+# ---------------------------------------------------------------------------
+
+def millions_formatter(x, pos):
+    """
+    Format axis values as millions for matplotlib FuncFormatter.
+    
+    Converts large monetary values to compact millions notation:
+    - 25_000_000 → "25M"
+    - 12_500_000 → "12.5M"
+    - 0 → "0"
+    
+    Parameters
+    ----------
+    x : float
+        Value to format (in raw units, e.g., CLP).
+    pos : int
+        Tick position (unused, required by FuncFormatter signature).
+    
+    Returns
+    -------
+    str
+        Formatted string with "M" suffix.
+    
+    Examples
+    --------
+    >>> from matplotlib.ticker import FuncFormatter
+    >>> ax.yaxis.set_major_formatter(FuncFormatter(millions_formatter))
+    
+    Notes
+    -----
+    Designed for use with matplotlib's FuncFormatter. For text annotations
+    where currency symbols are needed, use format_currency() instead.
+    """
+    if x == 0:
+        return '0'
+    val = x / 1e6
+    return f'{val:.0f}M' if val == int(val) else f'{val:.1f}M'
+
+
+def format_currency(value, decimals=1, symbol='$', unit='M'):
+    """
+    Format currency values for text annotations and labels.
+    
+    Standardizes monetary display across plots with customizable precision
+    and symbols. Default behavior: millions with 1 decimal place.
+    
+    Parameters
+    ----------
+    value : float
+        Monetary value in raw units (e.g., CLP).
+    decimals : int, default 1
+        Number of decimal places to display.
+    symbol : str, default '$'
+        Currency symbol prefix.
+    unit : str, default 'M'
+        Unit suffix (typically 'M' for millions).
+    
+    Returns
+    -------
+    str
+        Formatted currency string.
+    
+    Examples
+    --------
+    >>> format_currency(25_000_000)
+    '$25.0M'
+    >>> format_currency(25_000_000, decimals=0)
+    '$25M'
+    >>> format_currency(5_500_000, decimals=2)
+    '$5.50M'
+    
+    Notes
+    -----
+    - Always divides by 1e6 (millions scaling)
+    - Use in text annotations, legends, or titles where FuncFormatter
+      cannot be applied
+    - Consistent with millions_formatter() for axis ticks
+    - Companion function to millions_formatter() for complete formatting solution
+    """
+    val = value / 1e6
+    if decimals == 0:
+        return f'{symbol}{val:.0f}{unit}'
+    return f'{symbol}{val:.{decimals}f}{unit}'
+
+
 # ---------------------------------------------------------------------------
 # Return-path generators
 # ---------------------------------------------------------------------------
@@ -272,10 +366,12 @@ def lognormal_iid(
 ) -> np.ndarray:
     """IID arithmetic returns derived from lognormal gross returns.
 
-    We sample gross returns G_t ~ LogNormal(mu, sigma) and map to arithmetic:
+    Samples gross returns G_t ~ LogNormal(mu, sigma) and maps to arithmetic:
         r_t = G_t - 1
-    This guarantees r_t > -1 (no quiebres imposibles).
-    Note: (mu, sigma) son los parámetros de la normal en el log-gross, no media/vol aritmética.
+    This guarantees r_t > -1 (no impossible bankruptcies).
+
+    Note: (mu, sigma) are parameters of the normal in log-gross space,
+    not arithmetic mean/volatility.
     """
     if months <= 0:
         return np.zeros(0, dtype=float)
@@ -288,8 +384,6 @@ def lognormal_iid(
 # ---------------------------------------------------------------------------
 # Metrics
 # ---------------------------------------------------------------------------
-
-from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class PortfolioMetrics:
@@ -308,15 +402,19 @@ def compute_metrics(
 ) -> PortfolioMetrics:
     """Compute key metrics for a simulated wealth path.
 
+    Metrics
+    -------
     - final_wealth: W_T
-    - total_contributions: sum(a_t) si se entrega; en caso contrario infiere 0
-    - cagr: usa utils.compute_cagr (evita división por 0 cuando W0=0)
-    - vol: desviación estándar de los rendimientos mensuales aproximados
-           a partir de cambios de riqueza (robusta a W[t]==0)
+    - total_contributions: sum(A_t) if provided; otherwise 0
+    - cagr: uses utils.compute_cagr (avoids division by 0 when W0=0)
+    - vol: standard deviation of approximate monthly returns computed
+           from wealth changes (robust to W[t]==0)
     - max_drawdown: min(drawdown(W))
 
-    Nota: cuando W incluye aportes, la 'vol' basada en ΔW/W_{t-1} es aproximada.
-    Para análisis de riesgo puro, usar los retornos exógenos r_t.
+    Note
+    ----
+    When W includes contributions, 'vol' based on ΔW/W_{t-1} is approximate.
+    For pure risk analysis, use exogenous returns r_t instead.
     """
     if not isinstance(wealth, pd.Series) or wealth.empty:
         return PortfolioMetrics(0.0, 0.0, 0.0, 0.0, 0.0)
@@ -324,7 +422,7 @@ def compute_metrics(
     W = wealth.astype(float)
     final_w = float(W.iloc[-1])
 
-    # Total contributions (si se proveen)
+    # Total contributions (if provided)
     if contributions is None:
         total_contrib = 0.0
     else:
@@ -334,15 +432,15 @@ def compute_metrics(
     # CAGR
     cagr_val = compute_cagr(W, periods_per_year=periods_per_year)
 
-    # Vol de “retornos” aproximados usando cambios relativos de W
-    # Maneja ceros evitando divisiones inválidas.
+    # Vol of approximate "returns" using relative changes in W
+    # Handles zeros by avoiding invalid divisions
     W_prev = W.shift(1)
     with np.errstate(divide="ignore", invalid="ignore"):
         pseudo_r = (W - W_prev) / W_prev
     pseudo_r = pseudo_r.replace([np.inf, -np.inf], np.nan).dropna()
     vol_val = float(pseudo_r.std(ddof=1)) if not pseudo_r.empty else 0.0
 
-    # Máximo drawdown
+    # Maximum drawdown
     dd = drawdown(W)
     max_dd = float(dd.min()) if not dd.empty else 0.0
 
