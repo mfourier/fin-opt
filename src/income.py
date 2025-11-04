@@ -57,13 +57,16 @@ from typing import Dict, Iterable, Optional, Literal
 
 import numpy as np
 import pandas as pd
+from matplotlib.ticker import FuncFormatter
 
 # Reuse common utilities
 from .utils import (
     check_non_negative,
     annual_to_monthly,
     month_index,
-    normalize_start_month
+    normalize_start_month,
+    millions_formatter,
+    format_currency,
 )
 
 __all__ = [
@@ -1173,16 +1176,17 @@ class IncomeModel:
             use_dual = (max(left_max / right_max, right_max / left_max) >= dual_axis_ratio) if left_max*right_max>0 else False
 
         lines, labels = [], []
+        ax_right = None
         
         if use_dual:
             # --- Dual-axis mode ---
-            ax_r = ax.twinx()
+            ax_right = ax.twinx()
             
             # 1. Plot trajectories FIRST (background)
             if show_trajectories and sims is not None:
                 for i in range(n_simulations):
                     # Variable trajectories on right axis: sims[i, :] shape (months,)
-                    ax_r.plot(idx, sims[i, :], color='gray', alpha=trajectory_alpha, 
+                    ax_right.plot(idx, sims[i, :], color='gray', alpha=trajectory_alpha, 
                             linewidth=0.8, zorder=1)
                     # Total trajectories on left axis
                     ax.plot(idx, fixed_arr + sims[i, :], color='gray', 
@@ -1190,7 +1194,7 @@ class IncomeModel:
             
             # 2. Plot confidence bands (if enabled)
             if show_confidence_band and lower_perc is not None:
-                ax_r.fill_between(idx, lower_perc, upper_perc, 
+                ax_right.fill_between(idx, lower_perc, upper_perc, 
                                 color=colors.get("variable", "orange"), 
                                 alpha=0.2, zorder=2)
                 ax.fill_between(idx, lower_perc + fixed_arr, upper_perc + fixed_arr,
@@ -1204,12 +1208,12 @@ class IncomeModel:
             l_total, = ax.plot(idx, total_mean, label="total", 
                             color=colors.get("total", "black"), 
                             linewidth=2.5, zorder=3)
-            l_var, = ax_r.plot(idx, var_mean, linestyle="--", label=var_col, 
+            l_var, = ax_right.plot(idx, var_mean, linestyle="--", label=var_col, 
                             color=colors.get("variable", "orange"), 
                             linewidth=2.5, zorder=3)
             
             ax.set_ylabel(ylabel_left)
-            ax_r.set_ylabel(ylabel_right)
+            ax_right.set_ylabel(ylabel_right)
             lines.extend([l_fixed, l_total, l_var])
             labels.extend([fixed_col, "total", var_col])
             
@@ -1251,7 +1255,11 @@ class IncomeModel:
             lines.extend([l_fixed, l_var, l_total])
             labels.extend([fixed_col, var_col, "total"])
 
-        # Formatting
+        # ========== Formatting ==========
+        ax.yaxis.set_major_formatter(FuncFormatter(millions_formatter))
+        if ax_right is not None:
+            ax_right.yaxis.set_major_formatter(FuncFormatter(millions_formatter))
+        
         if grid: ax.grid(True, linestyle="--", alpha=0.4, zorder=0)
         if title: ax.set_title(title)
         ax.set_xlabel("Month")
@@ -1265,7 +1273,9 @@ class IncomeModel:
         total_var_sum = var_mean.sum()
         total_sum = total_fixed_sum + total_var_sum
         ax.text(0.02, 0.98,
-                f"Total Fixed: ${total_fixed_sum:,.0f}\nTotal Variable: ${total_var_sum:,.0f}\nTotal Income: ${total_sum:,.0f}".replace(",", "."),
+                f"Total Fixed: ${total_fixed_sum:,.0f}".replace(",", ".") + "\n" +
+                f"Total Variable: ${total_var_sum:,.0f}".replace(",", ".") + "\n" +
+                f"Total Income: ${total_sum:,.0f}".replace(",", "."),
                 transform=ax.transAxes, fontsize=9, verticalalignment="top", 
                 horizontalalignment="left",
                 bbox=dict(boxstyle="round", facecolor="white", alpha=0.7), zorder=10)
@@ -1447,7 +1457,8 @@ class IncomeModel:
         ax.plot(idx, contrib_mean, color=colors["total"], label="Mean Contribution", 
             linewidth=2.5, zorder=3)
 
-        # Formatting
+        # ========== Formatting ==========
+        ax.yaxis.set_major_formatter(FuncFormatter(millions_formatter))
         ax.set_xlabel("Month")
         ax.set_ylabel(ylabel)
         ax.set_title(title)
@@ -1744,7 +1755,7 @@ class IncomeModel:
     
     def __repr__(self) -> str:
         try:
-            metrics = self.income_metrics(months=12, start=date(2025, 1, 1))  # ejemplo: horizonte 12 meses
+            metrics = self.income_metrics(months=12, start=date(2025, 1, 1))
             return (
                 f"{self.__class__.__name__}(horizon=12 months, "
                 f"total_income={metrics.total_income:.2f}, "
@@ -1839,4 +1850,3 @@ if __name__ == "__main__":
     print(f"Old way (loop): {old_time*1000:.2f} ms")
     print(f"New way (vectorized): {new_time*1000:.2f} ms")
     print(f"Speedup: {old_time/new_time:.1f}×")
-

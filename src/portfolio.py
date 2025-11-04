@@ -88,8 +88,9 @@ from typing import List, Literal, Optional, Dict
 from dataclasses import dataclass
 
 import numpy as np
+from matplotlib.ticker import FuncFormatter
 
-from .utils import check_non_negative, annual_to_monthly, monthly_to_annual
+from .utils import check_non_negative, annual_to_monthly, monthly_to_annual, millions_formatter
 
 __all__ = [
     "Account",
@@ -777,7 +778,7 @@ class Portfolio:
         result: dict,
         X: np.ndarray,
         start: Optional[date] = None,
-        figsize: tuple = (16, 8),
+        figsize: tuple = (16, 10),
         title: Optional[str] = None,
         save_path: Optional[str] = None,
         return_fig_ax: bool = False,
@@ -786,6 +787,7 @@ class Portfolio:
         colors: Optional[dict] = None,
         hist_bins: int = 30,
         hist_color: str = 'mediumseagreen',
+        goals: Optional[list] = None,
     ):
         """
         Visualize portfolio wealth dynamics with 4 panels + lateral histogram.
@@ -826,6 +828,10 @@ class Portfolio:
             Number of bins for final wealth distribution histogram.
         hist_color : str, default 'mediumseagreen'
             Color for the lateral histogram.
+        goals : list, optional
+            List of Goal objects (TerminalGoal or IntermediateGoal) to visualize.
+            Terminal goals are shown as horizontal lines at t=T.
+            Intermediate goals are shown with markers at their specified month.
         
         Returns
         -------
@@ -841,23 +847,7 @@ class Portfolio:
         When start is provided, months are converted to calendar dates for
         improved readability. This matches the temporal representation used
         in income.plot_income() and income.plot_contributions().
-        
-        Examples
-        --------
-        >>> from datetime import date
-        >>> result = portfolio.simulate(A, R, X)
-        >>> 
-        >>> # Numeric time axis (default)
-        >>> portfolio.plot(result, X, title="Portfolio Analysis")
-        >>> 
-        >>> # Calendar time axis
-        >>> portfolio.plot(result, X, start=date(2025, 1, 1),
-        ...                title="Portfolio Analysis")
-        >>> 
-        >>> # Custom colors and histogram
-        >>> portfolio.plot(result, X, start=date(2025, 1, 1),
-        ...                colors={"Emergency": "green", "Housing": "blue"},
-        ...                hist_bins=40, hist_color='coral')
+    
         """
         import matplotlib.pyplot as plt
         from matplotlib.gridspec import GridSpec
@@ -894,7 +884,7 @@ class Portfolio:
         
         # Setup figure
         fig = plt.figure(figsize=figsize)
-        gs = GridSpec(2, 2, figure=fig, hspace=0.3, wspace=0.3)
+        gs = GridSpec(2, 2, figure=fig, hspace=0.4, wspace=0.3)
         
         ax_accounts = fig.add_subplot(gs[0, 0])
         ax_total = fig.add_subplot(gs[0, 1])
@@ -911,7 +901,7 @@ class Portfolio:
                         color=account_colors[m],
                         alpha=trajectory_alpha,
                         linewidth=0.8,
-                        label=self.accounts[m].name if i == 0 else '_nolegend_'
+                        label='_nolegend_'
                     )
         
         # Mean trajectories (thicker)
@@ -922,14 +912,103 @@ class Portfolio:
                 mean_wealth,
                 color=account_colors[m],
                 linewidth=2.5,
-                label=f"{self.accounts[m].name} (mean)"
+                label=f"{self.accounts[m].name}"
             )
         
+        ax_accounts.yaxis.set_major_formatter(FuncFormatter(millions_formatter))
         ax_accounts.set_xlabel(xlabel)
         ax_accounts.set_ylabel("Wealth (CLP)")
         ax_accounts.set_title(r'Wealth by Account $(W_t^m)$')
         ax_accounts.legend(loc='best', fontsize=8)
         ax_accounts.grid(True, alpha=0.3)
+
+        # ========== Panel 1: Goal visualization ==========
+        if goals is not None:
+            # Map account names to indices for color matching
+            account_name_to_idx = {acc.name: idx for idx, acc in enumerate(self.accounts)}
+            
+            for goal in goals:
+                if goal.account not in account_name_to_idx:
+                    continue  # Skip if account not in portfolio
+                
+                acc_idx = account_name_to_idx[goal.account]
+                goal_color = account_colors[acc_idx]
+                
+                # Check goal type using class name
+                goal_type = goal.__class__.__name__
+                
+                if goal_type == 'TerminalGoal':
+                    # Horizontal line at threshold across entire horizon
+                    ax_accounts.axhline(
+                        goal.threshold,
+                        color=goal_color,
+                        linestyle='--',
+                        linewidth=2,
+                        alpha=0.8,
+                        zorder=10
+                    )
+                    
+                    # Annotation at the right edge
+                    ax_accounts.text(
+                        time_axis[-1], goal.threshold,
+                        f" ${goal.threshold:,.0f}".replace(",", "."),
+                        color=goal_color,
+                        fontsize=7,
+                        verticalalignment='center',
+                        bbox=dict(boxstyle='round,pad=0.3', facecolor='white', 
+                                edgecolor=goal_color, alpha=0.9, linewidth=1.5)
+                    )
+                
+                elif goal_type == 'IntermediateGoal':
+                    # Marker at specific month
+                    goal_time = time_axis[goal.month] if goal.month < len(time_axis) else time_axis[-1]
+                    
+                    # Horizontal line up to goal month
+                    if start is not None:
+                        ax_accounts.plot(
+                            [time_axis[0], goal_time],
+                            [goal.threshold, goal.threshold],
+                            color=goal_color,
+                            linestyle=':',
+                            linewidth=2,
+                            alpha=0.7,
+                            zorder=10
+                        )
+                    else:
+                        ax_accounts.axhline(
+                            goal.threshold,
+                            xmin=0,
+                            xmax=goal.month / T,
+                            color=goal_color,
+                            linestyle=':',
+                            linewidth=2,
+                            alpha=0.7,
+                            zorder=10
+                        )
+                    
+                    # Marker at goal month
+                    ax_accounts.scatter(
+                        goal_time, goal.threshold,
+                        color=goal_color,
+                        s=150,
+                        marker='D',
+                        edgecolor='white',
+                        linewidth=2,
+                        zorder=15,
+                        alpha=0.9
+                    )
+                    
+                    # Annotation
+                    ax_accounts.text(
+                        goal_time, goal.threshold,
+                        f" t={goal.month}\n ${goal.threshold:,.0f}".replace(",", "."),
+                        color=goal_color,
+                        fontsize=7,
+                        verticalalignment='bottom',
+                        horizontalalignment='left',
+                        bbox=dict(boxstyle='round,pad=0.3', facecolor='white',
+                                edgecolor=goal_color, alpha=0.9, linewidth=1.5)
+                    )
         
         # ========== Panel 2: Total wealth ==========
         if show_trajectories:
@@ -952,6 +1031,7 @@ class Portfolio:
             label='Mean'
         )
         
+        ax_total.yaxis.set_major_formatter(FuncFormatter(millions_formatter))
         ax_total.set_xlabel(xlabel)
         ax_total.set_ylabel("Total Wealth (CLP)")
         ax_total.set_title(r'Total Portfolio Wealth $(\sum_{m} W_t^m)$')
@@ -964,7 +1044,10 @@ class Portfolio:
         final_median = np.median(W_total[:, -1])
         ax_total.text(
             0.02, 0.98,
-            f"Final Wealth:\nMean: ${final_mean:,.0f}\nMedian: ${final_median:,.0f}\nStd: ${final_std:,.0f}".replace(",", "."),
+            f"Final Wealth:\n" +
+            f"Mean: ${final_mean:,.0f}".replace(",", ".") + "\n" +
+            f"Median: ${final_median:,.0f}".replace(",", ".") + "\n" +
+            f"Std: ${final_std:,.0f}".replace(",", "."),
             transform=ax_total.transAxes,
             fontsize=9,
             verticalalignment='top',
@@ -974,7 +1057,7 @@ class Portfolio:
         # Lateral histogram for final wealth distribution (only if n_sims > 1)
         if n_sims > 1:
             divider = make_axes_locatable(ax_total)
-            ax_hist = divider.append_axes("right", size=1.0, pad=0.15)
+            ax_hist = divider.append_axes("right", size=0.8, pad=0.15)
             
             final_wealth = W_total[:, -1]  # (n_sims,)
             ax_hist.hist(
@@ -1004,68 +1087,66 @@ class Portfolio:
             alpha=0.7
         )
         
+        ax_composition.yaxis.set_major_formatter(FuncFormatter(millions_formatter))
         ax_composition.set_xlabel(xlabel)
         ax_composition.set_ylabel("Wealth (CLP)")
-        ax_composition.set_title("Portfolio Composition")
+        ax_composition.set_title(r"Portfolio Composition $(\mathbb{E} [W_t^m])$")
         ax_composition.legend(loc='upper left', fontsize=8)
         ax_composition.grid(True, alpha=0.3)
         
-        # ========== Panel 4: Allocation policy heatmap ==========
-        im = ax_policy.imshow(
-            X.T,
-            aspect='auto',
-            cmap='YlOrRd',
-            vmin=0,
-            vmax=1,
-            interpolation='nearest'
-        )
+        # ========== Panel 4: Allocation policy (stacked bar) ==========
+        time_axis_policy = time_axis[:T]
+
+        bar_width = np.diff(time_axis_policy).min() if start is not None else 0.9
+
+        bottom = np.zeros(T)
+        for m in range(M):
+            ax_policy.bar(
+                time_axis_policy,
+                X[:, m],
+                bottom=bottom,
+                width=bar_width,
+                color=account_colors[m],
+                label=self.accounts[m].name,
+                edgecolor='white',
+                linewidth=0.3,
+                alpha=0.85
+            )
+            bottom += X[:, m]
+
+        ax_policy.set_xlabel(xlabel)
+        ax_policy.set_ylabel("Allocation Fraction")
+        ax_policy.set_title(r"Allocation Policy $(X = (x_t^m))$")
+        ax_policy.set_ylim(0, 1)
+        ax_policy.grid(True, alpha=0.3)
+        ax_policy.axhline(0.5, color='black', linestyle=':', linewidth=1, alpha=0.5)
+
+        if start is not None:
+            margin = (time_axis_policy[-1] - time_axis_policy[0]) * 0.02
+            ax_policy.set_xlim(time_axis_policy[0] - margin, time_axis_policy[-1] + margin)
+        else:
+            ax_policy.set_xlim(-0.5, T - 0.5)
         
-        ax_policy.set_xlabel("Month")
-        ax_policy.set_ylabel("Account")
-        ax_policy.set_title(r'Allocation Policy $(X = (x_t^m)_{t,m})$')
-        ax_policy.set_yticks(range(M))
-        ax_policy.set_yticklabels([acc.name for acc in self.accounts], fontsize=8)
-        
-        # Add colorbar
-        plt.colorbar(im, ax=ax_policy, fraction=0.046, pad=0.04, label='Fraction')
-        
-        # Add allocation values as text (if not too many)
-        if T <= 24 and M <= 5:
-            for t in range(T):
-                for m in range(M):
-                    text_color = 'white' if X[t, m] > 0.5 else 'black'
-                    ax_policy.text(
-                        t, m, f"{X[t, m]:.2f}",
-                        ha='center', va='center',
-                        color=text_color, fontsize=7
-                    )
-        
-        # ========== Date formatting (if applicable) ==========
+        # ========== Date formatting ==========
         if start is not None:
             # Rotate labels and format as dates for time series plots
-            for ax in [ax_accounts, ax_total, ax_composition]:
+            for ax in [ax_accounts, ax_total, ax_composition, ax_policy]:
                 ax.tick_params(axis='x', rotation=45)
                 ax.xaxis.set_major_formatter(plt.matplotlib.dates.DateFormatter('%Y-%m'))
-                ax.xaxis.set_major_locator(plt.matplotlib.dates.MonthLocator(interval=max(1, T//12)))
-            
-            # For policy heatmap, format ticks manually (imshow uses numeric indices)
-            # Select subset of months to avoid label saturation
-            n_ticks = min(12, T)  # Maximum 12 ticks on x-axis
-            tick_positions = np.linspace(0, T-1, n_ticks, dtype=int)
-            
-            # Generate date labels for those tick positions
-            tick_labels = [time_axis[pos].strftime('%Y-%m') for pos in tick_positions]
-            
-            ax_policy.set_xticks(tick_positions)
-            ax_policy.set_xticklabels(tick_labels, rotation=45, ha='right', fontsize=7)
-        
+                tick_interval = max(3, T // 8) if T > 24 else max(1, T // 12)
+                ax.xaxis.set_major_locator(plt.matplotlib.dates.MonthLocator(interval=tick_interval))
+                
+                for label in ax.get_xticklabels():
+                    label.set_ha('right')
+                    label.set_fontsize(8)
         # Main title
         if title:
             fig.suptitle(title, fontsize=14, fontweight='bold')
         
         # Annotation with simulation info
-        param_text = f"n_sims={n_sims} | T={T} | accounts={M}"
-        fig.text(0.99, 0.01, param_text, ha='right', va='bottom', fontsize=8, alpha=0.7)
+        param_text = f"Simulations: {n_sims} | Horizon: {T} months | Accounts: {M}"
+        fig.tight_layout(rect=[0, 0.01, 1, 0.96 if title else 1])
+        fig.text(0.99, 0.01, param_text, ha='right', va='bottom', fontsize=8, alpha=0.85)
         
         if save_path:
             fig.savefig(save_path, bbox_inches='tight', dpi=150)
