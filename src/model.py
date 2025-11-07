@@ -1253,6 +1253,7 @@ class FinancialModel:
             
             **Simulation-based (auto-simulates if result not provided):**
             - "wealth": Portfolio dynamics (4 panels)
+            - "allocation": Allocation analysis with investment gains (4 panels)  # AGREGAR
             - "comparison": Compare multiple strategies
         
         T : int, optional
@@ -1409,6 +1410,22 @@ class FinancialModel:
             # This mode uses horizons array from kwargs, no T/n_sims/seed/start
             pass
         
+        elif mode == "allocation":
+            # Allocation analysis requires X and optionally result
+            if X is None:
+                raise ValueError("mode='allocation' requires X parameter")
+            
+            dispatch_kwargs["X"] = X
+            if result is not None:
+                dispatch_kwargs["result"] = result
+            else:
+                # Will auto-simulate, need these params
+                dispatch_kwargs.setdefault("n_sims", n_sims)
+                if seed is not None:
+                    dispatch_kwargs["seed"] = seed
+                if start is not None:
+                    dispatch_kwargs["start"] = start
+            
         elif mode in ["income", "contributions"]:
             dispatch_kwargs.setdefault("months", T)
             if start is not None:
@@ -1444,6 +1461,7 @@ class FinancialModel:
             
             # Simulation-based
             "wealth": self._plot_wealth,
+            "allocation": self._plot_allocation,
             "comparison": self._plot_comparison,
         }
         
@@ -1461,11 +1479,11 @@ class FinancialModel:
 
     def _plot_income(self, **kwargs):
         """Delegate to income.plot_income()."""
-        return self.income.plot_income(**kwargs)
+        return self.income.plot(mode="income", **kwargs)
 
     def _plot_contributions(self, **kwargs):
         """Delegate to income.plot_contributions()."""
-        return self.income.plot_contributions(**kwargs)
+        return self.income.plot(mode="contributions", **kwargs)
 
     def _plot_returns(self, **kwargs):
         """Delegate to returns.plot()."""
@@ -1506,6 +1524,391 @@ class FinancialModel:
             kwargs["start"] = result.start
         
         return self.portfolio.plot(portfolio_result, X_plot, **kwargs)
+
+    def _plot_allocation(
+        self,
+        X: np.ndarray,
+        result: Optional[SimulationResult] = None,
+        n_sims: int = 500,
+        seed: Optional[int] = None,
+        start: Optional[date] = None,
+        figsize: tuple = (15, 10),  # Reducido de (16, 12)
+        title: Optional[str] = None,
+        save_path: Optional[str] = None,
+        return_fig_ax: bool = False,
+        colors: Optional[dict] = None,
+        show_trajectories: bool = False,
+        trajectory_alpha: float = 0.05,
+    ) -> Optional[tuple]:
+        """
+        Analyze allocation policy with investment return decomposition.
+        
+        Creates 4-panel visualization showing policy execution and investment gains:
+        1. Allocation fractions (stacked bar): x_t^m policy over time
+        2. Monthly allocations (stacked area): A_t * x_t^m absolute contributions
+        3. Cumulative capital vs wealth (lines): investment growth by account
+        4. Final decomposition (stacked bar): capital + gains = wealth
+        
+        Parameters
+        ----------
+        X : np.ndarray, shape (T, M)
+            Allocation policy matrix. Time horizon T is inferred from X.shape[0].
+        result : SimulationResult, optional
+            Pre-computed simulation result. If None, executes simulate() internally
+            using n_sims and seed parameters.
+        n_sims : int, default 500
+            Number of MC simulations (used only if result is None).
+        seed : int, optional
+            Random seed for reproducibility (used only if result is None).
+        start : date, optional
+            Start date for calendar alignment. If None and result is None, uses 
+            numeric months. If result is provided, extracts start from result.start.
+        figsize : tuple, default (15, 10)
+            Figure size (width, height).
+        title : str, optional
+            Main figure title.
+        save_path : str, optional
+            Path to save figure.
+        return_fig_ax : bool, default False
+            If True, returns (fig, axes_dict).
+        colors : dict, optional
+            Custom colors for accounts. Keys are account names.
+        show_trajectories : bool, default False
+            Whether to show individual simulation paths in Panel 3.
+        trajectory_alpha : float, default 0.05
+            Transparency for trajectory lines.
+        
+        Returns
+        -------
+        None or (fig, axes_dict)
+            If return_fig_ax=True, returns figure and axes dictionary.
+        
+        Notes
+        -----
+        **Panel 3 shows investment effect**: The gap between cumulative capital
+        (W_0 + contributions) and wealth represents compound interest gains.
+        Larger gaps indicate better investment performance.
+        
+        **Panel 4 stacked decomposition**: For each account m:
+        - Blue bar (base): Total capital invested W_0^m + Σ(A_t * x_t^m)
+        - Orange bar (stacked): Net gain W_T^m - W_0^m - Σ(A_t * x_t^m)
+        - Total height = Final wealth W_T^m
+        
+        Stacked bar design makes the relationship Capital + Gain = Wealth
+        visually obvious and eliminates comparison ambiguity.
+        
+        Examples
+        --------
+        >>> # With pre-computed simulation
+        >>> X = np.tile([0.6, 0.4], (24, 1))
+        >>> result = model.simulate(T=24, X=X, n_sims=500, seed=42)
+        >>> model.plot("allocation", X=X, result=result)
+        >>> 
+        >>> # Auto-simulate
+        >>> model.plot("allocation", X=X, n_sims=500, seed=42, 
+        ...           start=date(2025,1,1))
+        """
+        from matplotlib.ticker import FuncFormatter
+        from matplotlib import pyplot as plt
+        from matplotlib.lines import Line2D
+        from .utils import millions_formatter, month_index
+        
+        # Infer horizon from X
+        T, M = X.shape
+        if M != self.M:
+            raise ValueError(f"X has {M} accounts but model has {self.M}")
+        
+        # Execute simulation if not provided
+        if result is None:
+            result = self.simulate(T=T, X=X, n_sims=n_sims, seed=seed, start=start)
+        
+        # Extract data from SimulationResult
+        W = result.wealth  # (n_sims, T+1, M)
+        A = result.contributions  # (n_sims, T) or (T,)
+        n_sims_actual = W.shape[0]
+        T_plus_1 = W.shape[1]
+        
+        # Validate dimensions
+        if W.shape != (n_sims_actual, T + 1, M):
+            raise ValueError(f"Wealth shape {W.shape} inconsistent with X shape {X.shape}")
+        
+        # Handle stochastic vs deterministic contributions
+        if A.ndim == 1:  # Deterministic: (T,)
+            A_mean = A
+        else:  # Stochastic: (n_sims, T)
+            if A.shape[0] != n_sims_actual or A.shape[1] != T:
+                raise ValueError(f"Contributions shape {A.shape} inconsistent with expected ({n_sims_actual}, {T})")
+            A_mean = A.mean(axis=0)
+        
+        # Compute absolute monthly allocations: A_t * x_t^m
+        A_abs = A_mean[:, None] * X  # (T, M)
+        
+        # Mean wealth by account: (n_sims, T+1, M) -> (T+1, M)
+        W_mean = W.mean(axis=0)
+        
+        # Extract initial wealth per account
+        W0 = W_mean[0, :]  # (M,) - initial wealth at t=0
+        
+        # Compute cumulative contributions by account
+        cum_contrib = np.cumsum(A_abs, axis=0)  # (T, M)
+        # Total capital invested = W_0 + cumulative contributions
+        cum_capital = cum_contrib + W0[None, :]  # (T, M)
+        cum_capital_with_init = np.vstack([W0, cum_capital])  # (T+1, M) to match W
+        
+        # Final state decomposition
+        total_contrib_final = cum_contrib[-1, :]  # (M,) - sum of monthly contributions only
+        total_capital_invested = W0 + total_contrib_final  # (M,) - W_0 + contributions
+        total_wealth_final = W_mean[-1, :]  # (M,) - final wealth
+        # Net gains = W_T - W_0 - Σ(A_t * x_t^m)
+        gains_final = total_wealth_final - total_capital_invested  # (M,)
+        
+        # Setup colors
+        if colors is None:
+            colors = {}
+        default_colors = plt.cm.Dark2(np.linspace(0, 1, M))
+        account_colors = []
+        for i, acc in enumerate(self.accounts):
+            if acc.name in colors:
+                account_colors.append(colors[acc.name])
+            elif i in colors:
+                account_colors.append(colors[i])
+            else:
+                account_colors.append(default_colors[i])
+        
+        # Time axis (T+1 points for wealth, T points for contributions/policy)
+        start_date = result.start if hasattr(result, 'start') and result.start else start
+        if start_date is not None:
+            time_axis = month_index(start_date, T_plus_1)  # T+1 points
+            time_axis_policy = time_axis[:-1]  # T points for X
+            xlabel = "Date"
+        else:
+            time_axis = np.arange(T + 1)
+            time_axis_policy = np.arange(T)
+            xlabel = "Month"
+        
+        # Create figure with 4 panels
+        fig = plt.figure(figsize=figsize)
+        gs = fig.add_gridspec(2, 2, hspace=0.35, wspace=0.3)
+        
+        ax_fractions = fig.add_subplot(gs[0, 0])
+        ax_absolute = fig.add_subplot(gs[0, 1])
+        ax_cumulative = fig.add_subplot(gs[1, 0])
+        ax_decomposition = fig.add_subplot(gs[1, 1])
+        
+        # ========== Panel 1: Allocation Fractions (stacked bar) ==========
+        bar_width = np.diff(time_axis_policy).min() if start_date is not None else 0.9
+        bottom = np.zeros(T)
+        for m in range(M):
+            ax_fractions.bar(
+                time_axis_policy,
+                X[:, m],
+                bottom=bottom,
+                width=bar_width,
+                color=account_colors[m],
+                label=self.accounts[m].name,
+                edgecolor='white',
+                linewidth=0.3,
+                alpha=0.85
+            )
+            bottom += X[:, m]
+        
+        ax_fractions.set_xlabel(xlabel, fontsize=10)
+        ax_fractions.set_ylabel("Allocation Fraction", fontsize=10)
+        ax_fractions.set_title(r"Allocation Policy $(X = (x_t^m))$", fontsize=11, fontweight='bold')
+        ax_fractions.set_ylim(0, 1)
+        ax_fractions.grid(True, alpha=0.3)
+        ax_fractions.axhline(0.5, color='black', linestyle=':', linewidth=1, alpha=0.5)
+        ax_fractions.legend(loc='upper left', fontsize=8, framealpha=0.9)
+        
+        if start_date is not None:
+            margin = (time_axis_policy[-1] - time_axis_policy[0]) * 0.02
+            ax_fractions.set_xlim(time_axis_policy[0] - margin, time_axis_policy[-1] + margin)
+        else:
+            ax_fractions.set_xlim(-0.5, T - 0.5)
+        
+        # ========== Panel 2: Monthly Allocations (stacked area) ==========
+        ax_absolute.stackplot(
+            time_axis_policy,
+            *[A_abs[:, m] for m in range(M)],
+            labels=[acc.name for acc in self.accounts],
+            colors=account_colors,
+            alpha=0.8
+        )
+        ax_absolute.yaxis.set_major_formatter(FuncFormatter(millions_formatter))
+        ax_absolute.set_xlabel(xlabel, fontsize=10)
+        ax_absolute.set_ylabel("Monthly Allocation (CLP)", fontsize=10)
+        ax_absolute.set_title(r"Monthly Allocations by Account $(A_t \cdot x_t^m)$", fontsize=11, fontweight='bold')
+        ax_absolute.grid(True, alpha=0.3)
+        ax_absolute.legend(loc='upper left', fontsize=8, framealpha=0.9)
+        
+        # ========== Panel 3: Cumulative Capital vs Wealth  ==========
+        # Plot trajectories if requested
+        if show_trajectories:
+            for i in range(n_sims_actual):
+                for m in range(M):
+                    ax_cumulative.plot(
+                        time_axis,
+                        W[i, :, m],
+                        color=account_colors[m],
+                        alpha=trajectory_alpha,
+                        linewidth=0.6,
+                        label='_nolegend_'
+                    )
+
+        # Plot wealth (solid) and capital (dashed) with same color per account
+        for m in range(M):
+            # Wealth (solid line)
+            ax_cumulative.plot(
+                time_axis,
+                W_mean[:, m],
+                color=account_colors[m],
+                linewidth=2.5,
+                linestyle='-',
+                label='_nolegend_'
+            )
+            # Capital invested (dashed, same color with transparency)
+            ax_cumulative.plot(
+                time_axis,
+                cum_capital_with_init[:, m],
+                color=account_colors[m],
+                linewidth=2,
+                linestyle='--',
+                alpha=0.5,
+                label='_nolegend_'
+            )
+
+        # Clear any existing legend before creating new one
+        if ax_cumulative.get_legend():
+            ax_cumulative.get_legend().remove()
+
+        # Create clean legend with generic entries
+        legend_elements = [
+            Line2D([0], [0], color='black', linewidth=2.5, linestyle='-', label='Wealth'),
+            Line2D([0], [0], color='black', linewidth=2, linestyle='--', alpha=0.5, label='Capital Invested')
+        ]
+        ax_cumulative.legend(
+            handles=legend_elements, 
+            loc='upper left', 
+            fontsize=9, 
+            framealpha=1.0,
+            edgecolor='black',
+            fancybox=False
+        )
+
+        ax_cumulative.yaxis.set_major_formatter(FuncFormatter(millions_formatter))
+        ax_cumulative.set_xlabel(xlabel, fontsize=10)
+        ax_cumulative.set_ylabel("Amount (CLP)", fontsize=10)
+        ax_cumulative.set_title(r"Capital Invested vs Wealth $(W_0^m + \sum A_s x_s^m \text{ vs } W_t^m)$", 
+                            fontsize=11, fontweight='bold')
+        ax_cumulative.grid(True, alpha=0.3)
+        
+        # ========== Panel 4: Stacked Bar Decomposition ==========
+        x_pos = np.arange(M)
+        bar_width_decomp = 0.6  # Wider for clarity
+        
+        # Stacked bars: Capital (base) + Gain (top)
+        bars_capital = ax_decomposition.bar(
+            x_pos,
+            total_capital_invested,
+            bar_width_decomp,
+            label='Capital Invested',
+            color='steelblue',
+            alpha=0.85,
+            edgecolor='white',
+            linewidth=1.5
+        )
+        
+        bars_gain = ax_decomposition.bar(
+            x_pos,
+            gains_final,
+            bar_width_decomp,
+            bottom=total_capital_invested,
+            label='Net Gain',
+            color='darkorange',
+            alpha=0.85,
+            edgecolor='white',
+            linewidth=1.5
+        )
+        
+        ax_decomposition.set_xticks(x_pos)
+        ax_decomposition.set_xticklabels(
+            [acc.name for acc in self.accounts], 
+            rotation=25,
+            ha='right',
+            fontsize=9
+        )
+        ax_decomposition.yaxis.set_major_formatter(FuncFormatter(millions_formatter))
+        ax_decomposition.set_ylabel("Amount (CLP)", fontsize=10)
+        ax_decomposition.set_title("Final State Decomposition", fontsize=11, fontweight='bold')
+        ax_decomposition.legend(loc='upper left', fontsize=9, framealpha=0.95)
+        ax_decomposition.grid(True, alpha=0.3, axis='y')
+        
+        # Enhanced annotations on orange bars only
+        for m in range(M):
+            if total_capital_invested[m] > 0 and gains_final[m] > 0:
+                pct_gain = (gains_final[m] / total_capital_invested[m]) * 100
+                gain_value_M = gains_final[m] / 1e6  # In millions
+                
+                # Position at center of orange bar
+                y_position = total_capital_invested[m] + gains_final[m] / 2
+                
+                ax_decomposition.text(
+                    x_pos[m],
+                    y_position,
+                    f'${gain_value_M:.1f}M\n(+{pct_gain:.1f}%)',
+                    ha='center',
+                    va='center',
+                    fontsize=9,
+                    fontweight='bold',
+                    color='white',
+                    bbox=dict(boxstyle='round,pad=0.35', facecolor='darkorange', 
+                            edgecolor='white', alpha=0.95, linewidth=1.5)
+                )
+        
+        # ========== Date formatting ==========
+        if start_date is not None:
+            for ax in [ax_fractions, ax_absolute, ax_cumulative]:
+                ax.tick_params(axis='x', rotation=45)
+                ax.xaxis.set_major_formatter(plt.matplotlib.dates.DateFormatter('%Y-%m'))
+                tick_interval = max(3, T // 8) if T > 24 else max(1, T // 12)
+                ax.xaxis.set_major_locator(plt.matplotlib.dates.MonthLocator(interval=tick_interval))
+                
+                for label in ax.get_xticklabels():
+                    label.set_ha('right')
+                    label.set_fontsize(8)
+        
+        # Main title
+        if title:
+            fig.suptitle(title, fontsize=14, fontweight='bold', y=0.995)
+        
+        # Summary annotation (2 lines with proper spacing)
+        total_capital_invested_all = total_capital_invested.sum()
+        total_wealth_all = total_wealth_final.sum()
+        total_gains_all = gains_final.sum()
+        overall_return_pct = (total_gains_all / total_capital_invested_all * 100) if total_capital_invested_all > 0 else 0
+        
+        param_text_line1 = (f"Horizon: {T} months  |  Simulations: {n_sims_actual}  |  "
+                        f"Capital Invested: ${total_capital_invested_all:,.0f}".replace(",", "."))
+        param_text_line2 = (f"Total Gains: ${total_gains_all:,.0f} (+{overall_return_pct:.1f}%)".replace(",", "."))
+        
+        # Adjust layout with proper bottom margin
+        fig.tight_layout(rect=[0, 0.05, 1, 0.97 if title else 0.99])
+        
+        # Two-line annotation with proper spacing
+        fig.text(0.01, 0.028, param_text_line1, ha='left', va='bottom', fontsize=8, alpha=0.85)
+        fig.text(0.01, 0.008, param_text_line2, ha='left', va='bottom', fontsize=8, 
+                alpha=0.95, fontweight='bold', color='darkorange')
+        
+        if save_path:
+            fig.savefig(save_path, bbox_inches='tight', dpi=150)
+        
+        if return_fig_ax:
+            return fig, {
+                'fractions': ax_fractions,
+                'absolute': ax_absolute,
+                'cumulative': ax_cumulative,
+                'decomposition': ax_decomposition
+            }
 
     def _plot_comparison(
         self,
