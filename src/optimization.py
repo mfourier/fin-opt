@@ -78,7 +78,7 @@ __all__ = [
 
 # Type alias for objective specifications
 ObjectiveType = Union[
-    Literal["terminal_wealth", "low_turnover", "risk_adjusted", "balanced"],
+    Literal["risky", "balanced", "conservative"],
     Callable[[np.ndarray, np.ndarray, int, int], float]
 ]
 
@@ -265,10 +265,9 @@ class AllocationOptimizer(ABC):
     providing concrete solve() method.
     
     Supports parametrizable objectives f(X):
-    - "terminal_wealth": E[Σ_m W_T^m] (default)
-    - "low_turnover": E[W_T] - λ·Σ_{t,m}|x_{t+1,m} - x_t^m|
-    - "risk_adjusted": E[W_T] - λ·Std(W_T)
-    - "balanced": Combination of above
+    - "risky": E[Σ_m W_T^m] (default)
+    - "balanced": E[W_T] - λ·Σ_{t,m}|x_{t+1,m} - x_t^m|
+    - "conservative": E[W_T] - λ·Std(W_T)
     - Custom callable: f(W, X, T, M) → float
     
     Parameters
@@ -296,7 +295,7 @@ class AllocationOptimizer(ABC):
     def __init__(
         self,
         n_accounts: int,
-        objective: ObjectiveType = "terminal_wealth",
+        objective: ObjectiveType = "balanced",
         objective_params: Optional[Dict[str, Any]] = None,
         account_names: Optional[List[str]] = None
     ):
@@ -352,25 +351,6 @@ class AllocationOptimizer(ABC):
         -------
         OptimizationResult
             Optimal X*, objective value, feasibility, goal_set, diagnostics
-        
-        Notes
-        -----
-        Breaking change from previous versions:
-        - Old: goal_set was Optional, solver created it internally if None
-        - New: goal_set is required, eliminates redundant validation
-        - Migration: Create GoalSet before calling solve()
-        
-        Examples
-        --------
-        >>> from finopt.src.goals import GoalSet
-        >>> from datetime import date
-        >>> 
-        >>> # ✅ New pattern: create goal_set first
-        >>> goal_set = GoalSet(goals, accounts, date(2025, 1, 1))
-        >>> result = optimizer.solve(T=24, A=A, R=R, W0=W0, goal_set=goal_set)
-        >>> 
-        >>> # ❌ Old pattern (no longer supported):
-        >>> # result = optimizer.solve(T, A, R, W0, goals, accounts, start_date)
         """
         pass
     
@@ -397,10 +377,8 @@ class AllocationOptimizer(ABC):
         R : np.ndarray, shape (n_sims, T, M)
             Return scenarios
         W0 : np.ndarray, shape (M,)
-            Initial wealth vector (overrides portfolio.initial_wealth_vector)
         portfolio : Portfolio
-            Portfolio instance (REUSED, not recreated).
-            Uses W0_override to avoid dependency on portfolio.initial_wealth.
+            Portfolio instance 
         goal_set : GoalSet
             Validated goal collection
         
@@ -408,13 +386,6 @@ class AllocationOptimizer(ABC):
         -------
         bool
             True if all goals satisfied, False otherwise
-        
-        Notes
-        -----
-        Performance improvement:
-        - Before: Portfolio reconstructed on every call (~5-15 times per optimization)
-        - After: Portfolio reused from caller (0 reconstructions)
-        - Overhead eliminated: M validations × N calls
         
         Examples
         --------
@@ -497,18 +468,16 @@ class AllocationOptimizer(ABC):
             return self.objective(W, X, T, M)
         
         # Dispatch to predefined objectives
-        if self.objective == "terminal_wealth":
-            return self._objective_terminal_wealth(W, X, T, M)
-        elif self.objective == "low_turnover":
-            return self._objective_low_turnover(W, X, T, M)
-        elif self.objective == "risk_adjusted":
-            return self._objective_risk_adjusted(W, X, T, M)
+        if self.objective == "risky":
+            return self._objective_risky(W, X, T, M)
         elif self.objective == "balanced":
             return self._objective_balanced(W, X, T, M)
+        elif self.objective == "conservative":
+            return self._objective_conservative(W, X, T, M)
         else:
             raise ValueError(f"Unknown objective: {self.objective}")
     
-    def _objective_terminal_wealth(
+    def _objective_risky(
         self,
         W: np.ndarray,
         X: np.ndarray,
@@ -518,7 +487,7 @@ class AllocationOptimizer(ABC):
         """Expected total terminal wealth: E[Σ_m W_T^m]."""
         return W[:, T, :].sum(axis=1).mean()
     
-    def _objective_low_turnover(
+    def _objective_balanced(
         self,
         W: np.ndarray,
         X: np.ndarray,
@@ -528,20 +497,16 @@ class AllocationOptimizer(ABC):
         """
         Terminal wealth with turnover penalty.
         
-        f(X) = E[W_T] - λ·Σ_{t,m} |x_{t+1,m} - x_t^m|
+        f(X) = - Σ_{t,m} (x_{t+1,m} - x_t^m)^2
         """
-        lambda_ = self.objective_params.get("lambda", 0.1)
-        
-        terminal_wealth = W[:, T, :].sum(axis=1).mean()
-        
         if T > 1:
-            turnover = np.abs(X[1:, :] - X[:-1, :]).sum()
+            turnover = ((X[1:, :] - X[:-1, :]) ** 2).sum()
         else:
             turnover = 0.0
         
-        return terminal_wealth - lambda_ * turnover
+        return -turnover
     
-    def _objective_risk_adjusted(
+    def _objective_conservative(
         self,
         W: np.ndarray,
         X: np.ndarray,
@@ -560,32 +525,6 @@ class AllocationOptimizer(ABC):
         std_wealth = W_T_total.std()
         
         return mean_wealth - lambda_ * std_wealth
-    
-    def _objective_balanced(
-        self,
-        W: np.ndarray,
-        X: np.ndarray,
-        T: int,
-        M: int
-    ) -> float:
-        """
-        Balanced objective combining wealth, risk, and turnover.
-        
-        f(X) = E[W_T] - λ_risk·Std(W_T) - λ_turnover·Turnover(X)
-        """
-        lambda_risk = self.objective_params.get("lambda_risk", 0.3)
-        lambda_turnover = self.objective_params.get("lambda_turnover", 0.05)
-        
-        W_T_total = W[:, T, :].sum(axis=1)
-        mean_wealth = W_T_total.mean()
-        std_wealth = W_T_total.std()
-        
-        if T > 1:
-            turnover = np.abs(X[1:, :] - X[:-1, :]).sum()
-        else:
-            turnover = 0.0
-        
-        return mean_wealth - lambda_risk * std_wealth - lambda_turnover * turnover
 
 
 # ---------------------------------------------------------------------------
@@ -628,50 +567,31 @@ class CVaROptimizer(AllocationOptimizer):
     ----------------------------
     All objectives exploit affine wealth structure for convexity:
     
-    1. terminal_wealth: max E[Σ_m W_T^m]
+    1. risky: max E[Σ_m W_T^m]
        - Linear program (fastest)
        - Maximizes expected total final wealth
        - Use case: Wealth accumulation without risk considerations
     
-    2. min_cvar: min Σ_g CVaR_g
-       - Risk-averse objective
-       - Minimizes sum of conditional value-at-risk across all goals
-       - Use case: Conservative portfolios, downside protection
+    2. balanced: -||ΔX||_2
+       - Reduces transaction costs via L2 penalty on allocation changes
     
-    3. low_turnover: max E[W_T] - λ·||ΔX||₁
-       - Reduces transaction costs via L1 penalty on allocation changes
-       - λ controls tradeoff (typical: 0.01-0.5)
-       - Use case: Tax-efficient portfolios, high transaction costs
-    
-    4. risk_adjusted: max E[W_T] - λ·Var(W_T)
+    3. conservative: max E[W_T] - λ·Var(W_T)
        - Mean-variance tradeoff (uses variance, not std, for convexity)
        - λ controls risk aversion (typical: 0.1-1.0)
        - Use case: Markowitz-style optimization
-    
-    5. balanced: max E[W_T] - λ_r·Var(W_T) - λ_t·||ΔX||₁
-       - Multi-objective: wealth, risk, and turnover
-       - λ_r: risk aversion, λ_t: turnover penalty
-       - Use case: General-purpose balanced portfolios
-    
-    6. min_variance: min Var(W_T) s.t. E[W_T] ≥ target
-       - Pure risk minimization with wealth constraint
-       - target: minimum acceptable expected wealth
-       - Use case: Capital preservation with minimum return requirement
     
     Parameters
     ----------
     n_accounts : int
         Number of investment accounts in the portfolio
-    objective : str, default='min_cvar'
+    objective : str, default='balanced'
         Optimization objective. Options:
-        'terminal_wealth', 'min_cvar', 'low_turnover', 'risk_adjusted',
-        'balanced', 'min_variance'
+        'risky', 'balanced', 'conservative'.
     objective_params : dict, optional
         Objective-specific parameters:
-        - low_turnover: {'lambda': 0.1}
-        - risk_adjusted: {'lambda': 0.5}
-        - balanced: {'lambda_risk': 0.3, 'lambda_turnover': 0.05}
-        - min_variance: {'target': 15_000_000}
+        - risky:
+        - balanced: {'lambda': 0.5}
+        - conservative: {'lambda': 0.3}
     account_names : list of str, optional
         Names of accounts for improved diagnostics
     
@@ -695,28 +615,12 @@ class CVaROptimizer(AllocationOptimizer):
     The formulation is a pure convex program (LP or SOCP), solved efficiently
     using interior-point methods (ECOS, SCS, or CLARABEL). All objectives
     maintain convexity and global optimality guarantees.
-    
-    Examples
-    --------
-    >>> # Standard wealth maximization
-    >>> opt = CVaROptimizer(n_accounts=3, objective='terminal_wealth')
-    >>> result = opt.solve(T=24, A=A, R=R, W0=W0, goal_set=goal_set)
-    >>> 
-    >>> # Risk-adjusted optimization
-    >>> opt = CVaROptimizer(n_accounts=3, objective='risk_adjusted',
-    ...                    objective_params={'lambda': 0.5})
-    >>> result = opt.solve(T=24, A=A, R=R, W0=W0, goal_set=goal_set, verbose=True)
-    >>> 
-    >>> # Low-turnover for tax efficiency
-    >>> opt = CVaROptimizer(n_accounts=3, objective='low_turnover',
-    ...                    objective_params={'lambda': 0.2})
-    >>> result = opt.solve(T=24, A=A, R=R, W0=W0, goal_set=goal_set, solver='ECOS')
     """
     
     def __init__(
         self,
         n_accounts: int,
-        objective: str = 'min_cvar',
+        objective: str = 'balanced',
         objective_params: Optional[Dict[str, Any]] = None,
         account_names: Optional[List[str]] = None
     ):
@@ -724,8 +628,7 @@ class CVaROptimizer(AllocationOptimizer):
         
         # Validate objective
         valid_objectives = [
-            'terminal_wealth', 'min_cvar', 'low_turnover', 
-            'risk_adjusted', 'balanced', 'min_variance'
+            'risky', 'balanced', 'conservative'
         ]
         if objective not in valid_objectives:
             raise ValueError(
@@ -989,33 +892,12 @@ class CVaROptimizer(AllocationOptimizer):
         mean_wealth = cp.sum(W_T_total_per_scenario) / n_sims
         
         # Build objective based on self.objective
-        if self.objective == "terminal_wealth":
+        if self.objective == "risky":
             # Maximize expected total terminal wealth: E[Σ_m W[T,m]]
             # Linear program - fastest option
             objective = cp.Maximize(mean_wealth)
         
-        elif self.objective == "min_cvar":
-            # Minimize sum of CVaR values (risk-averse objective)
-            total_cvar = 0
-            for g, gamma_g in gamma.items():
-                eps = g.epsilon
-                total_cvar += gamma_g + cp.sum(z[g]) / (eps * n_sims)
-            
-            objective = cp.Minimize(total_cvar)
-        
-        elif self.objective == "low_turnover":
-            # Maximize wealth - turnover penalty
-            # Turnover: Σ_{t,m} |x_{t+1,m} - x_t^m| (L1 norm is convex)
-            lambda_ = self.objective_params.get("lambda", 0.1)
-            
-            if T > 1:
-                turnover = cp.norm1(X[1:, :] - X[:-1, :])
-            else:
-                turnover = 0.0
-            
-            objective = cp.Maximize(mean_wealth - lambda_ * turnover)
-        
-        elif self.objective == "risk_adjusted":
+        elif self.objective == "conservative":
             # Maximize E[W_T] - λ·Var(W_T)
             # Variance formulated as sum of squared deviations for DCP compliance
             lambda_ = self.objective_params.get("lambda", 0.5)
@@ -1027,41 +909,17 @@ class CVaROptimizer(AllocationOptimizer):
             objective = cp.Maximize(mean_wealth - lambda_ * variance)
         
         elif self.objective == "balanced":
-            # Combination: E[W] - λ_risk·Var(W) - λ_turnover·||ΔX||₁
-            lambda_risk = self.objective_params.get("lambda_risk", 0.3)
-            lambda_turnover = self.objective_params.get("lambda_turnover", 500)
-            
-            # Variance component (DCP-compliant formulation)
-            variance = cp.sum_squares(W_T_total_per_scenario - mean_wealth) / n_sims
+            # Penalty on allocation changes ||ΔX||_2
             
             # Turnover component
-            turnover = cp.norm1(X[1:, :] - X[:-1, :]) if T > 1 else 0.0
+            turnover = cp.sum_squares(X[1:, :] - X[:-1, :]) if T > 1 else 0.0
             
-            objective = cp.Maximize(
-                mean_wealth - lambda_risk * variance - lambda_turnover * turnover
-            )
-        
-        elif self.objective == "min_variance":
-            # Minimize variance subject to minimum wealth constraint
-            target = self.objective_params.get("target", None)
-            
-            if target is None:
-                raise ValueError(
-                    "Objective 'min_variance' requires 'target' parameter in objective_params"
-                )
-            
-            # Objective: minimize Var(W_T) using DCP-compliant formulation
-            variance = cp.sum_squares(W_T_total_per_scenario - mean_wealth) / n_sims
-            objective = cp.Minimize(variance)
-            
-            # Additional constraint: E[W_T] >= target
-            constraints.append(mean_wealth >= target)
+            objective = cp.Maximize(-turnover)
         
         else:
             raise ValueError(
                 f"Unknown objective '{self.objective}'. "
-                f"Valid options: 'terminal_wealth', 'min_cvar', 'low_turnover', "
-                f"'risk_adjusted', 'balanced', 'min_variance'"
+                f"Valid options: 'risky', 'balanced', 'conservative'"
             )
         
         # ============= SOLVE CONVEX PROGRAM =============
