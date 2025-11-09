@@ -174,7 +174,7 @@ model.plot("wealth", result=result, show_trajectories=True)
 │           FinancialModel (Facade)               │
 │  - Orchestration layer                          │
 │  - Unified plotting interface                   │
-│  - Simulation caching (SHA256)                  │
+│  - Simulation caching                           │
 └───────┬─────────────────────────────────────────┘
         │
         ├──► IncomeModel ──┬──► FixedIncome
@@ -375,7 +375,7 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 **Maximiliano Lioi**  
 M.Sc. Applied Mathematics | Data Scientist  
-[GitHub](https://github.com/yourusername) | [LinkedIn](https://linkedin.com/in/yourprofile)
+[GitHub](https://github.com/mfourier) | [LinkedIn](https://linkedin.com/in/mlioi)
 
 ---
 
