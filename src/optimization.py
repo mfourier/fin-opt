@@ -39,12 +39,11 @@ Convex Objectives in CVaROptimizer
 All objectives exploit the affine structure: W[:,t,m] = b + Φ @ X[:t,m]
 
 Available objectives:
-- terminal_wealth: max E[Σ_m W_T^m] (linear program)
-- min_cvar: min Σ_g CVaR_g (risk-averse, minimizes tail risk)
-- low_turnover: max E[W_T] - λ·||ΔX||₁ (reduces transaction costs)
-- risk_adjusted: max E[W_T] - λ·Var(W_T) (mean-variance tradeoff)
-- balanced: max E[W_T] - λᵣ·Var(W_T) - λₜ·||ΔX||₁ (multi-objective)
-- min_variance: min Var(W_T) s.t. E[W_T] ≥ target (Markowitz-style)
+    - "risky": E[Σ_m W_T^m]
+    - "balanced": E[W_T] - λ·Σ_{t,m}|x_{t+1,m} - x_t^m| (default)
+    - "conservative": E[W_T] - λ·Std(W_T)
+    - "risky_turnover": E[W_T] - λ·Σ_{t,m}|x_{t+1,m} - x_t^m|
+    - Custom callable: f(W, X, T, M) → float
 
 All objectives maintain convexity via:
 - Affine wealth: W is linear in X
@@ -78,7 +77,7 @@ __all__ = [
 
 # Type alias for objective specifications
 ObjectiveType = Union[
-    Literal["risky", "balanced", "conservative"],
+    Literal["risky", "risky_turnover", "balanced", "conservative"],
     Callable[[np.ndarray, np.ndarray, int, int], float]
 ]
 
@@ -265,9 +264,10 @@ class AllocationOptimizer(ABC):
     providing concrete solve() method.
     
     Supports parametrizable objectives f(X):
-    - "risky": E[Σ_m W_T^m] (default)
-    - "balanced": E[W_T] - λ·Σ_{t,m}|x_{t+1,m} - x_t^m|
+    - "risky": E[Σ_m W_T^m]
+    - "balanced": E[W_T] - λ·Σ_{t,m}|x_{t+1,m} - x_t^m| (default)
     - "conservative": E[W_T] - λ·Std(W_T)
+    - "risky_turnover": E[W_T] - λ·Σ_{t,m}|x_{t+1,m} - x_t^m|
     - Custom callable: f(W, X, T, M) → float
     
     Parameters
@@ -287,7 +287,7 @@ class AllocationOptimizer(ABC):
     - solve(T, A, R, W0, goal_set, X_init, **kwargs) → OptimizationResult
     
     Provided utilities:
-    - _validate_inputs(...) → GoalSet (DEPRECATED: goal_set now required)
+    - _validate_inputs(...) → GoalSet
     - _check_feasibility(...) → bool
     - _compute_objective(W, X, T, M) → float (dispatches to objective functions)
     """
@@ -386,14 +386,6 @@ class AllocationOptimizer(ABC):
         -------
         bool
             True if all goals satisfied, False otherwise
-        
-        Examples
-        --------
-        >>> # Caller creates portfolio once
-        >>> portfolio = Portfolio(goal_set.accounts)
-        >>> 
-        >>> # Reused in multiple feasibility checks
-        >>> feasible = optimizer._check_feasibility(X, A, R, W0, portfolio, goal_set)
         """
         
         X_normalized = X.copy()
@@ -472,6 +464,8 @@ class AllocationOptimizer(ABC):
             return self._objective_risky(W, X, T, M)
         elif self.objective == "balanced":
             return self._objective_balanced(W, X, T, M)
+        elif self.objective == "risky_turnover":
+            return self._objective_risky_turnover(W, X, T, M)
         elif self.objective == "conservative":
             return self._objective_conservative(W, X, T, M)
         else:
@@ -495,7 +489,7 @@ class AllocationOptimizer(ABC):
         M: int
     ) -> float:
         """
-        Terminal wealth with turnover penalty.
+        Turnover penalty.
         
         f(X) = - Σ_{t,m} (x_{t+1,m} - x_t^m)^2
         """
@@ -505,6 +499,29 @@ class AllocationOptimizer(ABC):
             turnover = 0.0
         
         return -turnover
+
+    def _objective_risky_turnover(
+        self,
+        W: np.ndarray,
+        X: np.ndarray,
+        T: int,
+        M: int
+    ) -> float:
+        """
+        Terminal wealth with turnover penalty.
+        
+        f(X) = E[W_T] - λ·Σ_{t,m} (x_{t+1,m} - x_t^m)^2
+        """
+        lambda_ = self.objective_params.get("lambda", 0.5)
+        
+        W_T_total = W[:, T, :].sum(axis=1)
+        mean_wealth = W_T_total.mean()
+
+        if T > 1:
+            turnover = ((X[1:, :] - X[:-1, :]) ** 2).sum()
+        else:
+            turnover = 0.0
+        return mean_wealth - lambda_ * turnover
     
     def _objective_conservative(
         self,
@@ -628,7 +645,7 @@ class CVaROptimizer(AllocationOptimizer):
         
         # Validate objective
         valid_objectives = [
-            'risky', 'balanced', 'conservative'
+            'risky', 'balanced', 'risky_turnover', 'conservative'
         ]
         if objective not in valid_objectives:
             raise ValueError(
@@ -712,20 +729,6 @@ class CVaROptimizer(AllocationOptimizer):
         - ECOS: Fast, recommended for LP/SOCP (default)
         - SCS: More robust, handles ill-conditioned problems
         - CLARABEL: Modern, balanced performance
-        
-        Examples
-        --------
-        >>> from finopt.src.goals import GoalSet
-        >>> from datetime import date
-        >>> 
-        >>> # ✅ Create goal_set first (required)
-        >>> goal_set = GoalSet(goals, accounts, date(2025, 1, 1))
-        >>> 
-        >>> result = optimizer.solve(
-        ...     T=12, A=A, R=R, W0=np.array([0, 0, 0]),
-        ...     goal_set=goal_set,
-        ...     verbose=True, solver='ECOS'
-        ... )
         """
         import time
         cp = self.cp
@@ -908,9 +911,15 @@ class CVaROptimizer(AllocationOptimizer):
             
             objective = cp.Maximize(mean_wealth - lambda_ * variance)
         
+        elif self.objective == "risky_turnover":
+            # Maximize E[W_T] - λ·||ΔX||_2
+            lambda_ = self.objective_params.get("lambda", 15000)
+            turnover = cp.sum_squares(X[1:, :] - X[:-1, :]) if T > 1 else 0.0
+
+            objective = cp.Maximize(mean_wealth - lambda_ * turnover)
+        
         elif self.objective == "balanced":
             # Penalty on allocation changes ||ΔX||_2
-            
             # Turnover component
             turnover = cp.sum_squares(X[1:, :] - X[:-1, :]) if T > 1 else 0.0
             
@@ -1015,7 +1024,7 @@ class CVaROptimizer(AllocationOptimizer):
             print(f"  X bounds: [{X_star.min():.4f}, {X_star.max():.4f}]")
             
             if max_simplex_error > 1e-4:
-                print(f"  ⚠️  Minor simplex violations detected (auto-corrected)")
+                print(f"Minor simplex violations detected (auto-corrected)")
             
             # Compute wealth using NumPy for validation
             def compute_wealth_numpy(X, t, m):

@@ -1,0 +1,24 @@
+# FinOpt - Core Dependencies
+# Generated from pyproject.toml
+# Install with: pip install -r requirements.txt
+
+# Numerical computing
+numpy>=1.24.0
+pandas>=2.0.0
+scipy>=1.10.0
+
+# Visualization
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# Optimization
+cvxpy>=1.4.0
+
+# Configuration and validation
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+
+# For development, install with extras:
+# pip install -e ".[dev]"          # Development tools
+# pip install -e ".[notebook]"     # Jupyter support
+# pip install -e ".[all]"          # Everything
