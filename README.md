@@ -36,14 +36,6 @@ Using **CVaR reformulation** (Rockafellar & Uryasev, 2000), we convert non-conve
 - **Affine wealth representation**: Closed-form dynamics expose linear structure for convex solvers
 - **CVaR reformulation**: Transforms probabilistic constraints into tractable epigraphic form
 - **Global optimality**: DCP-compliant objectives (CVXPY) eliminate local minima
-- **Analytical gradients**: ∂W_t^m/∂x_s^m = A_s F_{s,t}^m enables efficient optimization
-
-### Engineering Quality
-- **Modular architecture**: 6 independent components with clean separation of concerns
-- **Vectorized Monte Carlo**: 45-100× speedup via NumPy operations
-- **Intelligent caching**: SHA256-keyed simulation results avoid redundant computation
-- **Lazy imports**: Optional dependencies (CVXPY) loaded only when needed
-- **Production-ready**: Comprehensive docstrings, type hints, input validation
 
 ### Practical Capabilities
 - **Multiple goals**: Intermediate (fixed time) + terminal (optimized horizon)
