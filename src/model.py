@@ -79,6 +79,8 @@ import pandas as pd
 # Lazy imports for optimization (avoid circular dependencies)
 if TYPE_CHECKING:
     from .optimization import AllocationOptimizer, OptimizationResult
+    from .expenses import ExpenseModel
+    from .rewards import RewardSchedule
 
 # Direct imports (always available)
 from .income import IncomeModel
@@ -197,6 +199,12 @@ class SimulationResult:
     start: date
     seed: Optional[int]
     account_names: List[str]
+    
+    # Optional expense/withdrawal data
+    withdrawals: Optional[np.ndarray] = None  # Y matrix shape (T, M)
+    gross_contributions: Optional[np.ndarray] = None  # Before expense deductions
+    has_expenses: bool = False
+    has_rewards: bool = False
     
     # Internal cache for lazy computation
     _metrics: Optional[dict[str, pd.DataFrame]] = field(default=None, init=False, repr=False)
@@ -591,8 +599,21 @@ class FinancialModel:
         income: IncomeModel,
         accounts: List[Account],
         default_correlation: Optional[np.ndarray] = None,
-        enable_cache: bool = True
+        enable_cache: bool = True,
+        expenses: Optional[ExpenseModel] = None,
+        rewards: Optional[RewardSchedule] = None
     ):
+        # Import expenses and rewards modules (deferred to avoid circular imports)
+        if expenses is not None:
+            from .expenses import ExpenseModel as _ExpenseModel
+            if not isinstance(expenses, _ExpenseModel):
+                raise TypeError(f"expenses must be ExpenseModel, got {type(expenses)}")
+        
+        if rewards is not None:
+            from .rewards import RewardSchedule as _RewardSchedule
+            if not isinstance(rewards, _RewardSchedule):
+                raise TypeError(f"rewards must be RewardSchedule, got {type(rewards)}")
+        
         # Validation
         if not accounts:
             raise ValueError("accounts list cannot be empty")
@@ -601,6 +622,12 @@ class FinancialModel:
         self.income = income
         self.accounts = accounts  # Canonical source (shared with portfolio)
         self.M = len(accounts)
+        self.expenses = expenses
+        self.rewards = rewards
+        
+        # Sync expenses to income model (for contributions_from_disposable)
+        if expenses is not None:
+            self.income.expenses = expenses
         
         # Build return generator and portfolio executor
         # Note: self.accounts and self.portfolio.accounts are same reference
@@ -736,6 +763,18 @@ class FinancialModel:
             n_sims=n_sims
         )  # (n_sims, T) or (T,)
         
+        # If expenses are configured, use disposable income for contributions instead
+        A_effective = A
+        if self.expenses is not None:
+            # Use contributions from disposable income (after expenses)
+            # The income model already has expenses synced from __init__
+            A_effective = self.income.contributions_from_disposable(
+                months=T,
+                start=start_effective,
+                seed=seed,
+                n_sims=n_sims
+            )  # (n_sims, T) or (T,)
+        
         # Full income breakdown
         income_full = self.income.project(
             months=T,
@@ -752,19 +791,30 @@ class FinancialModel:
             seed=None if seed is None else seed + 1
         )  # (n_sims, T, M)
         
+        # Build withdrawals matrix Y if rewards are configured
+        Y = None
+        if self.rewards is not None:
+            # Get fixed withdrawals from reward schedule
+            Y = self.rewards.get_fixed_withdrawals(
+                T=T,
+                M=self.M,
+                accounts=self.accounts
+            )  # (T, M)
+        
         # Simulate wealth dynamics
         portfolio_result = self.portfolio.simulate(
-            A=A,
+            A=A_effective,
             R=R,
             X=X,
-            method="affine"
+            method="affine",
+            Y=Y
         )
         
         # Package into result container
         result = SimulationResult(
             wealth=portfolio_result["wealth"],
             total_wealth=portfolio_result["total_wealth"],
-            contributions=A,
+            contributions=A_effective,  # Effective contributions (after expenses if any)
             returns=R,
             income=income_full,
             allocation=X,
@@ -773,7 +823,12 @@ class FinancialModel:
             M=self.M,
             start=start_effective,
             seed=seed,
-            account_names=[acc.name for acc in self.accounts]
+            account_names=[acc.name for acc in self.accounts],
+            # Expense/withdrawal extension
+            withdrawals=Y,
+            gross_contributions=A if self.expenses is not None else None,
+            has_expenses=self.expenses is not None,
+            has_rewards=self.rewards is not None
         )
         
         # Store in cache
@@ -1028,19 +1083,42 @@ class FinancialModel:
         # Build generators using model components
         start_date = start if start is not None else date.today()
         
+        # Capture expenses in closure if present
+        expenses = self.expenses
+        
         def A_generator(T: int, n: int, s: Optional[int]) -> np.ndarray:
-            """Generate contribution scenarios."""
-            return self.income.contributions(
-                months=T,
-                n_sims=n,
-                seed=s,
-                output="array",
-                start=start_date
-            )
+            """Generate contribution scenarios (after expenses if configured)."""
+            if expenses is not None:
+                return self.income.contributions_from_disposable(
+                    months=T,
+                    n_sims=n,
+                    seed=s,
+                    output="array",
+                    start=start_date,
+                    expenses=expenses
+                )
+            else:
+                return self.income.contributions(
+                    months=T,
+                    n_sims=n,
+                    seed=s,
+                    output="array",
+                    start=start_date
+                )
         
         def R_generator(T: int, n: int, s: Optional[int]) -> np.ndarray:
             """Generate return scenarios."""
             return self.returns.generate(T, n_sims=n, seed=s)
+        
+        # Build withdrawals Y from rewards if configured
+        Y = None
+        if self.rewards is not None:
+            # Use T_max for withdrawals - seeker will slice as needed
+            Y = self.rewards.get_fixed_withdrawals(
+                T=T_max,
+                M=self.M,
+                accounts=self.accounts
+            )  # (T_max, M)
         
         # Extract initial wealth
         W0 = self.portfolio.initial_wealth_vector
@@ -1056,6 +1134,7 @@ class FinancialModel:
             n_sims=n_sims,
             seed=seed,
             search_method=search_method,
+            Y=Y,
             **solver_kwargs
         )
 

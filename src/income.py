@@ -53,11 +53,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Dict, Iterable, Optional, Literal
+from typing import Dict, Iterable, Optional, Literal, Union, TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
 from matplotlib.ticker import FuncFormatter
+
+if TYPE_CHECKING:
+    from .expenses import ExpenseModel
 
 # Reuse common utilities
 from .utils import (
@@ -693,10 +696,11 @@ class IncomeModel:
     """
     
     fixed: FixedIncome
-    variable: VariableIncome
+    variable: Optional[VariableIncome] = None
     name_fixed: str = field(default="fixed", init=True)
     name_variable: str = field(default="variable", init=True)
-    monthly_contribution: dict = None 
+    monthly_contribution: dict = None
+    expenses: Optional["ExpenseModel"] = None  # Optional expense model for net income
 
     def project(
         self,
@@ -813,7 +817,12 @@ class IncomeModel:
         
         # Get arrays: shape (n_sims, months) or (months,)
         fixed_arr = self.fixed.project(months, start=start, output="array", n_sims=n_sims)
-        variable_arr = self.variable.project(months, start=start, seed=seed, output="array", n_sims=n_sims)
+        if self.variable is not None:
+            variable_arr = self.variable.project(months, start=start, seed=seed, output="array", n_sims=n_sims)
+        else:
+            # No variable income - return zeros
+            shape = (n_sims, months) if n_sims > 1 else (months,)
+            variable_arr = np.zeros(shape, dtype=float)
         total_arr = fixed_arr + variable_arr
         
         if output == "array":
@@ -939,7 +948,11 @@ class IncomeModel:
 
         # Project incomes as arrays: shape (n_sims, months) or (months,)
         fixed_arr = self.fixed.project(months, start=start, output="array", n_sims=n_sims)
-        variable_arr = self.variable.project(months, start=start, seed=seed, output="array", n_sims=n_sims)
+        if self.variable is not None:
+            variable_arr = self.variable.project(months, start=start, seed=seed, output="array", n_sims=n_sims)
+        else:
+            shape = (n_sims, months) if n_sims > 1 else (months,)
+            variable_arr = np.zeros(shape, dtype=float)
 
         # Initialize contribution fractions (12-month arrays)
         if self.monthly_contribution is None:
@@ -976,6 +989,203 @@ class IncomeModel:
         else:  # series (validated above, safe)
             idx = month_index(start=start, months=months)
             return pd.Series(contrib_arr, index=idx, name="contribution")
+
+    # ---------------------------------------------------------------------------
+    # Extended methods for expense integration
+    # ---------------------------------------------------------------------------
+
+    def gross_income(
+        self,
+        months: int,
+        *,
+        start: Optional[date] = None,
+        seed: Optional[int] = None,
+        n_sims: int = 1,
+    ) -> np.ndarray:
+        """
+        Total income before expenses (I_t = y_fixed + y_variable).
+
+        This is equivalent to project(output="array")["total"].
+
+        Parameters
+        ----------
+        months : int
+            Number of months to project.
+        start : date, optional
+            Start date for calendar alignment.
+        seed : int, optional
+            Random seed for variable income.
+        n_sims : int, default 1
+            Number of Monte Carlo simulations.
+
+        Returns
+        -------
+        np.ndarray
+            If n_sims=1: shape (months,)
+            If n_sims>1: shape (n_sims, months)
+        """
+        result = self.project(months, start=start, seed=seed, output="array", n_sims=n_sims)
+        return result["total"]
+
+    def net_income(
+        self,
+        months: int,
+        *,
+        start: Optional[date] = None,
+        seed: Optional[int] = None,
+        n_sims: int = 1,
+    ) -> np.ndarray:
+        """
+        Income after expenses: Net_t = I_t - C_t.
+
+        Can be negative if expenses exceed income in some months.
+
+        Parameters
+        ----------
+        months : int
+            Number of months to project.
+        start : date, optional
+            Start date for calendar alignment.
+        seed : int, optional
+            Random seed for stochastic components.
+        n_sims : int, default 1
+            Number of Monte Carlo simulations.
+
+        Returns
+        -------
+        np.ndarray
+            If n_sims=1: shape (months,)
+            If n_sims>1: shape (n_sims, months)
+
+        Notes
+        -----
+        If no expense model is configured, returns gross_income (no expense deduction).
+        """
+        gross = self.gross_income(months, start=start, seed=seed, n_sims=n_sims)
+        
+        if self.expenses is None:
+            return gross
+        
+        # Use different seed offset for expenses to ensure independence
+        expense_seed = seed + 1000 if seed is not None else None
+        expense_result = self.expenses.project(
+            months, start=start, seed=expense_seed, output="array", n_sims=n_sims
+        )
+        expense_total = expense_result["total"]
+        
+        # Handle dimension consistency
+        if n_sims == 1 and gross.ndim == 1 and expense_total.ndim == 1:
+            return gross - expense_total
+        elif n_sims == 1:
+            # Flatten if needed
+            return gross.flatten() - expense_total.flatten()
+        else:
+            return gross - expense_total
+
+    def disposable_income(
+        self,
+        months: int,
+        *,
+        start: Optional[date] = None,
+        seed: Optional[int] = None,
+        n_sims: int = 1,
+    ) -> np.ndarray:
+        """
+        Non-negative disposable income: D_t = max(0, I_t - C_t).
+
+        Clamps net income to zero (cannot spend more than earned for savings).
+
+        Parameters
+        ----------
+        months : int
+            Number of months to project.
+        start : date, optional
+            Start date for calendar alignment.
+        seed : int, optional
+            Random seed for stochastic components.
+        n_sims : int, default 1
+            Number of Monte Carlo simulations.
+
+        Returns
+        -------
+        np.ndarray
+            If n_sims=1: shape (months,)
+            If n_sims>1: shape (n_sims, months)
+            All values >= 0.
+        """
+        net = self.net_income(months, start=start, seed=seed, n_sims=n_sims)
+        return np.maximum(net, 0.0)
+
+    def contributions_from_disposable(
+        self,
+        months: int,
+        *,
+        savings_rate: Union[float, np.ndarray] = 0.3,
+        start: Optional[date] = None,
+        seed: Optional[int] = None,
+        n_sims: int = 1,
+    ) -> np.ndarray:
+        """
+        Contributions as fraction of disposable income: A_t = savings_rate * D_t.
+
+        Alternative to contributions() that first deducts expenses.
+
+        Parameters
+        ----------
+        months : int
+            Number of months to project.
+        savings_rate : float or ndarray, default 0.3
+            Fraction of disposable income to save.
+            - float: constant rate for all months
+            - ndarray shape (12,): monthly rotating rates (Jan=0, ..., Dec=11)
+            - ndarray shape (months,): specific rate per month
+        start : date, optional
+            Start date for calendar alignment.
+        seed : int, optional
+            Random seed for stochastic components.
+        n_sims : int, default 1
+            Number of Monte Carlo simulations.
+
+        Returns
+        -------
+        np.ndarray
+            If n_sims=1: shape (months,)
+            If n_sims>1: shape (n_sims, months)
+
+        Notes
+        -----
+        This method is useful when you want to model:
+        1. Gross income (salary)
+        2. Minus expenses (rent, food, etc.)
+        3. Equals disposable income
+        4. Times savings_rate = contributions
+
+        Example
+        -------
+        >>> model = IncomeModel(fixed=fi, variable=vi, expenses=em)
+        >>> A = model.contributions_from_disposable(24, savings_rate=0.4)
+        """
+        D = self.disposable_income(months, start=start, seed=seed, n_sims=n_sims)
+        
+        # Handle savings_rate
+        if isinstance(savings_rate, (int, float)):
+            rate = float(savings_rate)
+            return rate * D
+        
+        savings_rate = np.asarray(savings_rate)
+        
+        if savings_rate.shape == (12,):
+            # Rotate based on start month
+            offset = normalize_start_month(start)
+            rate_full = savings_rate[(offset + np.arange(months)) % 12]
+        else:
+            rate_full = savings_rate[:months]
+        
+        # Broadcast for n_sims
+        if n_sims == 1 or D.ndim == 1:
+            return rate_full * D
+        else:
+            return rate_full[None, :] * D
 
     def plot_income(
         self,
@@ -1131,7 +1341,8 @@ class IncomeModel:
         
         # Variable income: vectorized generation
         sims = None
-        if (show_trajectories or show_confidence_band) and hasattr(self, "variable") and self.variable.sigma > 0:
+        has_variable = self.variable is not None and hasattr(self.variable, "sigma") and self.variable.sigma > 0
+        if (show_trajectories or show_confidence_band) and has_variable:
 
             sims = self.variable.project(
                 months=months, 
@@ -1149,8 +1360,11 @@ class IncomeModel:
             else:
                 lower_perc = upper_perc = None
         else:
-            # Deterministic or no trajectories needed
-            var_mean = self.variable.project(months=months, start=start, output="array")
+            # Deterministic or no variable income or no trajectories needed
+            if self.variable is not None:
+                var_mean = self.variable.project(months=months, start=start, output="array")
+            else:
+                var_mean = np.zeros(months, dtype=float)
             lower_perc = upper_perc = None
 
         total_mean = fixed_arr + var_mean
@@ -1418,7 +1632,8 @@ class IncomeModel:
 
         # Generate simulations if needed (VECTORIZED)
         sims = None
-        if (show_trajectories or show_confidence_band) and hasattr(self.variable, "sigma") and self.variable.sigma > 0:
+        has_variable = self.variable is not None and hasattr(self.variable, "sigma") and self.variable.sigma > 0
+        if (show_trajectories or show_confidence_band) and has_variable:
             sims = self.contributions(
                 months, 
                 start=start, 
@@ -1708,7 +1923,7 @@ class IncomeModel:
 
     # -------------------------- Serialization helpers ----------------------
     def to_dict(self) -> dict:
-        return {
+        result = {
             "fixed": {
                 "base": self.fixed.base,
                 "annual_growth": self.fixed.annual_growth,
@@ -1716,7 +1931,9 @@ class IncomeModel:
                                 else {d.isoformat(): v for d, v in self.fixed.salary_raises.items()},
                 "name": self.fixed.name,
             },
-            "variable": {
+        }
+        if self.variable is not None:
+            result["variable"] = {
                 "base": self.variable.base,
                 "seasonality": None if self.variable.seasonality is None else list(self.variable.seasonality),
                 "sigma": self.variable.sigma,
@@ -1725,13 +1942,13 @@ class IncomeModel:
                 "annual_growth": self.variable.annual_growth,
                 "name": self.variable.name,
                 "seed": self.variable.seed,
-            },
-        }
+            }
+        return result
 
     @classmethod
     def from_dict(cls, payload: dict) -> "IncomeModel":
         fx = payload.get("fixed", {})
-        vr = payload.get("variable", {})
+        vr = payload.get("variable")
         fixed = FixedIncome(
             base=float(fx.get("base", 0.0)),
             annual_growth=float(fx.get("annual_growth", 0.0)),
@@ -1740,16 +1957,18 @@ class IncomeModel:
             },
             name=str(fx.get("name", "fixed")),
         )
-        variable = VariableIncome(
-            base=float(vr.get("base", 0.0)),
-            seasonality=vr.get("seasonality"),
-            sigma=float(vr.get("sigma", 0.0)),
-            floor=vr.get("floor"),
-            cap=vr.get("cap"),
-            annual_growth=float(vr.get("annual_growth", 0.0)),
-            name=str(vr.get("name", "variable")),
-            seed=vr.get("seed"),
-        )
+        variable = None
+        if vr is not None:
+            variable = VariableIncome(
+                base=float(vr.get("base", 0.0)),
+                seasonality=vr.get("seasonality"),
+                sigma=float(vr.get("sigma", 0.0)),
+                floor=vr.get("floor"),
+                cap=vr.get("cap"),
+                annual_growth=float(vr.get("annual_growth", 0.0)),
+                name=str(vr.get("name", "variable")),
+                seed=vr.get("seed"),
+            )
         return cls(fixed=fixed, variable=variable)
 
     

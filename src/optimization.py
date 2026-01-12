@@ -361,7 +361,8 @@ class AllocationOptimizer(ABC):
         R: np.ndarray,
         W0: np.ndarray,
         portfolio: Portfolio,
-        goal_set: GoalSet
+        goal_set: GoalSet,
+        Y: Optional[np.ndarray] = None
     ) -> bool:
         """
         Check if allocation X satisfies all goals using exact SAA.
@@ -381,6 +382,8 @@ class AllocationOptimizer(ABC):
             Portfolio instance 
         goal_set : GoalSet
             Validated goal collection
+        Y : np.ndarray, shape (T, M), optional
+            Fixed withdrawal schedule. If None, no withdrawals applied.
         
         Returns
         -------
@@ -400,7 +403,8 @@ class AllocationOptimizer(ABC):
         result = portfolio.simulate(
             A=A, R=R, X=X_normalized, 
             method="affine", 
-            W0_override=W0
+            W0_override=W0,
+            Y=Y
         )
         W = result["wealth"]  # (n_sims, T+1, M)
         
@@ -671,6 +675,7 @@ class CVaROptimizer(AllocationOptimizer):
         W0: np.ndarray,
         goal_set: GoalSet,
         X_init: Optional[np.ndarray] = None,
+        Y: Optional[np.ndarray] = None,
         **solver_kwargs
     ) -> OptimizationResult:
         """
@@ -693,6 +698,19 @@ class CVaROptimizer(AllocationOptimizer):
             Must be created by caller before calling solve().
         X_init : ndarray, optional
             Initial guess for allocations (ignored by CVXPY)
+        Y : ndarray, shape (T, M), optional
+            Fixed withdrawal schedule for rewards/goals.
+            Y[t, m] = withdrawal from account m at time t.
+            If None, no withdrawals are applied.
+            This extends the wealth dynamics to:
+            W_{t+1}^m = (W_t^m + A_t x_t^m - Y_t^m)(1 + R_t^m)
+        **solver_kwargs
+            Additional solver options:
+            - solver : {'ECOS', 'SCS', 'CLARABEL'}, default='ECOS'
+            - verbose : bool, default=False
+            - max_iters : int, default=10000
+            - abstol : float, default=1e-7 (absolute tolerance)
+            - reltol : float, default=1e-6 (relative tolerance)
         **solver_kwargs
             Additional solver options:
             - solver : {'ECOS', 'SCS', 'CLARABEL'}, default='ECOS'
@@ -762,6 +780,16 @@ class CVaROptimizer(AllocationOptimizer):
                 f"goal_set.M={goal_set.M} != n_accounts={M}"
             )
         
+        # Validate and handle Y (withdrawals)
+        if Y is None:
+            Y_data = np.zeros((T, M))
+        else:
+            if Y.shape != (T, M):
+                raise ValueError(f"Y must have shape ({T}, {M}), got {Y.shape}")
+            if np.any(Y < 0):
+                raise ValueError("Y (withdrawals) must be non-negative")
+            Y_data = Y
+        
         # Extract solver options
         solver_name = solver_kwargs.get('solver', 'ECOS')
         verbose = solver_kwargs.get('verbose', False)
@@ -787,17 +815,23 @@ class CVaROptimizer(AllocationOptimizer):
         
         def build_wealth_affine(t: int, m: int):
             """
-            Build affine expression for wealth: W[:,t,m] = b + Φ @ X[:t,m]
+            Build affine expression for wealth with withdrawals.
+            
+            Extended formulation:
+                W[:,t,m] = b + Φ_A @ X[:t,m] - Φ_Y @ Y[:t,m]
             
             Mathematical formulation:
-                W[i,t,m] = W0[m] * F[i,0,t,m] + Σ_{s=0}^{t-1} A[i,s] * X[s,m] * F[i,s,t,m]
+                W[i,t,m] = W0[m] * F[i,0,t,m] 
+                         + Σ_{s=0}^{t-1} A[i,s] * X[s,m] * F[i,s,t,m]
+                         - Σ_{s=0}^{t-1} Y[s,m] * F[i,s,t,m]
             
             Matrix form:
-                W[:,t,m] = b_{t,m} + Φ_{t,m} @ X[:t,m]
+                W[:,t,m] = b_{t,m} + Φ_{t,m} @ X[:t,m] - withdrawal_term
                 
                 where:
                 - b[i] = W0[m] * F[i,0,t,m]  (constant term)
-                - Φ[i,s] = A[i,s] * F[i,s,t,m]  (coefficient matrix)
+                - Φ[i,s] = A[i,s] * F[i,s,t,m]  (contribution coefficient matrix)
+                - withdrawal_term = Σ_{s<t} Y[s,m] * F[i,s,t,m]  (fixed withdrawals)
             
             Parameters
             ----------
@@ -816,15 +850,20 @@ class CVaROptimizer(AllocationOptimizer):
             b = W0[m] * F[:, 0, t, m]  # shape: (n_sims,)
             
             if t == 0:
-                return b  # No contributions before t=0
+                return b  # No contributions/withdrawals before t=0
             
-            # Coefficient matrix: Φ[i,s] = A[i,s] * F[i,s,t,m]
-            # Element-wise multiplication creates the affine coefficients
+            # Coefficient matrix for contributions: Φ[i,s] = A[i,s] * F[i,s,t,m]
             Phi = A[:, :t] * F[:, :t, t, m]  # shape: (n_sims, t)
             
-            # Wealth = constant + matrix @ decision_vars
-            # W[:,t,m] = b + Φ @ X[:t,m]
-            return b + Phi @ X[:t, m]
+            # Contribution term (affine in X)
+            contribution_term = Phi @ X[:t, m]
+            
+            # Withdrawal term (constant, since Y_data is fixed)
+            # withdrawal_term[i] = Σ_{s<t} Y[s,m] * F[i,s,t,m]
+            withdrawal_term = (F[:, :t, t, m] * Y_data[:t, m]).sum(axis=1)  # shape: (n_sims,)
+            
+            # Wealth = constant + contributions - withdrawals
+            return b + contribution_term - withdrawal_term
         
         # ============= CONSTRAINTS =============
         
@@ -967,11 +1006,14 @@ class CVaROptimizer(AllocationOptimizer):
             # Return infeasible result with uniform allocation fallback
             X_star = np.ones((T, M)) / M
             
+            total_withdrawals = Y_data.sum() if Y_data is not None else 0.0
             diagnostics = {
                 'solver_status': prob.status,
                 'solver_time': solve_time,
                 'optimal_value': None,
                 'solver_name': solver_name,
+                'total_withdrawals': total_withdrawals,
+                'has_withdrawals': total_withdrawals > 0,
             }
             
             return OptimizationResult(
@@ -1032,6 +1074,7 @@ class CVaROptimizer(AllocationOptimizer):
                 W = W0[m] * F[:, 0, t, m]
                 for s in range(t):
                     W += A[:, s] * X[s, m] * F[:, s, t, m]
+                    W -= Y_data[s, m] * F[:, s, t, m]  # Subtract withdrawals
                 return W
             
             # Validate CVaR constraints and goal satisfaction
@@ -1081,10 +1124,12 @@ class CVaROptimizer(AllocationOptimizer):
         feasible = self._check_feasibility(
             X_star, A, R, W0, 
             portfolio,
-            goal_set
+            goal_set,
+            Y=Y_data
         )
         
         # Package diagnostics
+        total_withdrawals = Y_data.sum() if Y_data is not None else 0.0
         diagnostics = {
             'solver_status': prob.status,
             'solver_time': solve_time,
@@ -1093,6 +1138,8 @@ class CVaROptimizer(AllocationOptimizer):
             'n_constraints': len(constraints),
             'n_variables': T * M + len(gamma) * (1 + n_sims),
             'objective_type': self.objective,
+            'total_withdrawals': total_withdrawals,
+            'has_withdrawals': total_withdrawals > 0,
         }
         
         return OptimizationResult(
@@ -1181,6 +1228,7 @@ class GoalSeeker:
         n_sims: int = 500,
         seed: Optional[int] = None,
         search_method: str = "binary",
+        Y: Optional[np.ndarray] = None,
         **solver_kwargs
     ) -> OptimizationResult:
         """
@@ -1282,12 +1330,12 @@ class GoalSeeker:
         if search_method == "linear":
             return self._linear_search(
                 T_start, goal_set, A_generator, R_generator, 
-                W0, n_sims, seed, **solver_kwargs
+                W0, n_sims, seed, Y=Y, **solver_kwargs
             )
         elif search_method == "binary":
             return self._binary_search(
                 T_start, goal_set, A_generator, R_generator,
-                W0, n_sims, seed, **solver_kwargs
+                W0, n_sims, seed, Y=Y, **solver_kwargs
             )
         else:
             raise ValueError(f"Unknown search_method: {search_method}")
@@ -1301,6 +1349,7 @@ class GoalSeeker:
         W0: np.ndarray,
         n_sims: int,
         seed: Optional[int],
+        Y: Optional[np.ndarray] = None,
         **solver_kwargs
     ) -> OptimizationResult:
         """
@@ -1316,10 +1365,14 @@ class GoalSeeker:
             A = A_generator(T, n_sims, seed)
             R = R_generator(T, n_sims, None if seed is None else seed + 1)
             
+            # Slice Y to current horizon if provided
+            Y_T = Y[:T, :] if Y is not None else None
+            
             result = self.optimizer.solve(
                 T=T, A=A, R=R, W0=W0,
                 goal_set=goal_set,
                 X_init=X_prev,
+                Y=Y_T,
                 **solver_kwargs
             )
             
@@ -1350,6 +1403,7 @@ class GoalSeeker:
         W0: np.ndarray,
         n_sims: int,
         seed: Optional[int],
+        Y: Optional[np.ndarray] = None,
         **solver_kwargs
     ) -> OptimizationResult:
         """
@@ -1386,6 +1440,9 @@ class GoalSeeker:
             A = A_generator(mid, n_sims, seed)
             R = R_generator(mid, n_sims, None if seed is None else seed + 1)
             
+            # Slice Y to current horizon if provided
+            Y_T = Y[:mid, :] if Y is not None else None
+            
             # Warm start: if we have a previous result, extend it
             X_init = None
             if best_result is not None and best_result.T < mid:
@@ -1400,6 +1457,7 @@ class GoalSeeker:
                 T=mid, A=A, R=R, W0=W0,
                 goal_set=goal_set,
                 X_init=X_init,
+                Y=Y_T,
                 **solver_kwargs
             )
             
@@ -1429,10 +1487,14 @@ class GoalSeeker:
         A = A_generator(left, n_sims, seed)
         R = R_generator(left, n_sims, None if seed is None else seed + 1)
         
+        # Slice Y for final check
+        Y_left = Y[:left, :] if Y is not None else None
+        
         result = self.optimizer.solve(
             T=left, A=A, R=R, W0=W0,
             goal_set=goal_set,
             X_init=None,
+            Y=Y_left,
             **solver_kwargs
         )
         

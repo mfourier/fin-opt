@@ -7,6 +7,7 @@ to verify all components work together correctly.
 
 from datetime import date
 import numpy as np
+import pandas as pd
 import pytest
 
 from src.income import FixedIncome, VariableIncome, IncomeModel
@@ -111,8 +112,10 @@ class TestFullWorkflow:
 
             # Verify optimization result
             assert result is not None
-            assert hasattr(result, 'wealth')
-            assert hasattr(result, 'allocation')
+            # OptimizationResult has X (allocation matrix), T, objective_value, feasible
+            assert hasattr(result, 'X')
+            assert hasattr(result, 'feasible')
+            assert result.X.shape[1] == 2  # 2 accounts
 
         except ImportError:
             pytest.skip("cvxpy not installed - skipping optimization test")
@@ -120,7 +123,8 @@ class TestFullWorkflow:
     def test_model_caching(self):
         """Test that simulation results are cached correctly."""
         fixed = FixedIncome(base=1_500_000)
-        income = IncomeModel(fixed=fixed)
+        variable = VariableIncome(base=0, sigma=0.0)  # Minimal variable for API compatibility
+        income = IncomeModel(fixed=fixed, variable=variable)
         accounts = [Account.from_annual("Test", 0.08, 0.10)]
 
         model = FinancialModel(income=income, accounts=accounts)
@@ -142,7 +146,8 @@ class TestFullWorkflow:
     def test_metrics_computation(self):
         """Test that metrics are computed correctly on simulation results."""
         fixed = FixedIncome(base=1_500_000, annual_growth=0.0)
-        income = IncomeModel(fixed=fixed)
+        variable = VariableIncome(base=0, sigma=0.0)  # Minimal variable for API compatibility
+        income = IncomeModel(fixed=fixed, variable=variable)
         accounts = [Account.from_annual("Test", 0.08, 0.10)]
 
         model = FinancialModel(income=income, accounts=accounts)
@@ -150,23 +155,32 @@ class TestFullWorkflow:
         X = np.ones((12, 1))
         result = model.simulate(T=12, n_sims=100, X=X, seed=42)
 
-        # Compute metrics
+        # Compute per-simulation metrics
         metrics = result.metrics()
 
-        # Verify metrics structure
-        assert isinstance(metrics, dict)
-        assert "mean_final_wealth" in metrics
-        assert "median_final_wealth" in metrics
-        assert "total_contributions" in metrics
+        # Verify metrics structure - returns DataFrame with per-sim metrics
+        assert isinstance(metrics, pd.DataFrame)
+        assert "cagr" in metrics.columns
+        assert "volatility" in metrics.columns
+        assert "sharpe" in metrics.columns
+
+        # Compute aggregate metrics (distribution-level)
+        agg_metrics = result.aggregate_metrics()
+
+        # Verify aggregate metrics structure
+        assert isinstance(agg_metrics, pd.DataFrame)
+        assert "mean_final" in agg_metrics.columns
+        assert "median_final" in agg_metrics.columns
 
         # Values should be reasonable
-        assert metrics["mean_final_wealth"] > 0
-        assert metrics["total_contributions"] > 0
+        assert agg_metrics.loc["Test", "mean_final"] > 0
+        assert result.contributions.sum() > 0
 
     def test_multiple_goals(self):
         """Test model with both intermediate and terminal goals."""
         fixed = FixedIncome(base=2_000_000, annual_growth=0.02)
-        income = IncomeModel(fixed=fixed)
+        variable = VariableIncome(base=0, sigma=0.0)  # Minimal variable for API compatibility
+        income = IncomeModel(fixed=fixed, variable=variable)
 
         accounts = [
             Account.from_annual("Emergency", 0.04, 0.05),
@@ -190,17 +204,16 @@ class TestFullWorkflow:
             ),
         ]
 
-        # Verify goals are valid
-        from src.goals import GoalSet, check_goals
+        # Verify goals work with GoalSet
+        from src.goals import GoalSet
 
-        check_goals(goals)
         goal_set = GoalSet(
             goals=goals,
             accounts=accounts,
             start_date=date(2025, 1, 1)
         )
 
-        assert len(goal_set.goals) == 2
+        assert len(goal_set.intermediate_goals) + len(goal_set.terminal_goals) == 2
         assert goal_set.T_min == 6  # Minimum from intermediate goal
 
     def test_reproducibility(self):
@@ -226,7 +239,8 @@ class TestFullWorkflow:
     def test_large_scale_simulation(self):
         """Test model handles larger simulations efficiently."""
         fixed = FixedIncome(base=1_500_000)
-        income = IncomeModel(fixed=fixed)
+        variable = VariableIncome(base=0, sigma=0.0)  # Minimal variable for API compatibility
+        income = IncomeModel(fixed=fixed, variable=variable)
         accounts = [Account.from_annual("Test", 0.08, 0.10)]
 
         model = FinancialModel(income=income, accounts=accounts)
@@ -253,7 +267,9 @@ class TestEdgeCases:
 
     def test_zero_initial_wealth(self):
         """Test model with zero initial wealth (contribution-driven)."""
-        income = IncomeModel(fixed=FixedIncome(base=1_000_000))
+        fixed = FixedIncome(base=1_000_000)
+        variable = VariableIncome(base=0, sigma=0.0)  # Minimal variable for API compatibility
+        income = IncomeModel(fixed=fixed, variable=variable)
         accounts = [Account.from_annual("Test", 0.08, 0.10, initial_wealth=0)]
 
         model = FinancialModel(income=income, accounts=accounts)
@@ -269,7 +285,9 @@ class TestEdgeCases:
 
     def test_invalid_allocation_policy(self):
         """Test that invalid allocation policy raises error."""
-        income = IncomeModel(fixed=FixedIncome(base=1_000_000))
+        fixed = FixedIncome(base=1_000_000)
+        variable = VariableIncome(base=0, sigma=0.0)  # Minimal variable for API compatibility
+        income = IncomeModel(fixed=fixed, variable=variable)
         accounts = [Account.from_annual("A", 0.08, 0.10)]
 
         model = FinancialModel(income=income, accounts=accounts)
@@ -282,7 +300,9 @@ class TestEdgeCases:
 
     def test_mismatched_dimensions(self):
         """Test error handling for dimension mismatches."""
-        income = IncomeModel(fixed=FixedIncome(base=1_000_000))
+        fixed = FixedIncome(base=1_000_000)
+        variable = VariableIncome(base=0, sigma=0.0)  # Minimal variable for API compatibility
+        income = IncomeModel(fixed=fixed, variable=variable)
         accounts = [
             Account.from_annual("A", 0.08, 0.10),
             Account.from_annual("B", 0.12, 0.15),

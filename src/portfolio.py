@@ -464,13 +464,15 @@ class Portfolio:
         R: np.ndarray,  # Returns: (n_sims, T, M)
         X: np.ndarray,  # Allocations: (T, M)
         method: Literal["recursive", "affine"] = "affine",
-        W0_override: Optional[np.ndarray] = None
+        W0_override: Optional[np.ndarray] = None,
+        Y: Optional[np.ndarray] = None  # Withdrawals: (T, M) or (n_sims, T, M)
     ) -> dict:
         """
-        Execute wealth dynamics W_{t+1}^m = (W_t^m + A_t^m)(1 + R_t^m).
+        Execute wealth dynamics W_{t+1}^m = (W_t^m + A_t^m - Y_t^m)(1 + R_t^m).
         
-        Supports batch processing of Monte Carlo samples with automatic broadcasting
-        and optional initial wealth override for optimization scenarios.
+        Supports batch processing of Monte Carlo samples with automatic broadcasting,
+        optional initial wealth override for optimization scenarios, and planned
+        withdrawals for reward/goal funding.
         
         Parameters
         ----------
@@ -485,12 +487,17 @@ class Portfolio:
             Must satisfy: X[t, :].sum() = 1, X[t, m] ≥ 0.
         method : {"recursive", "affine"}, default "affine"
             Computation method:
-            - "recursive": iterative W_{t+1} = (W_t + A_t)(1+R_t)
-            - "affine": closed-form W_t = W_0 F_{0,t} + Σ_s A_s x_s F_{s,t}
+            - "recursive": iterative W_{t+1} = (W_t + A_t - Y_t)(1+R_t)
+            - "affine": closed-form W_t = W_0 F_{0,t} + Σ_s (A_s x_s - y_s) F_{s,t}
         W0_override : np.ndarray, shape (M,), optional
             Override initial wealth vector. If None, uses self.initial_wealth_vector.
             Useful for optimization scenarios where W0 varies without creating
             temporary Account objects.
+        Y : np.ndarray, optional
+            Planned withdrawals (for rewards/goals).
+            - Shape (T, M): deterministic withdrawals (broadcast across simulations)
+            - Shape (n_sims, T, M): stochastic withdrawals per simulation
+            - None: no withdrawals (equivalent to Y=0)
         
         Returns
         -------
@@ -584,11 +591,31 @@ class Portfolio:
         else:
             raise ValueError(f"A must be 1D or 2D, got shape {A.shape}")
         
+        # Handle Y (withdrawals) - default to zeros if not provided
+        if Y is None:
+            Y_expanded = np.zeros((n_sims, T, M))
+        elif Y.ndim == 2:
+            # Deterministic: (T, M) → broadcast to (n_sims, T, M)
+            if Y.shape != (T, M):
+                raise ValueError(f"Y shape {Y.shape} != expected ({T}, {M})")
+            Y_expanded = np.broadcast_to(Y, (n_sims, T, M)).copy()
+        elif Y.ndim == 3:
+            # Stochastic: (n_sims, T, M)
+            if Y.shape != (n_sims, T, M):
+                raise ValueError(f"Y shape {Y.shape} != expected ({n_sims}, {T}, {M})")
+            Y_expanded = Y
+        else:
+            raise ValueError(f"Y must be 2D or 3D, got shape {Y.shape}")
+        
+        # Validate Y is non-negative
+        if np.any(Y_expanded < 0):
+            raise ValueError("Y (withdrawals) must be non-negative")
+        
         # Dispatch to computation method
         if method == "recursive":
-            W = self._simulate_recursive(A_expanded, R, X, W0_override)
+            W = self._simulate_recursive(A_expanded, R, X, W0_override, Y_expanded)
         elif method == "affine":
-            W = self._simulate_affine(A_expanded, R, X, W0_override)
+            W = self._simulate_affine(A_expanded, R, X, W0_override, Y_expanded)
         else:
             raise ValueError(f"method must be 'recursive' or 'affine', got {method}")
         
@@ -605,10 +632,11 @@ class Portfolio:
         A: np.ndarray,  # (n_sims, T)
         R: np.ndarray,  # (n_sims, T, M)
         X: np.ndarray,  # (T, M)
-        W0_override: Optional[np.ndarray] = None
+        W0_override: Optional[np.ndarray] = None,
+        Y: Optional[np.ndarray] = None  # (n_sims, T, M)
     ) -> np.ndarray:
         """
-        Recursive wealth dynamics: W_{t+1}^m = (W_t^m + A_t^m)(1 + R_t^m).
+        Recursive wealth dynamics: W_{t+1}^m = (W_t^m + A_t^m - Y_t^m)(1 + R_t^m).
         
         Vectorized over simulations (no Python loops over n_sims).
         
@@ -616,6 +644,8 @@ class Portfolio:
         ----------
         W0_override : np.ndarray, shape (M,), optional
             Override initial wealth. If None, uses self.initial_wealth_vector.
+        Y : np.ndarray, shape (n_sims, T, M), optional
+            Withdrawals per period and account. If None, defaults to zeros.
         
         Returns
         -------
@@ -623,6 +653,10 @@ class Portfolio:
         """
         n_sims, T, M = R.shape
         W0 = W0_override if W0_override is not None else self.initial_wealth_vector
+        
+        # Default Y to zeros if not provided
+        if Y is None:
+            Y = np.zeros((n_sims, T, M))
         
         # Initialize wealth
         W = np.zeros((n_sims, T + 1, M))
@@ -634,9 +668,9 @@ class Portfolio:
             # Broadcasting: (n_sims, 1) * (1, M) → (n_sims, M)
             A_allocated = A[:, t, None] * X[t, :]
             
-            # W_{t+1} = (W_t + A_t) * (1 + R_t)
+            # W_{t+1} = (W_t + A_t - Y_t) * (1 + R_t)
             # All operations vectorized over n_sims
-            W[:, t + 1, :] = (W[:, t, :] + A_allocated) * (1 + R[:, t, :])
+            W[:, t + 1, :] = (W[:, t, :] + A_allocated - Y[:, t, :]) * (1 + R[:, t, :])
         
         return W
     
@@ -645,17 +679,20 @@ class Portfolio:
         A: np.ndarray,  # (n_sims, T)
         R: np.ndarray,  # (n_sims, T, M)
         X: np.ndarray,  # (T, M)
-        W0_override: Optional[np.ndarray] = None
+        W0_override: Optional[np.ndarray] = None,
+        Y: Optional[np.ndarray] = None  # (n_sims, T, M)
     ) -> np.ndarray:
         """
-        Affine wealth representation: W_t^m = W_0^m F_{0,t}^m + Σ_s A_s x_s^m F_{s,t}^m.
+        Affine wealth representation: W_t^m = W_0^m F_{0,t}^m + Σ_s (A_s x_s^m - y_s^m) F_{s,t}^m.
         
-        Closed-form formula, useful for optimization (wealth is linear in X).
+        Closed-form formula, useful for optimization (wealth is linear in X and Y).
         
         Parameters
         ----------
         W0_override : np.ndarray, shape (M,), optional
             Override initial wealth. If None, uses self.initial_wealth_vector.
+        Y : np.ndarray, shape (n_sims, T, M), optional
+            Withdrawals per period and account. If None, defaults to zeros.
         
         Returns
         -------
@@ -663,6 +700,10 @@ class Portfolio:
         """
         n_sims, T, M = R.shape
         W0 = W0_override if W0_override is not None else self.initial_wealth_vector
+        
+        # Default Y to zeros if not provided
+        if Y is None:
+            Y = np.zeros((n_sims, T, M))
         
         # Compute accumulation factors: (n_sims, T+1, T+1, M)
         F = self.compute_accumulation_factors(R)
@@ -677,12 +718,14 @@ class Portfolio:
             # Broadcasting: (M,) * (n_sims, M) → (n_sims, M)
             W[:, t, :] = W0 * F[:, 0, t, :]
             
-            # Contribution term: Σ_{s=0}^{t-1} A_s x_s^m F_{s,t}^m
+            # Contribution and withdrawal term: Σ_{s=0}^{t-1} (A_s x_s^m - y_s^m) F_{s,t}^m
             for s in range(t):
                 # Allocate: A_s * X[s,:]: (n_sims, 1) * (1, M) → (n_sims, M)
                 contrib = A[:, s, None] * X[s, :]
-                # contrib * F_{s,t}^m: (n_sims, M) * (n_sims, M) → (n_sims, M)
-                W[:, t, :] += contrib * F[:, s, t, :]
+                # Net flow = contribution - withdrawal
+                net_flow = contrib - Y[:, s, :]
+                # net_flow * F_{s,t}^m: (n_sims, M) * (n_sims, M) → (n_sims, M)
+                W[:, t, :] += net_flow * F[:, s, t, :]
         
         return W
     
