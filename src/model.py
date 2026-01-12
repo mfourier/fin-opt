@@ -1093,9 +1093,7 @@ class FinancialModel:
                     months=T,
                     n_sims=n,
                     seed=s,
-                    output="array",
-                    start=start_date,
-                    expenses=expenses
+                    start=start_date
                 )
             else:
                 return self.income.contributions(

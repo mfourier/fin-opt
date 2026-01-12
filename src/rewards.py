@@ -191,15 +191,26 @@ class RewardSchedule:
     >>> Y[2, 0]  # Laptop at month 3 (0-indexed: 2)
     1000000.0
     """
-    rewards: List[Reward]
+    rewards: List[Reward] = field(default_factory=list)
     withdrawal_policy: Literal["proportional", "priority", "single_account"] = "proportional"
     default_account: Optional[Union[int, str]] = None
 
     def __post_init__(self) -> None:
-        if not self.rewards:
-            raise ValueError("rewards list cannot be empty")
         if self.withdrawal_policy == "single_account" and self.default_account is None:
             raise ValueError("single_account policy requires default_account")
+
+    def add(self, reward: Reward) -> None:
+        """
+        Add a reward to the schedule.
+
+        Parameters
+        ----------
+        reward : Reward
+            The reward to add.
+        """
+        if not isinstance(reward, Reward):
+            raise TypeError(f"Expected Reward, got {type(reward)}")
+        self.rewards.append(reward)
 
     def _resolve_account(
         self,

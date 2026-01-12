@@ -53,7 +53,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Dict, Iterable, Optional, Literal, Union, TYPE_CHECKING
+from typing import Dict, Iterable, Optional, Literal, Union, TYPE_CHECKING, List
 
 import numpy as np
 import pandas as pd
@@ -695,8 +695,8 @@ class IncomeModel:
     ...
     """
     
-    fixed: FixedIncome
-    variable: Optional[VariableIncome] = None
+    fixed: Union[FixedIncome, List[FixedIncome]]
+    variable: Optional[Union[VariableIncome, List[VariableIncome]]] = None
     name_fixed: str = field(default="fixed", init=True)
     name_variable: str = field(default="variable", init=True)
     monthly_contribution: dict = None
@@ -816,9 +816,30 @@ class IncomeModel:
                 return pd.Series(dtype=float, index=idx, name="total")
         
         # Get arrays: shape (n_sims, months) or (months,)
-        fixed_arr = self.fixed.project(months, start=start, output="array", n_sims=n_sims)
+        if isinstance(self.fixed, list):
+            # Sum up list of fixed incomes
+            projections = [
+                f.project(months, start=start, output="array", n_sims=n_sims)
+                for f in self.fixed
+            ]
+            fixed_arr = sum(projections)
+        else:
+            fixed_arr = self.fixed.project(months, start=start, output="array", n_sims=n_sims)
+
         if self.variable is not None:
-            variable_arr = self.variable.project(months, start=start, seed=seed, output="array", n_sims=n_sims)
+            if isinstance(self.variable, list):
+                # Sum up list of variable incomes with independent seeds
+                projections = []
+                for i, v in enumerate(self.variable):
+                    s = seed + i if seed is not None else None
+                    projections.append(v.project(
+                        months, start=start, seed=s, output="array", n_sims=n_sims
+                    ))
+                variable_arr = sum(projections)
+            else:
+                variable_arr = self.variable.project(
+                    months, start=start, seed=seed, output="array", n_sims=n_sims
+                )
         else:
             # No variable income - return zeros
             shape = (n_sims, months) if n_sims > 1 else (months,)
@@ -947,9 +968,28 @@ class IncomeModel:
                 return pd.Series(arr, index=idx, name="contribution")
 
         # Project incomes as arrays: shape (n_sims, months) or (months,)
-        fixed_arr = self.fixed.project(months, start=start, output="array", n_sims=n_sims)
+        if isinstance(self.fixed, list):
+            # Sum up list of fixed incomes
+            projections = [
+                f.project(months, start=start, output="array", n_sims=n_sims)
+                for f in self.fixed
+            ]
+            fixed_arr = sum(projections)
+        else:
+            fixed_arr = self.fixed.project(months, start=start, output="array", n_sims=n_sims)
+
         if self.variable is not None:
-            variable_arr = self.variable.project(months, start=start, seed=seed, output="array", n_sims=n_sims)
+            if isinstance(self.variable, list):
+                # Sum up list of variable incomes with independent seeds
+                projections = []
+                for i, v in enumerate(self.variable):
+                    s = seed + i if seed is not None else None
+                    projections.append(v.project(
+                        months, start=start, seed=s, output="array", n_sims=n_sims
+                    ))
+                variable_arr = sum(projections)
+            else:
+                variable_arr = self.variable.project(months, start=start, seed=seed, output="array", n_sims=n_sims)
         else:
             shape = (n_sims, months) if n_sims > 1 else (months,)
             variable_arr = np.zeros(shape, dtype=float)
@@ -1337,20 +1377,47 @@ class IncomeModel:
         fixed_col, var_col = self.name_fixed, self.name_variable
 
         # Fixed income: single projection (deterministic, replicated internally if needed)
-        fixed_arr = self.fixed.project(months=months, start=start, output="array")  # shape: (months,)
+        if isinstance(self.fixed, list):
+             projections = [
+                f.project(months=months, start=start, output="array") 
+                for f in self.fixed
+            ]
+             fixed_arr = sum(projections)
+        else:
+            fixed_arr = self.fixed.project(months=months, start=start, output="array")  # shape: (months,)
         
         # Variable income: vectorized generation
         sims = None
-        has_variable = self.variable is not None and hasattr(self.variable, "sigma") and self.variable.sigma > 0
-        if (show_trajectories or show_confidence_band) and has_variable:
+        has_variable = False
+        if self.variable is not None:
+            if isinstance(self.variable, list):
+                has_variable = any(hasattr(v, "sigma") and v.sigma > 0 for v in self.variable)
+            else:
+                has_variable = hasattr(self.variable, "sigma") and self.variable.sigma > 0
 
-            sims = self.variable.project(
-                months=months, 
-                start=start, 
-                seed=None,  
-                output="array", 
-                n_sims=n_simulations
-            )  # shape: (n_simulations, months)
+        if (show_trajectories or show_confidence_band) and has_variable:
+            if isinstance(self.variable, list):
+                projections = []
+                for i, v in enumerate(self.variable):
+                    # Use unique seeds based on instance to ensure diversity but reproducibility
+                    # Ideally we accept a seed in plot(), but here we synthesize
+                    s = i * 1234
+                    projections.append(v.project(
+                        months=months, 
+                        start=start, 
+                        seed=s,
+                        output="array", 
+                        n_sims=n_simulations
+                    ))
+                sims = sum(projections)
+            else:
+                sims = self.variable.project(
+                    months=months, 
+                    start=start, 
+                    seed=None,  
+                    output="array", 
+                    n_sims=n_simulations
+                )  # shape: (n_simulations, months)
             
             var_mean = sims.mean(axis=0)  # shape: (months,)
             
@@ -1362,7 +1429,14 @@ class IncomeModel:
         else:
             # Deterministic or no variable income or no trajectories needed
             if self.variable is not None:
-                var_mean = self.variable.project(months=months, start=start, output="array")
+                if isinstance(self.variable, list):
+                    projections = [
+                        v.project(months=months, start=start, output="array")
+                        for v in self.variable
+                    ]
+                    var_mean = sum(projections)
+                else:
+                    var_mean = self.variable.project(months=months, start=start, output="array")
             else:
                 var_mean = np.zeros(months, dtype=float)
             lower_perc = upper_perc = None
