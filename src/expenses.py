@@ -35,7 +35,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Dict, Iterable, Optional, Literal, Union, Tuple
+from typing import Dict, Iterable, Optional, Literal, Union, Tuple, List
 
 import numpy as np
 import pandas as pd
@@ -590,9 +590,9 @@ class ExpenseModel:
     >>> result["total"].shape
     (100, 12)
     """
-    fixed: Optional[FixedExpense] = None
-    variable: Optional[VariableExpense] = None
-    micro: Optional[MicroExpense] = None
+    fixed: Optional[Union[FixedExpense, List[FixedExpense]]] = None
+    variable: Optional[Union[VariableExpense, List[VariableExpense]]] = None
+    micro: Optional[Union[MicroExpense, List[MicroExpense]]] = None
 
     def __post_init__(self) -> None:
         if self.fixed is None and self.variable is None and self.micro is None:
@@ -641,8 +641,8 @@ class ExpenseModel:
         # Manage seeds for reproducibility
         if seed is not None:
             seed_fixed = seed
-            seed_variable = seed + 1
-            seed_micro = seed + 2
+            seed_variable = seed + 1000
+            seed_micro = seed + 2000
         else:
             seed_fixed = None
             seed_variable = None
@@ -650,25 +650,53 @@ class ExpenseModel:
 
         # Project each component
         if self.fixed is not None:
-            fixed_proj = self.fixed.project(months, start=start, output="array", n_sims=n_sims)
+            if isinstance(self.fixed, list):
+                projections = [
+                    f.project(months, start=start, output="array", n_sims=n_sims)
+                    for f in self.fixed
+                ]
+                fixed_proj = sum(projections)
+            else:
+                fixed_proj = self.fixed.project(months, start=start, output="array", n_sims=n_sims)
+            
             if n_sims == 1:
                 fixed_proj = fixed_proj[None, :]  # (1, months)
         else:
             fixed_proj = np.zeros((n_sims, months))
 
         if self.variable is not None:
-            variable_proj = self.variable.project(
-                months, start=start, seed=seed_variable, output="array", n_sims=n_sims
-            )
+            if isinstance(self.variable, list):
+                projections = []
+                for i, v in enumerate(self.variable):
+                    s = seed_variable + i if seed_variable is not None else None
+                    projections.append(v.project(
+                        months, start=start, seed=s, output="array", n_sims=n_sims
+                    ))
+                variable_proj = sum(projections)
+            else:
+                variable_proj = self.variable.project(
+                    months, start=start, seed=seed_variable, output="array", n_sims=n_sims
+                )
+
             if n_sims == 1:
                 variable_proj = variable_proj[None, :]
         else:
             variable_proj = np.zeros((n_sims, months))
 
         if self.micro is not None:
-            micro_proj = self.micro.project(
-                months, start=start, seed=seed_micro, output="array", n_sims=n_sims
-            )
+            if isinstance(self.micro, list):
+                projections = []
+                for i, m in enumerate(self.micro):
+                    s = seed_micro + i if seed_micro is not None else None
+                    projections.append(m.project(
+                        months, start=start, seed=s, output="array", n_sims=n_sims
+                    ))
+                micro_proj = sum(projections)
+            else:
+                micro_proj = self.micro.project(
+                    months, start=start, seed=seed_micro, output="array", n_sims=n_sims
+                )
+
             if n_sims == 1:
                 micro_proj = micro_proj[None, :]
         else:
