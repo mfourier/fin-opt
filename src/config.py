@@ -206,9 +206,9 @@ class FixedIncomeConfig(BaseModel):
         le=0.5,
         description="Annual growth rate (e.g., 0.03 for 3%)"
     )
-    raises: Optional[List[tuple[int, float]]] = Field(
+    salary_raises: Optional[dict] = Field(
         default=None,
-        description="List of (month, multiplier) tuples for scheduled raises"
+        description="Dict of date to raise amounts for scheduled raises"
     )
 
 
