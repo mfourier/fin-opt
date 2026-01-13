@@ -159,8 +159,8 @@ def income_to_dict(income_model: IncomeModel) -> Dict[str, Any]:
             "base": income_model.fixed.base,
             "annual_growth": income_model.fixed.annual_growth,
         }
-        if income_model.fixed.raises:
-            fixed_data["raises"] = income_model.fixed.raises
+        if income_model.fixed.salary_raises:
+            fixed_data["salary_raises"] = income_model.fixed.salary_raises
         result["fixed"] = fixed_data
 
     # Variable income
@@ -171,7 +171,8 @@ def income_to_dict(income_model: IncomeModel) -> Dict[str, Any]:
             "annual_growth": income_model.variable.annual_growth,
         }
         if income_model.variable.seasonality is not None:
-            var_data["seasonality"] = income_model.variable.seasonality.tolist()
+            s = income_model.variable.seasonality
+            var_data["seasonality"] = list(s) if hasattr(s, '__iter__') else [s]
         if income_model.variable.floor is not None:
             var_data["floor"] = income_model.variable.floor
         if income_model.variable.cap is not None:
@@ -181,8 +182,13 @@ def income_to_dict(income_model: IncomeModel) -> Dict[str, Any]:
         result["variable"] = var_data
 
     # Contribution rates
-    result["contribution_rate_fixed"] = income_model.monthly_contribution.get("fixed", 0.3)
-    result["contribution_rate_variable"] = income_model.monthly_contribution.get("variable", 1.0)
+    contrib = income_model.monthly_contribution or {}
+    if isinstance(contrib, dict):
+        result["contribution_rate_fixed"] = contrib.get("fixed", 0.3)
+        result["contribution_rate_variable"] = contrib.get("variable", 1.0)
+    else:
+        result["contribution_rate_fixed"] = 0.3
+        result["contribution_rate_variable"] = 1.0
 
     return result
 
@@ -212,7 +218,7 @@ def income_from_dict(data: Dict[str, Any]) -> IncomeModel:
         fixed = FixedIncome(
             base=config.fixed.base,
             annual_growth=config.fixed.annual_growth,
-            raises=config.fixed.raises,
+            salary_raises=config.fixed.salary_raises,
         )
 
     # Build variable income
@@ -279,7 +285,7 @@ def save_model(
     }
 
     if include_correlation and model.returns is not None:
-        config["correlation"] = model.returns.correlation.tolist()
+        config["correlation"] = model.returns.default_correlation.tolist()
 
     # Write to file
     path.parent.mkdir(parents=True, exist_ok=True)

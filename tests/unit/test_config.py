@@ -125,7 +125,7 @@ class TestIncomeConfig:
 
         assert config.base == 1_500_000
         assert config.annual_growth == 0.03
-        assert config.raises is None
+        assert config.salary_raises is None
 
     def test_fixed_income_negative_base(self):
         """Test negative base raises validation error."""
