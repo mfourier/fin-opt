@@ -452,5 +452,255 @@ class TestIncomeModelIntegration:
         assert contrib.shape == (100, 12)
 
 
+# ============================================================================
+# OPTIONAL COMPONENT TESTS (fixed=None or variable=None)
+# ============================================================================
+
+class TestIncomeModelOptionalComponents:
+    """Test IncomeModel with optional fixed or variable components."""
+
+    def test_both_none_raises(self):
+        """Test that both None raises ValueError."""
+        with pytest.raises(ValueError, match="At least one income stream"):
+            IncomeModel(fixed=None, variable=None)
+
+    def test_fixed_only_instantiation(self):
+        """Test IncomeModel with only fixed income."""
+        fi = FixedIncome(base=1_000_000, annual_growth=0.05)
+        model = IncomeModel(fixed=fi, variable=None)
+
+        assert model.fixed is fi
+        assert model.variable is None
+
+    def test_variable_only_instantiation(self):
+        """Test IncomeModel with only variable income."""
+        vi = VariableIncome(base=200_000, sigma=0.1, seed=42)
+        model = IncomeModel(fixed=None, variable=vi)
+
+        assert model.fixed is None
+        assert model.variable is vi
+
+    def test_fixed_only_project_series(self):
+        """Test project() with fixed-only model returns correct values."""
+        fi = FixedIncome(base=1_000_000)
+        model = IncomeModel(fixed=fi, variable=None)
+
+        result = model.project(months=6, start=date(2025, 1, 1), output="series")
+
+        assert isinstance(result, pd.Series)
+        assert len(result) == 6
+        # Total should equal fixed (no variable)
+        np.testing.assert_array_almost_equal(result, 1_000_000)
+
+    def test_variable_only_project_series(self):
+        """Test project() with variable-only model returns correct values."""
+        vi = VariableIncome(base=200_000, sigma=0.0)  # deterministic
+        model = IncomeModel(fixed=None, variable=vi)
+
+        result = model.project(months=6, start=date(2025, 1, 1), output="series")
+
+        assert isinstance(result, pd.Series)
+        assert len(result) == 6
+        # Total should equal variable (no fixed)
+        np.testing.assert_array_almost_equal(result, 200_000)
+
+    def test_fixed_only_project_dataframe(self):
+        """Test project() DataFrame with fixed-only model."""
+        fi = FixedIncome(base=1_000_000)
+        model = IncomeModel(fixed=fi, variable=None)
+
+        result = model.project(months=6, start=date(2025, 1, 1), output="dataframe")
+
+        assert isinstance(result, pd.DataFrame)
+        assert "fixed" in result.columns
+        assert "variable" in result.columns
+        assert "total" in result.columns
+        # Fixed should be 1M, variable should be 0
+        np.testing.assert_array_almost_equal(result["fixed"], 1_000_000)
+        np.testing.assert_array_almost_equal(result["variable"], 0)
+        np.testing.assert_array_almost_equal(result["total"], 1_000_000)
+
+    def test_variable_only_project_dataframe(self):
+        """Test project() DataFrame with variable-only model."""
+        vi = VariableIncome(base=200_000, sigma=0.0)
+        model = IncomeModel(fixed=None, variable=vi)
+
+        result = model.project(months=6, start=date(2025, 1, 1), output="dataframe")
+
+        # Fixed should be 0, variable should be 200k
+        np.testing.assert_array_almost_equal(result["fixed"], 0)
+        np.testing.assert_array_almost_equal(result["variable"], 200_000)
+        np.testing.assert_array_almost_equal(result["total"], 200_000)
+
+    def test_fixed_only_project_n_sims(self):
+        """Test project() with n_sims on fixed-only model."""
+        fi = FixedIncome(base=1_000_000)
+        model = IncomeModel(fixed=fi, variable=None)
+
+        result = model.project(months=6, n_sims=10, output="array")
+
+        assert result["fixed"].shape == (10, 6)
+        assert result["variable"].shape == (10, 6)
+        assert result["total"].shape == (10, 6)
+        # All variable values should be zero
+        np.testing.assert_array_equal(result["variable"], 0)
+
+    def test_variable_only_project_n_sims(self):
+        """Test project() with n_sims on variable-only model."""
+        vi = VariableIncome(base=200_000, sigma=0.1, seed=42)
+        model = IncomeModel(fixed=None, variable=vi)
+
+        result = model.project(months=6, n_sims=10, output="array")
+
+        assert result["fixed"].shape == (10, 6)
+        # All fixed values should be zero
+        np.testing.assert_array_equal(result["fixed"], 0)
+        # Variable should have variation
+        assert not np.allclose(result["variable"][0, :], result["variable"][1, :])
+
+    def test_fixed_only_contributions(self):
+        """Test contributions() with fixed-only model."""
+        fi = FixedIncome(base=1_000_000)
+        model = IncomeModel(fixed=fi, variable=None)
+
+        result = model.contributions(months=6, start=date(2025, 1, 1), output="array")
+
+        # Default: 30% of fixed, 100% of variable (which is 0)
+        expected = 1_000_000 * 0.3
+        np.testing.assert_array_almost_equal(result, expected)
+
+    def test_variable_only_contributions(self):
+        """Test contributions() with variable-only model."""
+        vi = VariableIncome(base=200_000, sigma=0.0)
+        model = IncomeModel(fixed=None, variable=vi)
+
+        result = model.contributions(months=6, start=date(2025, 1, 1), output="array")
+
+        # Default: 30% of fixed (0), 100% of variable
+        expected = 200_000 * 1.0
+        np.testing.assert_array_almost_equal(result, expected)
+
+    def test_fixed_only_income_metrics(self):
+        """Test income_metrics() with fixed-only model."""
+        fi = FixedIncome(base=1_000_000)
+        model = IncomeModel(fixed=fi, variable=None)
+
+        metrics = model.income_metrics(months=12, start=date(2025, 1, 1))
+
+        assert metrics.months == 12
+        assert metrics.total_fixed == 12_000_000
+        assert metrics.total_variable == 0
+        assert metrics.total_income == 12_000_000
+        assert metrics.fixed_share == 1.0
+        assert metrics.variable_share == 0.0
+
+    def test_variable_only_income_metrics(self):
+        """Test income_metrics() with variable-only model."""
+        vi = VariableIncome(base=200_000, sigma=0.0)
+        model = IncomeModel(fixed=None, variable=vi)
+
+        metrics = model.income_metrics(months=12, start=date(2025, 1, 1))
+
+        assert metrics.months == 12
+        assert metrics.total_fixed == 0
+        assert metrics.total_variable == 2_400_000
+        assert metrics.total_income == 2_400_000
+        assert metrics.fixed_share == 0.0
+        assert metrics.variable_share == 1.0
+
+    def test_fixed_only_to_dict(self):
+        """Test to_dict() with fixed-only model."""
+        fi = FixedIncome(base=1_000_000, annual_growth=0.05)
+        model = IncomeModel(fixed=fi, variable=None)
+
+        result = model.to_dict()
+
+        assert result["fixed"] is not None
+        assert result["fixed"]["base"] == 1_000_000
+        assert result["variable"] is None
+
+    def test_variable_only_to_dict(self):
+        """Test to_dict() with variable-only model."""
+        vi = VariableIncome(base=200_000, sigma=0.1)
+        model = IncomeModel(fixed=None, variable=vi)
+
+        result = model.to_dict()
+
+        assert result["fixed"] is None
+        assert result["variable"] is not None
+        assert result["variable"]["base"] == 200_000
+
+    def test_fixed_only_from_dict(self):
+        """Test from_dict() with fixed-only payload."""
+        payload = {
+            "fixed": {"base": 1_000_000, "annual_growth": 0.05},
+            "variable": None,
+        }
+
+        model = IncomeModel.from_dict(payload)
+
+        assert model.fixed is not None
+        assert model.fixed.base == 1_000_000
+        assert model.variable is None
+
+    def test_variable_only_from_dict(self):
+        """Test from_dict() with variable-only payload."""
+        payload = {
+            "fixed": None,
+            "variable": {"base": 200_000, "sigma": 0.1},
+        }
+
+        model = IncomeModel.from_dict(payload)
+
+        assert model.fixed is None
+        assert model.variable is not None
+        assert model.variable.base == 200_000
+
+    def test_fixed_only_repr(self):
+        """Test __repr__() with fixed-only model."""
+        fi = FixedIncome(base=1_000_000)
+        model = IncomeModel(fixed=fi, variable=None)
+
+        repr_str = repr(model)
+
+        assert "IncomeModel" in repr_str
+        assert "fixed" in repr_str
+        assert "variable" not in repr_str or "variable(base" not in repr_str
+
+    def test_variable_only_repr(self):
+        """Test __repr__() with variable-only model."""
+        vi = VariableIncome(base=200_000, sigma=0.0)
+        model = IncomeModel(fixed=None, variable=vi)
+
+        repr_str = repr(model)
+
+        assert "IncomeModel" in repr_str
+        assert "variable" in repr_str
+
+    def test_roundtrip_serialization_fixed_only(self):
+        """Test serialization roundtrip for fixed-only model."""
+        fi = FixedIncome(base=1_000_000, annual_growth=0.05)
+        original = IncomeModel(fixed=fi, variable=None)
+
+        payload = original.to_dict()
+        restored = IncomeModel.from_dict(payload)
+
+        assert restored.fixed.base == original.fixed.base
+        assert restored.fixed.annual_growth == original.fixed.annual_growth
+        assert restored.variable is None
+
+    def test_roundtrip_serialization_variable_only(self):
+        """Test serialization roundtrip for variable-only model."""
+        vi = VariableIncome(base=200_000, sigma=0.15, seed=42)
+        original = IncomeModel(fixed=None, variable=vi)
+
+        payload = original.to_dict()
+        restored = IncomeModel.from_dict(payload)
+
+        assert restored.fixed is None
+        assert restored.variable.base == original.variable.base
+        assert restored.variable.sigma == original.variable.sigma
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
