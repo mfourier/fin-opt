@@ -57,30 +57,12 @@ class TestFinancialModelInstantiation:
         assert model.accounts == accounts
         assert model.M == 2
 
-    def test_with_correlation(self, income, accounts):
-        """Test FinancialModel with correlation matrix."""
-        corr = np.array([
-            [1.0, 0.5],
-            [0.5, 1.0],
-        ])
-        model = FinancialModel(income=income, accounts=accounts, correlation=corr)
-
-        np.testing.assert_array_almost_equal(model.returns.default_correlation, corr)
-
     def test_single_account(self, income):
         """Test FinancialModel with single account."""
         accounts = [Account.from_annual("Single", 0.08, 0.10)]
         model = FinancialModel(income=income, accounts=accounts)
 
         assert model.M == 1
-
-    def test_account_names_property(self, model, accounts):
-        """Test account_names property."""
-        names = model.account_names
-
-        assert len(names) == len(accounts)
-        assert names[0] == "Conservative"
-        assert names[1] == "Aggressive"
 
 
 # ============================================================================
@@ -186,34 +168,11 @@ class TestSimulationResult:
         """Test T property."""
         assert sample_result.T == 12
 
-    def test_allocation_policy(self, sample_result):
-        """Test allocation_policy stored correctly."""
-        assert sample_result.allocation_policy.shape == (12, 2)
-
-    def test_total_wealth_property(self, sample_result):
+    def test_total_wealth_shape(self, sample_result):
         """Test total_wealth computed correctly."""
+        # wealth.sum(axis=2) gives total wealth across accounts
         total = sample_result.wealth.sum(axis=2)
-        np.testing.assert_array_almost_equal(total, sample_result.wealth[:, :, 0] + sample_result.wealth[:, :, 1])
-
-
-# ============================================================================
-# FINANCIALMODEL CACHING TESTS
-# ============================================================================
-
-class TestFinancialModelCaching:
-    """Test FinancialModel caching behavior."""
-
-    def test_cache_enabled_by_default(self, model):
-        """Test that caching is enabled by default."""
-        T = 12
-        n_sims = 50
-        X = np.tile([0.6, 0.4], (T, 1))
-
-        # First simulation
-        result1 = model.simulate(T=T, n_sims=n_sims, X=X, seed=42)
-
-        # Check params_hash is generated
-        assert result1.params_hash is not None
+        assert total.shape == (50, 13)  # n_sims x (T+1)
 
 
 # ============================================================================

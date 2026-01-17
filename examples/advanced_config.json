@@ -1,0 +1,49 @@
+{
+  "schema_version": "0.1.0",
+  "income": {
+    "fixed": {
+      "base": 2000000,
+      "annual_growth": 0.04,
+      "salary_raises": {
+        "12": 0.10,
+        "24": 0.08,
+        "36": 0.05
+      }
+    },
+    "variable": {
+      "base": 500000,
+      "sigma": 0.20,
+      "annual_growth": 0.02,
+      "seasonality": [0.8, 0.8, 0.9, 1.0, 1.0, 1.2, 1.0, 1.0, 1.0, 1.0, 1.0, 1.5],
+      "floor": 0,
+      "cap": 2000000
+    },
+    "contribution_rate_fixed": 0.25,
+    "contribution_rate_variable": 1.0
+  },
+  "accounts": [
+    {
+      "name": "Emergency",
+      "annual_return": 0.04,
+      "annual_volatility": 0.03,
+      "initial_wealth": 1000000
+    },
+    {
+      "name": "Conservative",
+      "annual_return": 0.08,
+      "annual_volatility": 0.10,
+      "initial_wealth": 0
+    },
+    {
+      "name": "Aggressive",
+      "annual_return": 0.14,
+      "annual_volatility": 0.18,
+      "initial_wealth": 0
+    }
+  ],
+  "correlation": [
+    [1.0, 0.3, 0.2],
+    [0.3, 1.0, 0.6],
+    [0.2, 0.6, 1.0]
+  ]
+}

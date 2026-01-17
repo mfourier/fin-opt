@@ -1,0 +1,17 @@
+{
+  "goals": [
+    {
+      "type": "intermediate",
+      "month": 12,
+      "account": "Emergency",
+      "threshold": 3000000,
+      "confidence": 0.90
+    },
+    {
+      "type": "terminal",
+      "account": "Aggressive",
+      "threshold": 20000000,
+      "confidence": 0.70
+    }
+  ]
+}

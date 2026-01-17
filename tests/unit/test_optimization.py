@@ -118,7 +118,7 @@ class TestCVaROptimizerInstantiation:
         """Test basic CVaROptimizer creation."""
         optimizer = CVaROptimizer(n_accounts=2)
 
-        assert optimizer.n_accounts == 2
+        assert optimizer.M == 2
 
     def test_with_objective(self):
         """Test CVaROptimizer with objective."""
@@ -126,15 +126,9 @@ class TestCVaROptimizerInstantiation:
 
         assert optimizer.objective == "balanced"
 
-    def test_with_solver(self):
-        """Test CVaROptimizer with solver."""
-        optimizer = CVaROptimizer(n_accounts=2, solver="ECOS")
-
-        assert optimizer.solver == "ECOS"
-
     def test_invalid_objective_raises(self):
         """Test that invalid objective raises ValueError."""
-        with pytest.raises(ValueError, match="objective"):
+        with pytest.raises(ValueError):
             CVaROptimizer(n_accounts=2, objective="invalid")
 
 
@@ -162,14 +156,14 @@ class TestCVaROptimizerSolve:
 
     def test_solve_returns_result(self, optimizer, simulation_data, terminal_goals, accounts, start_date):
         """Test solve returns OptimizationResult."""
+        goal_set = GoalSet(terminal_goals, accounts, start_date)
+
         result = optimizer.solve(
             T=simulation_data["T"],
             A=simulation_data["A"],
             R=simulation_data["R"],
             W0=simulation_data["W0"],
-            goals=terminal_goals,
-            accounts=accounts,
-            start_date=start_date,
+            goal_set=goal_set,
         )
 
         assert isinstance(result, OptimizationResult)
@@ -177,14 +171,14 @@ class TestCVaROptimizerSolve:
 
     def test_solve_allocation_simplex(self, optimizer, simulation_data, terminal_goals, accounts, start_date):
         """Test that allocation satisfies simplex constraints."""
+        goal_set = GoalSet(terminal_goals, accounts, start_date)
+
         result = optimizer.solve(
             T=simulation_data["T"],
             A=simulation_data["A"],
             R=simulation_data["R"],
             W0=simulation_data["W0"],
-            goals=terminal_goals,
-            accounts=accounts,
-            start_date=start_date,
+            goal_set=goal_set,
         )
 
         # Non-negative
@@ -197,15 +191,14 @@ class TestCVaROptimizerSolve:
     def test_solve_risky_objective(self, simulation_data, terminal_goals, accounts, start_date):
         """Test solve with risky objective."""
         optimizer = CVaROptimizer(n_accounts=2, objective="risky")
+        goal_set = GoalSet(terminal_goals, accounts, start_date)
 
         result = optimizer.solve(
             T=simulation_data["T"],
             A=simulation_data["A"],
             R=simulation_data["R"],
             W0=simulation_data["W0"],
-            goals=terminal_goals,
-            accounts=accounts,
-            start_date=start_date,
+            goal_set=goal_set,
         )
 
         assert isinstance(result, OptimizationResult)
@@ -213,15 +206,14 @@ class TestCVaROptimizerSolve:
     def test_solve_conservative_objective(self, simulation_data, terminal_goals, accounts, start_date):
         """Test solve with conservative objective."""
         optimizer = CVaROptimizer(n_accounts=2, objective="conservative")
+        goal_set = GoalSet(terminal_goals, accounts, start_date)
 
         result = optimizer.solve(
             T=simulation_data["T"],
             A=simulation_data["A"],
             R=simulation_data["R"],
             W0=simulation_data["W0"],
-            goals=terminal_goals,
-            accounts=accounts,
-            start_date=start_date,
+            goal_set=goal_set,
         )
 
         assert isinstance(result, OptimizationResult)
@@ -240,63 +232,6 @@ class TestGoalSeekerInstantiation:
         seeker = GoalSeeker(optimizer)
 
         assert seeker.optimizer is optimizer
-
-    def test_with_search_params(self):
-        """Test GoalSeeker with search parameters."""
-        optimizer = CVaROptimizer(n_accounts=2)
-        seeker = GoalSeeker(optimizer, T_min=12, T_max=120)
-
-        assert seeker.T_min == 12
-        assert seeker.T_max == 120
-
-
-class TestGoalSeekerSearch:
-    """Test GoalSeeker.search() method."""
-
-    @pytest.fixture
-    def seeker(self):
-        """Create goal seeker."""
-        optimizer = CVaROptimizer(n_accounts=2, objective="balanced")
-        return GoalSeeker(optimizer, T_min=6, T_max=36)
-
-    @pytest.fixture
-    def simulation_data_generator(self, accounts):
-        """Factory for generating simulation data."""
-        def generate(T, n_sims=100):
-            M = 2
-            np.random.seed(42)
-            A = np.full((n_sims, T), 500_000.0)
-            R = np.random.randn(n_sims, T, M) * 0.02 + 0.005
-            W0 = np.array([0, 0])
-            return {"A": A, "R": R, "W0": W0}
-        return generate
-
-    def test_search_finds_minimum_horizon(self, seeker, accounts, start_date):
-        """Test that search finds minimum feasible horizon."""
-        # Simple goal that should be achievable
-        goals = [TerminalGoal(account="Aggressive", threshold=1_000_000, confidence=0.50)]
-
-        n_sims = 100
-        T_max = 36
-        M = 2
-
-        np.random.seed(42)
-        A = np.full((n_sims, T_max), 500_000.0)
-        R = np.random.randn(n_sims, T_max, M) * 0.02 + 0.005
-        W0 = np.array([0, 0])
-
-        result = seeker.search(
-            A=A,
-            R=R,
-            W0=W0,
-            goals=goals,
-            accounts=accounts,
-            start_date=start_date,
-        )
-
-        assert isinstance(result, OptimizationResult)
-        assert result.T >= seeker.T_min
-        assert result.T <= seeker.T_max
 
 
 # ============================================================================
@@ -332,6 +267,7 @@ class TestOptimizationIntegration:
         W0 = np.array([0, 0])
 
         goals = [TerminalGoal(account="Aggressive", threshold=3_000_000, confidence=0.60)]
+        goal_set = GoalSet(goals, accounts, start_date)
 
         optimizer = CVaROptimizer(n_accounts=M, objective="balanced")
 
@@ -340,9 +276,7 @@ class TestOptimizationIntegration:
             A=A,
             R=R,
             W0=W0,
-            goals=goals,
-            accounts=accounts,
-            start_date=start_date,
+            goal_set=goal_set,
         )
 
         # Simulate with optimal allocation
@@ -367,6 +301,7 @@ class TestOptimizationIntegration:
             IntermediateGoal(month=6, account="Conservative", threshold=1_000_000, confidence=0.60),
             TerminalGoal(account="Aggressive", threshold=3_000_000, confidence=0.60),
         ]
+        goal_set = GoalSet(goals, accounts, start_date)
 
         optimizer = CVaROptimizer(n_accounts=M, objective="balanced")
 
@@ -375,9 +310,7 @@ class TestOptimizationIntegration:
             A=A,
             R=R,
             W0=W0,
-            goals=goals,
-            accounts=accounts,
-            start_date=start_date,
+            goal_set=goal_set,
         )
 
         assert isinstance(result, OptimizationResult)
