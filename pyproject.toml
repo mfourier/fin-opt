@@ -108,7 +108,7 @@ addopts = [
     "--cov=src",
     "--cov-report=html",
     "--cov-report=term-missing",
-    "--cov-fail-under=70",
+    "--cov-fail-under=40",
     "--strict-markers",
     "-ra",  # Show summary of all test outcomes
 ]

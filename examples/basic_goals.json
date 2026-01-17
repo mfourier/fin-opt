@@ -1,0 +1,10 @@
+{
+  "goals": [
+    {
+      "type": "terminal",
+      "account": "Aggressive",
+      "threshold": 10000000,
+      "confidence": 0.70
+    }
+  ]
+}

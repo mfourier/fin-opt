@@ -1,0 +1,30 @@
+{
+  "schema_version": "0.1.0",
+  "income": {
+    "fixed": {
+      "base": 1500000,
+      "annual_growth": 0.03
+    },
+    "variable": {
+      "base": 200000,
+      "sigma": 0.15,
+      "annual_growth": 0.02
+    },
+    "contribution_rate_fixed": 0.3,
+    "contribution_rate_variable": 1.0
+  },
+  "accounts": [
+    {
+      "name": "Conservative",
+      "annual_return": 0.06,
+      "annual_volatility": 0.08,
+      "initial_wealth": 0
+    },
+    {
+      "name": "Aggressive",
+      "annual_return": 0.12,
+      "annual_volatility": 0.15,
+      "initial_wealth": 0
+    }
+  ]
+}

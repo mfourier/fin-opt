@@ -239,9 +239,11 @@ def income_from_dict(data: Dict[str, Any]) -> IncomeModel:
         )
 
     # Build income model
+    # IncomeModel expects 12-element arrays for monthly contributions
+    # Convert scalar rates to uniform arrays
     monthly_contribution = {
-        "fixed": config.contribution_rate_fixed,
-        "variable": config.contribution_rate_variable,
+        "fixed": np.full(12, config.contribution_rate_fixed, dtype=float),
+        "variable": np.full(12, config.contribution_rate_variable, dtype=float),
     }
 
     return IncomeModel(
