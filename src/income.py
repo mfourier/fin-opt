@@ -623,10 +623,12 @@ class IncomeModel:
 
     Parameters
     ----------
-    fixed : FixedIncome
+    fixed : Optional[FixedIncome], default None
         Deterministic income stream (e.g., salary) with optional annual growth.
-    variable : VariableIncome
+        If None, only variable income is used.
+    variable : Optional[VariableIncome], default None
         Irregular income stream, capturing seasonality, stochastic noise, and growth.
+        If None, only fixed income is used.
     name_fixed : str, default "fixed"
         Column name or label for the fixed-income component in outputs.
     name_variable : str, default "variable"
@@ -654,6 +656,7 @@ class IncomeModel:
 
     Notes
     -----
+    - At least one of `fixed` or `variable` must be provided.
     - The `start` parameter defines the calendar alignment for both income projections
       and rotation of contribution fractions. For `VariableIncome`, it sets the
       first month for seasonality.
@@ -671,32 +674,52 @@ class IncomeModel:
     >>> fi = FixedIncome(base=1_400_000.0, annual_growth=0.02)
     >>> vi = VariableIncome(base=200_000.0, sigma=0.1, seed=123)
     >>> income_model = IncomeModel(fixed=fi, variable=vi)
-    
+
     # Total income as Series
     >>> income_model.project(months=6, start=date(2025,1,1))
     2025-01-01    1610000.0
     ...
-    
+
     # Detailed breakdown as DataFrame
     >>> df = income_model.project(months=6, start=date(2025,1,1), output="dataframe")
     >>> df
                   fixed   variable      total
     2025-01-01  1400000  210000.0  1610000.0
     2025-02-01  1402323  190000.0  1592323.0
-    
+
     # Contributions
     >>> contrib = income_model.contributions(months=6, start=date(2025,1,1))
     >>> contrib
     2025-01-01    620000.0
     2025-02-01    624200.0
     ...
+
+    # Fixed-only model (no variable income)
+    >>> fixed_only = IncomeModel(fixed=fi, variable=None)
+    >>> fixed_only.project(months=6, start=date(2025,1,1))
+    2025-01-01    1400000.0
+    ...
+
+    # Variable-only model (no fixed income)
+    >>> variable_only = IncomeModel(fixed=None, variable=vi)
+    >>> variable_only.project(months=6, start=date(2025,1,1))
+    2025-01-01    210000.0
+    ...
     """
-    
-    fixed: FixedIncome
-    variable: VariableIncome
+
+    fixed: Optional[FixedIncome] = None
+    variable: Optional[VariableIncome] = None
     name_fixed: str = field(default="fixed", init=True)
     name_variable: str = field(default="variable", init=True)
-    monthly_contribution: dict = None 
+    monthly_contribution: Optional[dict] = None
+
+    def __post_init__(self) -> None:
+        """Validate that at least one income stream is provided."""
+        if self.fixed is None and self.variable is None:
+            raise ValueError(
+                "At least one income stream must be provided. "
+                "Both 'fixed' and 'variable' cannot be None."
+            ) 
 
     def project(
         self,
@@ -794,14 +817,17 @@ class IncomeModel:
             )
         
         idx = month_index(start=start, months=max(months, 0))
-        
+
+        # Determine output shape based on n_sims
+        shape = (n_sims, months) if n_sims > 1 else (months,)
+        empty_shape = (n_sims, 0) if n_sims > 1 else (0,)
+
         if months <= 0:
             if output == "array":
-                shape = (n_sims, 0) if n_sims > 1 else (0,)
                 return {
-                    self.name_fixed: np.zeros(shape, dtype=float),
-                    self.name_variable: np.zeros(shape, dtype=float),
-                    "total": np.zeros(shape, dtype=float),
+                    self.name_fixed: np.zeros(empty_shape, dtype=float),
+                    self.name_variable: np.zeros(empty_shape, dtype=float),
+                    "total": np.zeros(empty_shape, dtype=float),
                 }
             elif output == "dataframe":
                 return pd.DataFrame(
@@ -810,10 +836,19 @@ class IncomeModel:
                 )
             else:  # series
                 return pd.Series(dtype=float, index=idx, name="total")
-        
+
         # Get arrays: shape (n_sims, months) or (months,)
-        fixed_arr = self.fixed.project(months, start=start, output="array", n_sims=n_sims)
-        variable_arr = self.variable.project(months, start=start, seed=seed, output="array", n_sims=n_sims)
+        # Handle None components by using zero arrays
+        if self.fixed is not None:
+            fixed_arr = self.fixed.project(months, start=start, output="array", n_sims=n_sims)
+        else:
+            fixed_arr = np.zeros(shape, dtype=float)
+
+        if self.variable is not None:
+            variable_arr = self.variable.project(months, start=start, seed=seed, output="array", n_sims=n_sims)
+        else:
+            variable_arr = np.zeros(shape, dtype=float)
+
         total_arr = fixed_arr + variable_arr
         
         if output == "array":
@@ -928,9 +963,12 @@ class IncomeModel:
                 f"Use output='array' with n_sims={n_sims}."
             )
         
+        # Determine output shape based on n_sims
+        shape = (n_sims, months) if n_sims > 1 else (months,)
+        empty_shape = (n_sims, 0) if n_sims > 1 else (0,)
+
         if months <= 0:
-            shape = (n_sims, 0) if n_sims > 1 else (0,)
-            arr = np.zeros(shape, dtype=float)
+            arr = np.zeros(empty_shape, dtype=float)
             if output == "array":
                 return arr
             else:  # series
@@ -938,16 +976,25 @@ class IncomeModel:
                 return pd.Series(arr, index=idx, name="contribution")
 
         # Project incomes as arrays: shape (n_sims, months) or (months,)
-        fixed_arr = self.fixed.project(months, start=start, output="array", n_sims=n_sims)
-        variable_arr = self.variable.project(months, start=start, seed=seed, output="array", n_sims=n_sims)
+        # Handle None components by using zero arrays
+        if self.fixed is not None:
+            fixed_arr = self.fixed.project(months, start=start, output="array", n_sims=n_sims)
+        else:
+            fixed_arr = np.zeros(shape, dtype=float)
+
+        if self.variable is not None:
+            variable_arr = self.variable.project(months, start=start, seed=seed, output="array", n_sims=n_sims)
+        else:
+            variable_arr = np.zeros(shape, dtype=float)
 
         # Initialize contribution fractions (12-month arrays)
+        # Only include fractions for components that exist
         if self.monthly_contribution is None:
-            fixed_fractions = np.full(12, 0.3, dtype=float)
-            variable_fractions = np.ones(12, dtype=float)
+            fixed_fractions = np.full(12, 0.3, dtype=float) if self.fixed is not None else np.zeros(12, dtype=float)
+            variable_fractions = np.ones(12, dtype=float) if self.variable is not None else np.zeros(12, dtype=float)
         else:
-            fixed_fractions = np.asarray(self.monthly_contribution["fixed"], dtype=float)
-            variable_fractions = np.asarray(self.monthly_contribution["variable"], dtype=float)
+            fixed_fractions = np.asarray(self.monthly_contribution.get("fixed", [0.0]*12), dtype=float)
+            variable_fractions = np.asarray(self.monthly_contribution.get("variable", [0.0]*12), dtype=float)
             if len(fixed_fractions) != 12 or len(variable_fractions) != 12:
                 raise ValueError("monthly_contribution lists must have length 12.")
 
@@ -1126,35 +1173,43 @@ class IncomeModel:
         colors = colors or {"fixed": "black", "variable": "gray", "total": "blue"}
         fixed_col, var_col = self.name_fixed, self.name_variable
 
-        # Fixed income: single projection (deterministic, replicated internally if needed)
-        fixed_arr = self.fixed.project(months=months, start=start, output="array")  # shape: (months,)
-        
-        # Variable income: vectorized generation
-        sims = None
-        if (show_trajectories or show_confidence_band) and hasattr(self, "variable") and self.variable.sigma > 0:
+        idx = month_index(start=start, months=max(months, 0))
 
-            sims = self.variable.project(
-                months=months, 
-                start=start, 
-                seed=None,  
-                output="array", 
-                n_sims=n_simulations
-            )  # shape: (n_simulations, months)
-            
-            var_mean = sims.mean(axis=0)  # shape: (months,)
-            
-            if show_confidence_band:
-                lower_perc = np.percentile(sims, (1-confidence)/2*100, axis=0)
-                upper_perc = np.percentile(sims, (1+confidence)/2*100, axis=0)
-            else:
-                lower_perc = upper_perc = None
+        # Fixed income: single projection (deterministic)
+        # Handle None component by using zero array
+        if self.fixed is not None:
+            fixed_arr = self.fixed.project(months=months, start=start, output="array")  # shape: (months,)
         else:
-            # Deterministic or no trajectories needed
-            var_mean = self.variable.project(months=months, start=start, output="array")
-            lower_perc = upper_perc = None
+            fixed_arr = np.zeros(months, dtype=float)
+
+        # Variable income: vectorized generation
+        # Handle None component
+        sims = None
+        lower_perc = upper_perc = None
+
+        if self.variable is not None:
+            has_stochastic = self.variable.sigma > 0
+            if (show_trajectories or show_confidence_band) and has_stochastic:
+                sims = self.variable.project(
+                    months=months,
+                    start=start,
+                    seed=None,
+                    output="array",
+                    n_sims=n_simulations
+                )  # shape: (n_simulations, months)
+
+                var_mean = sims.mean(axis=0)  # shape: (months,)
+
+                if show_confidence_band:
+                    lower_perc = np.percentile(sims, (1-confidence)/2*100, axis=0)
+                    upper_perc = np.percentile(sims, (1+confidence)/2*100, axis=0)
+            else:
+                # Deterministic or no trajectories needed
+                var_mean = self.variable.project(months=months, start=start, output="array")
+        else:
+            var_mean = np.zeros(months, dtype=float)
 
         total_mean = fixed_arr + var_mean
-        idx = month_index(start=start, months=max(months, 0))
         
         if len(idx) == 0:
             fig, ax = plt.subplots(figsize=figsize) if ax is None else (None, ax)
@@ -1166,14 +1221,15 @@ class IncomeModel:
         fig = None
         if ax is None: fig, ax = plt.subplots(figsize=figsize)
 
-        # Determine dual-axis
+        # Determine dual-axis (only makes sense if both components exist)
         use_dual = False
-        if dual_axis is True:
-            use_dual = True
-        elif dual_axis == "auto":
-            left_max = max(np.nanmax(fixed_arr), np.nanmax(total_mean))
-            right_max = np.nanmax(var_mean)
-            use_dual = (max(left_max / right_max, right_max / left_max) >= dual_axis_ratio) if left_max*right_max>0 else False
+        if self.fixed is not None and self.variable is not None:
+            if dual_axis is True:
+                use_dual = True
+            elif dual_axis == "auto":
+                left_max = max(np.nanmax(fixed_arr), np.nanmax(total_mean))
+                right_max = np.nanmax(var_mean)
+                use_dual = (max(left_max / right_max, right_max / left_max) >= dual_axis_ratio) if left_max*right_max>0 else False
 
         lines, labels = [], []
         ax_right = None
@@ -1219,41 +1275,53 @@ class IncomeModel:
             
         else:
             # --- Single-axis mode ---
-            
-            # 1. Plot trajectories FIRST (background)
+
+            # 1. Plot trajectories FIRST (background) - only if variable exists and is stochastic
             if show_trajectories and sims is not None:
                 for i in range(n_simulations):
-                    ax.plot(idx, sims[i, :], color='gray', alpha=trajectory_alpha, 
+                    ax.plot(idx, sims[i, :], color='gray', alpha=trajectory_alpha,
                         linewidth=0.8, zorder=1, label='_nolegend_')
-                    ax.plot(idx, fixed_arr + sims[i, :], color='gray', 
-                        alpha=trajectory_alpha*0.7, linewidth=0.8, 
-                        zorder=1, label='_nolegend_')
-            
+                    if self.fixed is not None:
+                        ax.plot(idx, fixed_arr + sims[i, :], color='gray',
+                            alpha=trajectory_alpha*0.7, linewidth=0.8,
+                            zorder=1, label='_nolegend_')
+
             # 2. Plot confidence bands (if enabled)
             if show_confidence_band and lower_perc is not None:
-                ax.fill_between(idx, lower_perc, upper_perc, 
-                            color=colors.get("variable", "orange"), 
-                            alpha=0.2, label=f"{var_col} CI", 
+                ax.fill_between(idx, lower_perc, upper_perc,
+                            color=colors.get("variable", "orange"),
+                            alpha=0.2, label=f"{var_col} CI",
                             zorder=2)
-                ax.fill_between(idx, lower_perc + fixed_arr, upper_perc + fixed_arr,
-                            color=colors.get("total", "black"), 
-                            alpha=0.15, label="Total CI", 
-                            zorder=2)
-            
-            # 3. Plot mean lines (foreground)
-            l_fixed, = ax.plot(idx, fixed_arr, label=fixed_col, 
-                            color=colors.get("fixed", "blue"), 
-                            linewidth=2.5, zorder=3)
-            l_var, = ax.plot(idx, var_mean, label=var_col, 
-                            color=colors.get("variable", "orange"), 
-                            linestyle="--", linewidth=2.5, zorder=3)
-            l_total, = ax.plot(idx, total_mean, label="total", 
-                            color=colors.get("total", "black"), 
-                            linewidth=2.5, zorder=3)
-            
+                if self.fixed is not None:
+                    ax.fill_between(idx, lower_perc + fixed_arr, upper_perc + fixed_arr,
+                                color=colors.get("total", "black"),
+                                alpha=0.15, label="Total CI",
+                                zorder=2)
+
+            # 3. Plot mean lines (foreground) - conditional on component existence
+            if self.fixed is not None:
+                l_fixed, = ax.plot(idx, fixed_arr, label=fixed_col,
+                                color=colors.get("fixed", "blue"),
+                                linewidth=2.5, zorder=3)
+                lines.append(l_fixed)
+                labels.append(fixed_col)
+
+            if self.variable is not None:
+                l_var, = ax.plot(idx, var_mean, label=var_col,
+                                color=colors.get("variable", "orange"),
+                                linestyle="--", linewidth=2.5, zorder=3)
+                lines.append(l_var)
+                labels.append(var_col)
+
+            # Only show total if both components exist (otherwise total == the single component)
+            if self.fixed is not None and self.variable is not None:
+                l_total, = ax.plot(idx, total_mean, label="total",
+                                color=colors.get("total", "black"),
+                                linewidth=2.5, zorder=3)
+                lines.append(l_total)
+                labels.append("total")
+
             ax.set_ylabel(ylabel_left)
-            lines.extend([l_fixed, l_var, l_total])
-            labels.extend([fixed_col, var_col, "total"])
 
         # ========== Formatting ==========
         ax.yaxis.set_major_formatter(FuncFormatter(millions_formatter))
@@ -1268,15 +1336,21 @@ class IncomeModel:
             label.set_ha("right")
         if legend: ax.legend(lines, labels, loc="best")
 
-        # Total annotation
-        total_fixed_sum = fixed_arr.sum()
-        total_var_sum = var_mean.sum()
+        # Total annotation - conditional on which components exist
+        total_fixed_sum = fixed_arr.sum() if self.fixed is not None else 0.0
+        total_var_sum = var_mean.sum() if self.variable is not None else 0.0
         total_sum = total_fixed_sum + total_var_sum
+
+        annotation_lines = []
+        if self.fixed is not None:
+            annotation_lines.append(f"Total Fixed: ${total_fixed_sum:,.0f}".replace(",", "."))
+        if self.variable is not None:
+            annotation_lines.append(f"Total Variable: ${total_var_sum:,.0f}".replace(",", "."))
+        annotation_lines.append(f"Total Income: ${total_sum:,.0f}".replace(",", "."))
+
         ax.text(0.02, 0.98,
-                f"Total Fixed: ${total_fixed_sum:,.0f}".replace(",", ".") + "\n" +
-                f"Total Variable: ${total_var_sum:,.0f}".replace(",", ".") + "\n" +
-                f"Total Income: ${total_sum:,.0f}".replace(",", "."),
-                transform=ax.transAxes, fontsize=9, verticalalignment="top", 
+                "\n".join(annotation_lines),
+                transform=ax.transAxes, fontsize=9, verticalalignment="top",
                 horizontalalignment="left",
                 bbox=dict(boxstyle="round", facecolor="white", alpha=0.7), zorder=10)
 
@@ -1417,27 +1491,32 @@ class IncomeModel:
             return
 
         # Generate simulations if needed (VECTORIZED)
+        # Check if variable income exists and has stochasticity
         sims = None
-        if (show_trajectories or show_confidence_band) and hasattr(self.variable, "sigma") and self.variable.sigma > 0:
+        lower = upper = None
+        has_stochastic_variable = (
+            self.variable is not None and
+            hasattr(self.variable, "sigma") and
+            self.variable.sigma > 0
+        )
+
+        if (show_trajectories or show_confidence_band) and has_stochastic_variable:
             sims = self.contributions(
-                months, 
-                start=start, 
-                seed=None, 
-                output="array", 
+                months,
+                start=start,
+                seed=None,
+                output="array",
                 n_sims=n_simulations
             )  # shape: (n_simulations, months)
-            
+
             contrib_mean = sims.mean(axis=0)  # shape: (months,)
-            
+
             if show_confidence_band:
                 lower = np.percentile(sims, (1-confidence)/2*100, axis=0)
                 upper = np.percentile(sims, (1+confidence)/2*100, axis=0)
-            else:
-                lower = upper = None
         else:
-            # Deterministic case
+            # Deterministic case (fixed-only or deterministic variable)
             contrib_mean = self.contributions(months, start=start, output="array")
-            lower = upper = None
 
         fig = None
         if ax is None: fig, ax = plt.subplots(figsize=figsize)
@@ -1683,7 +1762,8 @@ class IncomeModel:
         min_variable = float(df[var_col].min())
         max_variable = float(df[var_col].max())
 
-        if variable_threshold is None:
+        # Variable threshold only makes sense if variable income exists
+        if variable_threshold is None or self.variable is None:
             pct_below = float("nan")
         else:
             below = (df[var_col] < float(variable_threshold)).sum()
@@ -1708,15 +1788,26 @@ class IncomeModel:
 
     # -------------------------- Serialization helpers ----------------------
     def to_dict(self) -> dict:
-        return {
-            "fixed": {
+        """Serialize IncomeModel to dictionary.
+
+        Returns a dictionary with 'fixed' and 'variable' keys. Each key maps
+        to either None (if component doesn't exist) or a dict with component params.
+        """
+        result = {}
+
+        if self.fixed is not None:
+            result["fixed"] = {
                 "base": self.fixed.base,
                 "annual_growth": self.fixed.annual_growth,
-                "salary_raises": None if self.fixed.salary_raises is None 
+                "salary_raises": None if self.fixed.salary_raises is None
                                 else {d.isoformat(): v for d, v in self.fixed.salary_raises.items()},
                 "name": self.fixed.name,
-            },
-            "variable": {
+            }
+        else:
+            result["fixed"] = None
+
+        if self.variable is not None:
+            result["variable"] = {
                 "base": self.variable.base,
                 "seasonality": None if self.variable.seasonality is None else list(self.variable.seasonality),
                 "sigma": self.variable.sigma,
@@ -1725,45 +1816,66 @@ class IncomeModel:
                 "annual_growth": self.variable.annual_growth,
                 "name": self.variable.name,
                 "seed": self.variable.seed,
-            },
-        }
+            }
+        else:
+            result["variable"] = None
+
+        return result
 
     @classmethod
     def from_dict(cls, payload: dict) -> "IncomeModel":
-        fx = payload.get("fixed", {})
-        vr = payload.get("variable", {})
-        fixed = FixedIncome(
-            base=float(fx.get("base", 0.0)),
-            annual_growth=float(fx.get("annual_growth", 0.0)),
-            salary_raises=None if fx.get("salary_raises") is None else {
-                date.fromisoformat(k): float(v) for k, v in fx["salary_raises"].items()
-            },
-            name=str(fx.get("name", "fixed")),
-        )
-        variable = VariableIncome(
-            base=float(vr.get("base", 0.0)),
-            seasonality=vr.get("seasonality"),
-            sigma=float(vr.get("sigma", 0.0)),
-            floor=vr.get("floor"),
-            cap=vr.get("cap"),
-            annual_growth=float(vr.get("annual_growth", 0.0)),
-            name=str(vr.get("name", "variable")),
-            seed=vr.get("seed"),
-        )
+        """Deserialize IncomeModel from dictionary.
+
+        Supports both old format (always both components) and new format
+        (components can be None).
+        """
+        fx = payload.get("fixed")
+        vr = payload.get("variable")
+
+        # Handle None or missing fixed component
+        if fx is None or (isinstance(fx, dict) and not fx):
+            fixed = None
+        else:
+            fixed = FixedIncome(
+                base=float(fx.get("base", 0.0)),
+                annual_growth=float(fx.get("annual_growth", 0.0)),
+                salary_raises=None if fx.get("salary_raises") is None else {
+                    date.fromisoformat(k): float(v) for k, v in fx["salary_raises"].items()
+                },
+                name=str(fx.get("name", "fixed")),
+            )
+
+        # Handle None or missing variable component
+        if vr is None or (isinstance(vr, dict) and not vr):
+            variable = None
+        else:
+            variable = VariableIncome(
+                base=float(vr.get("base", 0.0)),
+                seasonality=vr.get("seasonality"),
+                sigma=float(vr.get("sigma", 0.0)),
+                floor=vr.get("floor"),
+                cap=vr.get("cap"),
+                annual_growth=float(vr.get("annual_growth", 0.0)),
+                name=str(vr.get("name", "variable")),
+                seed=vr.get("seed"),
+            )
+
         return cls(fixed=fixed, variable=variable)
 
-    
     def __repr__(self) -> str:
         try:
+            # Build component description
+            components = []
+            if self.fixed is not None:
+                components.append(f"fixed(base={self.fixed.base:,.0f})")
+            if self.variable is not None:
+                components.append(f"variable(base={self.variable.base:,.0f})")
+            component_str = ", ".join(components) if components else "no components"
+
             metrics = self.income_metrics(months=12, start=date(2025, 1, 1))
             return (
-                f"{self.__class__.__name__}(horizon=12 months, "
-                f"total_income={metrics.total_income:.2f}, "
-                f"total_fixed={metrics.total_fixed:.2f}, "
-                f"total_variable={metrics.total_variable:.2f}, "
-                f"mean_total={metrics.mean_total:.2f}, "
-                f"fixed_share={metrics.fixed_share*100:.1f}%, "
-                f"variable_share={metrics.variable_share*100:.1f}%)"
+                f"{self.__class__.__name__}({component_str}, "
+                f"12mo total={metrics.total_income:,.0f})"
             )
         except Exception:
             return f"{self.__class__.__name__}(IncomeModel instance)"
