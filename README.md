@@ -3,34 +3,41 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](tests/)
 
-**Goal-based portfolio optimization under uncertainty using convex programming and stochastic simulation.**
+> **Minimum-horizon portfolio optimization with probabilistic goal guarantees**
 
-FinOpt determines the minimum investment horizon to achieve multiple financial goals with probabilistic guarantees, combining Monte Carlo simulation with CVaR (Conditional Value-at-Risk) reformulation for globally optimal allocation policies.
+Find the shortest investment horizon to achieve your financial goals using CVaR-reformulated convex programming and Monte Carlo simulation.
 
----
+**Why FinOpt?** Traditional tools either use heuristics (suboptimal), gradient descent (local minima), or simulation without optimization (no decisions). FinOpt combines stochastic simulation with convex optimization for **globally optimal allocation policies**.
 
-## 🎯 Problem Statement
-
-Traditional financial planning tools use either:
-- **Heuristic rules** (e.g., 60/40 portfolio, constant rebalancing) → suboptimal
-- **Gradient-based optimization** (local minima, no guarantees) → unreliable
-- **Monte Carlo simulation** without optimization → what-if analysis only
-
-**FinOpt solves the bilevel problem:**
-
-```
-min T                           [Find shortest horizon]
-s.t. ∃ X ∈ F_T                  [Where policy X satisfies all goals]
-
-where F_T = {X : P(W_t^m(X) ≥ b_t^m) ≥ 1-ε, ∀ goals}
-```
-
-Using **CVaR reformulation** (Rockafellar & Uryasev, 2000), we convert non-convex chance constraints into a **convex optimization problem** with global optimality guarantees.
+![Wealth Dynamics](docs/images/wealth_dynamics.png)
+*Monte Carlo wealth trajectories under optimal allocation policy with goal achievement markers*
 
 ---
 
-## ✨ Key Features
+## Problem Statement
+
+**Core question**: *What is the minimum investment horizon T\* to achieve multiple financial goals with high probability?*
+
+Traditional approaches fall short:
+- **Heuristic rules** (60/40 portfolio, constant rebalancing) → suboptimal allocations
+- **Gradient-based optimization** → local minima, no global guarantees
+- **Pure Monte Carlo** → scenario analysis without decision support
+
+**FinOpt's approach**: Bilevel stochastic optimization
+
+```
+Outer: min T                              # Find shortest horizon
+Inner: find X ∈ Simplex such that         # Allocation policy
+       P(W_t ≥ goal_t) ≥ 1-ε, ∀ goals    # Probabilistic constraints
+```
+
+The key insight: Using **CVaR reformulation** (Rockafellar & Uryasev, 2000), non-convex chance constraints become convex, enabling global optimality via disciplined convex programming (DCP).
+
+---
+
+## Key Features
 
 ### Mathematical Rigor
 - **Affine wealth representation**: Closed-form dynamics expose linear structure for convex solvers
@@ -44,17 +51,25 @@ Using **CVaR reformulation** (Rockafellar & Uryasev, 2000), we convert non-conve
 - **Flexible objectives**: Terminal wealth, low turnover, risk-adjusted, balanced
 - **Unified visualization**: 8 plotting modes with auto-simulation
 
+### Project Status
+
+| Component | Status |
+|-----------|--------|
+| Core simulation engine | Stable |
+| CVaR optimization | Stable |
+| SAA optimizer (scipy) | Stable |
+| CLI interface | Stable |
+| Serialization/persistence | Stable |
+| Transaction costs | Planned |
+| Tax modeling | Planned |
+
 ---
 
-## 📊 Visual Showcase
+## Visual Showcase
 
 ### Income Projection with Seasonality
 ![Income Projection](docs/images/income_projection.png)
 *Stochastic variable income (gray trajectories) + deterministic fixed income with scheduled raises*
-
-### Wealth Dynamics Under Optimal Policy
-![Wealth Dynamics](docs/images/wealth_dynamics.png)
-*Monte Carlo trajectories showing goal achievement: UF @ month 6, Conservative @ month 18, Terminal goals @ T=23*
 
 ### Allocation Analysis with Investment Gains
 ![Allocation Analysis](docs/images/allocation_analysis.png)
@@ -62,41 +77,56 @@ Using **CVaR reformulation** (Rockafellar & Uryasev, 2000), we convert non-conve
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Installation
 
+#### Option 1: Conda (Recommended)
+
 ```bash
-# Clone repository
-git clone https://github.com/yourusername/finopt.git
+git clone https://github.com/mfourier/finopt.git
 cd finopt
 
-# Create virtual environment (Python 3.11+)
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
+conda env create -f environment.yml
+conda activate finance
+pip install -e .
 ```
 
-**Core dependencies:**
-- `numpy`, `pandas`: Numerical computing
-- `cvxpy`: Convex optimization (ECOS/SCS/CLARABEL solvers)
-- `matplotlib`: Visualization
-- `scipy`: Gradient-based optimization (SAA)
+#### Option 2: pip
+
+```bash
+git clone https://github.com/mfourier/finopt.git
+cd finopt
+
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+pip install -e .
+```
+
+#### Verify Installation
+
+```bash
+python -c "from src import FinancialModel; print('FinOpt installed successfully')"
+pytest tests/ -q  # Run test suite
+```
+
+**Core dependencies**: numpy, pandas, cvxpy (ECOS/SCS solvers), matplotlib, scipy, pydantic
 
 ### Minimal Example
 
+> **Note**: Examples use Chilean Peso (CLP) but FinOpt is currency-agnostic. Scale values appropriately for your local currency.
+
 ```python
-from finopt import FinancialModel, Account, IncomeModel, FixedIncome
-from finopt.goals import TerminalGoal
-from finopt.optimization import CVaROptimizer
+from src import FinancialModel, Account, IncomeModel, FixedIncome
+from src.goals import TerminalGoal
+from src.optimization import CVaROptimizer
 from datetime import date
 
 # 1. Define income stream
 income = IncomeModel(
     fixed=FixedIncome(
-        base=1_500_000,  # CLP/month
+        base=1_500_000,  # Monthly salary
         annual_growth=0.03,
         salary_raises={date(2026, 6, 1): 500_000}
     )
@@ -149,17 +179,24 @@ model.plot("wealth", result=result, show_trajectories=True)
 
 **Output:**
 ```
-=== GoalSeeker: BINARY search T ∈ [1, 120] ===
-[Iter 1] Testing T=60... ✓ Feasible
-[Iter 2] Testing T=30... ✓ Feasible  
-[Iter 3] Testing T=15... ✗ Infeasible
-[Iter 4] Testing T=23... ✓ Feasible
+=== GoalSeeker: BINARY search T in [1, 120] ===
+[Iter 1] Testing T=60... Feasible
+[Iter 2] Testing T=30... Feasible
+[Iter 3] Testing T=15... Infeasible
+[Iter 4] Testing T=23... Feasible
 === Optimal: T*=23 (converged in 7 iterations) ===
 ```
 
+### Interactive Notebooks
+
+| Notebook | Description |
+|----------|-------------|
+| [FinOpt-Workflow.ipynb](notebooks/FinOpt-Workflow.ipynb) | Complete workflow: income, simulation, optimization, visualization |
+| [recursive_affine_verification.ipynb](notebooks/recursive_affine_verification.ipynb) | Mathematical verification of affine wealth representation |
+
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -196,7 +233,7 @@ model.plot("wealth", result=result, show_trajectories=True)
 
 ---
 
-## 📐 Mathematical Foundation
+## Mathematical Foundation
 
 ### Wealth Dynamics (Affine Representation)
 
@@ -258,12 +295,12 @@ s.t. Σ_m x_t^m = 1, ∀t      [Simplex constraint]
 
 ---
 
-## 💼 Usage Examples
+## Usage Examples
 
 ### Example 1: Multiple Goals with Different Horizons
 
 ```python
-from finopt.goals import IntermediateGoal, TerminalGoal
+from src.goals import IntermediateGoal, TerminalGoal
 
 goals = [
     # Emergency fund by month 6
@@ -299,7 +336,7 @@ for goal_id, status in verification.items():
 ### Example 2: Stochastic Income with Seasonality
 
 ```python
-from finopt import VariableIncome
+from src import VariableIncome
 
 # Freelance income with summer peak
 variable = VariableIncome(
@@ -325,7 +362,7 @@ income = IncomeModel(
 ### Example 3: Risk-Adjusted Objectives
 
 ```python
-from finopt.optimization import CVaROptimizer
+from src.optimization import CVaROptimizer
 
 # Compare different risk preferences
 objectives = ["risky", "balanced", "conservative"]
@@ -338,18 +375,42 @@ for obj in objectives:
 
 ---
 
-## 🔬 Extensions & Future Work
+## Testing
 
-### Planned Features
-- [ ] **Transaction costs**: Convex penalties for rebalancing (L1/L2 norms)
-- [ ] **Taxes**: Capital gains modeling for Chilean tax regime
-- [ ] **Multi-period rebalancing**: Dynamic policies vs pre-commitment
-- [ ] **Robust optimization**: Uncertainty sets for (μ, σ) parameters
-- [ ] **Real data backtesting**: Historical IPSA, Fintual fund returns
+FinOpt includes comprehensive unit and integration tests:
+
+```bash
+# Full test suite
+pytest tests/ -v
+
+# With coverage report
+pytest tests/ --cov=src --cov-report=term-missing
+
+# Integration tests only (full optimization workflow)
+pytest tests/integration/ -v
+
+# Quick smoke test
+pytest tests/unit/test_portfolio.py -v -k "affine"
+```
+
+**Test structure**:
+- `tests/unit/` - Module-level tests for all 9 core modules
+- `tests/integration/` - End-to-end workflow tests
+- `tests/conftest.py` - Shared fixtures (accounts, income models, goals)
 
 ---
 
-## 📚 References
+## Roadmap
+
+- [ ] **Transaction costs**: Convex penalties for rebalancing (L1/L2 norms)
+- [ ] **Tax modeling**: Capital gains for Chilean tax regime
+- [ ] **Multi-period rebalancing**: Dynamic policies vs pre-commitment
+- [ ] **Robust optimization**: Uncertainty sets for (μ, σ) parameters
+- [ ] **Historical backtesting**: Real fund return data
+
+---
+
+## References
 
 **Optimization Theory**:
 - Rockafellar, R.T. & Uryasev, S. (2000). "Optimization of Conditional Value-at-Risk". *Journal of Risk*, 2(3), 21-41.
@@ -357,18 +418,36 @@ for obj in objectives:
 
 ---
 
-## 📄 License
+## Contributing
+
+Contributions are welcome. Please:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Ensure tests pass (`pytest tests/`)
+4. Format code (`black src/ tests/`)
+5. Submit a pull request
+
+**Development setup**:
+```bash
+pip install -e ".[dev]"  # Installs black, pytest, pytest-cov
+```
+
+---
+
+## License
 
 MIT License - see [LICENSE](LICENSE) for details.
 
 ---
 
-## 👤 Author
+## Author
 
-**Maximiliano Lioi**  
-M.Sc. Applied Mathematics | Data Scientist  
+**Maximiliano Lioi**
+M.Sc. Applied Mathematics | Quantitative Finance | Data Science
+
 [GitHub](https://github.com/mfourier) | [LinkedIn](https://linkedin.com/in/mlioi)
 
 ---
 
-**⚠️ Disclaimer**: This software is for educational and research purposes. Not financial advice. Consult certified professionals before making investment decisions.
+*This software is for educational and research purposes. Not financial advice. Consult certified professionals before making investment decisions.*

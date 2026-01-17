@@ -24,16 +24,20 @@ jupyter lab
 
 **Note**: There is no `requirements.txt` - dependencies are managed via `environment.yml`.
 
-## Architecture: Six Independent Modules
+## Architecture: Nine Modules
 
 The codebase follows strict separation of concerns with a unidirectional dependency flow:
 
 ```
+Core Pipeline:
 income.py → portfolio.py → model.py → optimization.py
     ↓           ↓              ↓
 returns.py ─────┘              │
                                │
 goals.py ──────────────────────┘
+
+Supporting Modules:
+config.py ─── serialization.py ─── cli.py
 ```
 
 ### 1. `income.py` - Cash Flow Modeling
@@ -43,6 +47,8 @@ Generates contribution scenarios `A_t` (monthly contributions available for inve
 - **`FixedIncome`**: Deterministic salary with annual growth and scheduled raises
 - **`VariableIncome`**: Stochastic income with seasonality (12-month factors), Gaussian noise, floor/cap constraints
 - **`IncomeModel`**: Facade combining fixed + variable streams with configurable contribution rates
+  - `monthly_contribution`: dict with 12-element arrays per income type
+  - **Defaults**: `{"fixed": [0.3]*12, "variable": [1.0]*12}` (30% of salary, 100% of bonuses)
 
 **Key pattern**: Calendar-aware outputs (indexed by first-of-month dates), reproducible randomness via explicit seeds.
 
@@ -73,9 +79,17 @@ Domain-level abstractions for financial goals as chance constraints.
 
 - **`IntermediateGoal`**: Fixed calendar checkpoint (e.g., emergency fund by month 6)
   - ℙ(W_{t_fixed}^m ≥ b) ≥ 1-ε
+  - Params: `account`, `threshold`, `confidence`, `month` OR `date` (mutually exclusive)
 - **`TerminalGoal`**: End-of-horizon target (e.g., retirement wealth at optimized horizon T*)
   - ℙ(W_T^m ≥ b) ≥ 1-ε
+  - Params: `account`, `threshold`, `confidence`
 - **`GoalSet`**: Validator and metadata provider (T_min, account index resolution)
+  - `estimate_minimum_horizon(monthly_contribution, accounts)`: Deterministic T estimate for terminal goals
+
+**Utility functions**:
+- **`check_goals(result, goals, accounts, start_date)`**: Validates goal satisfaction, returns metrics dict
+- **`goal_progress(result, goals, accounts, start_date)`**: Computes VaR-based progress toward each goal
+- **`print_goal_status(result, goals, accounts, start_date)`**: Pretty-prints goal satisfaction status
 
 **Design principle**: Immutable frozen dataclasses with calendar-aware resolution.
 
@@ -86,8 +100,11 @@ Implements bilevel optimization: outer problem (minimize horizon T) + inner prob
 - **`CVaROptimizer`**: Convex reformulation via CVaR epigraphic form (uses CVXPY)
   - Transforms non-convex chance constraints into tractable LP/QP
   - Objectives: "risky", "balanced" (default), "conservative", "risky_turnover", or custom callable
-- **`SAAOptimizer`**: Sample Average Approximation with gradient-based solvers (scipy)
+  - Solver selection via `solver` kwarg: "ECOS" (default), "SCS", "CLARABEL", "MOSEK"
 - **`GoalSeeker`**: Binary/linear search over horizon T with warm-start
+- **`OptimizationResult`**: Container for X*, T*, objective value, goal_set, and diagnostics
+  - `validate_goals(result)`: Validates goal satisfaction using stored goal_set
+  - `is_valid_allocation()`: Checks simplex constraints on X
 
 **CVaR Reformulation** (Rockafellar & Uryasev 2000):
 ```
@@ -98,6 +115,16 @@ Epigraph (LP):          γ + (1/εN)Σ z_i ≤ 0,  z_i ≥ b - W_t^i - γ,  z_i 
 
 This provides global optimality guarantees (vs local minima from gradient-based methods).
 
+**Optimization Objectives**:
+
+| Objective | Formula | Type | Use Case |
+|-----------|---------|------|----------|
+| `"risky"` | `E[Σ_m W_T^m]` | LP | Maximum wealth accumulation |
+| `"balanced"` | `-Σ_{t,m}(Δx_{t,m})²` | QP | Stable allocations (turnover penalty only) |
+| `"conservative"` | `E[W_T] - λ·Std(W_T)` | QP | Risk-averse mean-variance |
+| `"risky_turnover"` | `E[W_T] - λ·Σ(Δx)²` | QP | Wealth + stability tradeoff |
+| Custom callable | `f(W, X, T, M) → float` | - | User-defined (must be convex) |
+
 ### 6. `model.py` - Orchestration Facade
 
 **`FinancialModel`**: Unified entry point that coordinates income → returns → portfolio → optimization.
@@ -106,8 +133,99 @@ Key features:
 - **Intelligent caching**: Simulation results cached by SHA256 hash of parameters (RAM-efficient)
 - **Auto-simulation**: `plot()` method simulates internally when needed
 - **Unified plotting**: 8 modes with single interface (wealth, allocation, income, etc.)
+- **`simulate_from_optimization()`**: Re-simulates using OptimizationResult's X* and goal_set
 
 **`SimulationResult`**: Immutable dataclass containing wealth trajectories, contributions, returns, income breakdown, and metadata for reproducibility.
+
+### 7. `config.py` - Configuration Management
+
+Pydantic-based type-safe configuration for all model parameters.
+
+- **`SimulationConfig`**: n_sims, seed, cache_enabled, verbose
+- **`OptimizationConfig`**: T_max, T_min, solver, objective, search_strategy, tolerance
+- **`IncomeConfig`**: Combines FixedIncomeConfig + VariableIncomeConfig with contribution rates
+- **`AccountConfig`**: name, annual_return, annual_volatility, initial_wealth
+- **`AppSettings`**: Environment variables (FINOPT_* prefix), .env file support
+
+```python
+from finopt.config import SimulationConfig, OptimizationConfig
+
+sim_config = SimulationConfig(n_sims=1000, seed=42, cache_enabled=True)
+opt_config = OptimizationConfig(T_max=120, solver="ECOS", objective="balanced")
+
+# Serialize to JSON
+config_dict = sim_config.model_dump()
+```
+
+### 8. `serialization.py` - Model Persistence
+
+JSON serialization for model configurations and optimization results.
+
+- **`save_model(model, path)`**: Saves FinancialModel to JSON (income, accounts, correlation)
+- **`load_model(path)`**: Reconstructs FinancialModel from JSON
+- **`save_optimization_result(result, path)`**: Saves X*, T, goals, diagnostics
+- **`load_optimization_result(path)`**: Returns dict (requires context for full reconstruction)
+- Schema versioning: Currently "0.1.0"
+
+```python
+from finopt.serialization import save_model, load_model
+from pathlib import Path
+
+save_model(model, Path("config.json"))
+loaded_model = load_model(Path("config.json"))
+```
+
+### 9. `cli.py` - Command-Line Interface
+
+Click-based CLI for running simulations without Python code.
+
+```bash
+# Run simulation from config file
+finopt simulate --config config.json --output results/ --horizon 36
+
+# Optimize allocation policy
+finopt optimize --config config.json --goal-file goals.yaml --horizon 36
+
+# Validate configuration
+finopt config validate config.json
+
+# Show version
+finopt --version
+```
+
+## Mathematical Foundation
+
+### Affine Wealth Representation
+
+The core optimization insight is that wealth is **affine in allocation policy**:
+
+```
+W_t^m(X) = W_0^m · F_{0,t}^m + Σ_{s=0}^{t-1} A_s · x_s^m · F_{s,t}^m
+```
+
+where `F_{s,t}^m = Π_{τ=s+1}^{t} (1 + R_τ^m)` is the accumulation factor.
+
+**Consequences**:
+- Convex constraints remain convex (enables CVaR reformulation)
+- Analytical gradients: ∂W_t^m/∂x_s^m = A_s · F_{s,t}^m
+- O(1) wealth evaluation (no recursion needed in optimization inner loop)
+
+### Wealth Array Indexing
+
+The wealth array has shape `(n_sims, T+1, M)`:
+- `wealth[i, 0, m]` = W_0^m (initial wealth, **before** any contributions/returns)
+- `wealth[i, t, m]` = W_t^m (wealth at **end** of month t, after contributions and returns)
+- `wealth[i, T, m]` = terminal wealth (used for TerminalGoal evaluation)
+
+### CVaR Reformulation
+
+Transforms non-convex chance constraints into tractable convex form:
+```
+Original:   ℙ(W_t ≥ b) ≥ 1-ε        (non-convex)
+CVaR form:  CVaR_ε(b - W_t) ≤ 0     (convex)
+```
+
+Based on Rockafellar & Uryasev (2000).
 
 ## Common Workflows
 
@@ -193,32 +311,6 @@ All components process full Monte Carlo batches:
 - `IntermediateGoal.month`: integer offset from `start_date` OR `datetime.date` (auto-resolved)
 - `account` parameter: integer index OR string name (resolved via `GoalSet`)
 - `confidence`: 1-ε (e.g., 0.80 means 80% probability of success)
-
-## Mathematical Foundation
-
-### Affine Wealth Representation
-
-The core optimization insight is that wealth is **affine in allocation policy**:
-
-```
-W_t^m(X) = W_0^m · F_{0,t}^m + Σ_{s=0}^{t-1} A_s · x_s^m · F_{s,t}^m
-```
-
-where `F_{s,t}^m = Π_{τ=s+1}^{t} (1 + R_τ^m)` is the accumulation factor.
-
-**Consequences**:
-- Convex constraints remain convex (enables CVaR reformulation)
-- Analytical gradients: ∂W_t^m/∂x_s^m = A_s · F_{s,t}^m
-- O(1) wealth evaluation (no recursion needed in optimization inner loop)
-
-### CVaR Objectives
-
-All built-in objectives maintain convexity:
-- **"risky"**: Linear program, maximizes E[Σ_m W_T^m]
-- **"balanced"**: Quadratic program, E[W_T] - λ·Σ|Δx| (turnover penalty)
-- **"conservative"**: Quadratic program, E[W_T] - λ·Std(W_T) (risk-adjusted)
-
-Custom objectives must be convex in X to maintain global optimality.
 
 ## Code Style and Patterns
 
