@@ -1,0 +1,1218 @@
+================================================================================
+FinOpt Extension: Waste (Gastos) & Rewards (Premios/Retiros)
+Complete Implementation Guide
+================================================================================
+
+Author: Implementation Plan for FinOpt Framework
+Version: 1.0
+Status: IMPLEMENTATION READY
+Date: 2026-01-12
+
+================================================================================
+TABLE OF CONTENTS
+================================================================================
+
+1. EXECUTIVE SUMMARY
+2. ARCHITECTURE ANALYSIS
+3. IMPLEMENTATION PHASES
+   3.1 Phase 1: Expense Modeling (expenses.py)
+   3.2 Phase 2: Extended Income Model Integration
+   3.3 Phase 3: Portfolio Dynamics with Withdrawals
+   3.4 Phase 4: Optimization Extensions (CVaR with Rewards)
+   3.5 Phase 5: Visualization and Reporting
+4. DETAILED CLASS SPECIFICATIONS
+5. MATHEMATICAL FORMULATIONS (Code-Ready)
+6. TEST SPECIFICATIONS
+7. MIGRATION GUIDE
+8. APPENDIX: Full Code Templates
+
+================================================================================
+1. EXECUTIVE SUMMARY
+================================================================================
+
+Goal: Extend FinOpt to model:
+  (A) Expenses (gastos): Fixed + Variable + Micro-expenses that reduce savings
+  (B) Rewards/Purchases (premios): Withdrawals from portfolio for planned purchases
+
+Core Constraint: Preserve AFFINE WEALTH structure W_t^m(X,Y) for convexity:
+  W_t^m(X,Y) = W_0^m F_{0,t}^m + sum_{s=0}^{t-1} (A_s x_s^m - y_s^m) F_{s,t}^m
+
+Key Design Decisions:
+  1. Expenses are modeled BEFORE portfolio (reduce contributions A_t)
+  2. Rewards/Withdrawals are modeled IN portfolio dynamics (reduce wealth W_t)
+  3. Withdrawal variables Y optional - can be fixed schedule or decision
+  4. New classes: FixedExpense, VariableExpense, MicroExpense, ExpenseModel
+  5. New classes: Reward, RewardSchedule
+  6. Extended: IncomeModel.net_income(), Portfolio.simulate() with withdrawals
+
+================================================================================
+2. ARCHITECTURE ANALYSIS
+================================================================================
+
+Current Module Structure (src/):
+--------------------------------
+income.py       -> FixedIncome, VariableIncome, IncomeModel
+                   Generates contributions A_t = alpha_f * y_fixed + alpha_v * y_var
+
+portfolio.py    -> Account, Portfolio
+                   Executes W_{t+1} = (W_t + A_t x_t)(1 + R_t)
+                   Provides affine form W_t = W_0 F_{0,t} + sum A_s x_s F_{s,t}
+
+returns.py      -> ReturnModel
+                   Generates correlated lognormal R_t ~ LogNormal(mu, Sigma)
+
+goals.py        -> IntermediateGoal, TerminalGoal, GoalSet
+                   Defines P(W_t >= b) >= 1-epsilon constraints
+
+optimization.py -> CVaROptimizer, GoalSeeker
+                   Solves bilevel: min T s.t. CVaR-reformulated goals feasible
+
+model.py        -> FinancialModel, SimulationResult
+                   Orchestrates income -> returns -> portfolio pipeline
+
+Proposed Extensions:
+--------------------
+NEW expenses.py -> FixedExpense, VariableExpense, MicroExpense, ExpenseModel
+                   Models C_t = C_fixed + C_var + C_micro
+
+EXTEND income.py -> IncomeModel.net_income(), IncomeModel.disposable_income()
+                    D_t = I_t - C_t (disposable income before savings)
+
+NEW rewards.py  -> Reward, RewardSchedule
+                   Models Y_t = sum_k q_k * 1{t = tau_k} (withdrawal events)
+
+EXTEND portfolio.py -> Portfolio.simulate() with Y parameter
+                       W_{t+1} = (W_t + A_t x_t - y_t)(1 + R_t)
+
+EXTEND optimization.py -> CVaROptimizer with withdrawal variables
+                          Constraints y_t <= W_t (liquidity)
+
+================================================================================
+3. IMPLEMENTATION PHASES
+================================================================================
+
+------------------------------------------------------------------------------
+PHASE 1: Expense Modeling (expenses.py) - NEW MODULE
+------------------------------------------------------------------------------
+
+File: src/expenses.py
+
+Purpose:
+  Model monthly expenses (gastos) that reduce disposable income before savings.
+  Three expense types mirror the income structure:
+    - FixedExpense: Rent, utilities, loan payments (deterministic)
+    - VariableExpense: Food, transport, entertainment (stochastic + seasonality)
+    - MicroExpense: Coffee, snacks, impulse buys (compound Poisson)
+
+Mathematical Model:
+  C_t = C_t^fixed + C_t^variable + C_t^micro
+
+  C_t^fixed: deterministic with optional annual growth (inflation)
+    c_t^fixed = base * (1 + m_inflation)^t + step_changes
+
+  C_t^variable: stochastic with seasonality
+    C_t^variable ~ base * (1+m)^t * s_{t mod 12} * (1 + epsilon_t)
+    epsilon_t ~ N(0, sigma^2)
+    With floor/cap guardrails
+
+  C_t^micro: compound Poisson
+    C_t^micro = sum_{j=1}^{N_t} S_j
+    N_t ~ Poisson(lambda_t)
+    S_j ~ LogNormal(mu_s, sigma_s) or Gamma(alpha, beta)
+
+Classes to Implement:
+---------------------
+
+@dataclass(frozen=True)
+class FixedExpense:
+    """
+    Deterministic monthly expense with optional inflation and step changes.
+    
+    Parameters
+    ----------
+    base : float
+        Monthly base expense at t=0 (e.g., 500_000 CLP for rent)
+    annual_inflation : float, default 0.0
+        Nominal annual inflation rate (e.g., 0.04 for 4%/year)
+    step_changes : Optional[Dict[date, float]], default None
+        Scheduled changes (e.g., rent increase): {date(2026,1,1): 50_000}
+    name : str, default "fixed_expense"
+    
+    Methods
+    -------
+    project(months, start=None, output="array", n_sims=1) -> np.ndarray
+        Deterministic projection (replicated for n_sims)
+    """
+    base: float
+    annual_inflation: float = 0.0
+    step_changes: Optional[Dict[date, float]] = None
+    name: str = "fixed_expense"
+
+
+@dataclass(frozen=True)
+class VariableExpense:
+    """
+    Stochastic monthly expense with seasonality and noise.
+    
+    Parameters
+    ----------
+    base : float
+        Baseline monthly expense before growth/seasonality
+    seasonality : Optional[Iterable[float]], default None
+        12-month multiplicative factors (e.g., higher in December)
+    sigma : float, default 0.0
+        Gaussian noise std as fraction of mean
+    floor : Optional[float], default 0.0
+        Minimum expense (cannot be negative)
+    cap : Optional[float], default None
+        Maximum expense
+    annual_inflation : float, default 0.0
+        Nominal annual growth rate
+    name : str, default "variable_expense"
+    seed : Optional[int], default None
+    
+    Methods
+    -------
+    project(months, start=None, seed=None, output="array", n_sims=1) -> np.ndarray
+        Stochastic projection with shape (n_sims, months)
+    """
+    base: float
+    seasonality: Optional[Iterable[float]] = None
+    sigma: float = 0.0
+    floor: Optional[float] = 0.0
+    cap: Optional[float] = None
+    annual_inflation: float = 0.0
+    name: str = "variable_expense"
+    seed: Optional[int] = None
+
+
+@dataclass(frozen=True)
+class MicroExpense:
+    """
+    Compound Poisson micro-expense process.
+    
+    Models frequent small purchases (coffee, snacks, impulse buys).
+    N_t ~ Poisson(lambda_t), S_j ~ severity distribution.
+    C_t^micro = sum_{j=1}^{N_t} S_j
+    
+    Parameters
+    ----------
+    lambda_base : float
+        Base expected number of events per month (e.g., 30 for daily)
+    severity_mean : float
+        Mean expense per event (e.g., 2_000 CLP)
+    severity_std : float
+        Std of expense per event
+    severity_distribution : Literal["lognormal", "gamma"], default "lognormal"
+    lambda_seasonality : Optional[Iterable[float]], default None
+        12-month factors for event frequency (e.g., higher in December)
+    name : str, default "micro_expense"
+    seed : Optional[int], default None
+    
+    Methods
+    -------
+    project(months, start=None, seed=None, output="array", n_sims=1) -> np.ndarray
+        Compound Poisson projection with shape (n_sims, months)
+    
+    expected_monthly() -> float
+        E[C_micro] = lambda * E[S]
+    """
+    lambda_base: float
+    severity_mean: float
+    severity_std: float
+    severity_distribution: Literal["lognormal", "gamma"] = "lognormal"
+    lambda_seasonality: Optional[Iterable[float]] = None
+    name: str = "micro_expense"
+    seed: Optional[int] = None
+
+
+@dataclass(frozen=False)
+class ExpenseModel:
+    """
+    Unified expense model combining fixed, variable, and micro-expenses.
+    
+    Parameters
+    ----------
+    fixed : Optional[FixedExpense], default None
+    variable : Optional[VariableExpense], default None
+    micro : Optional[MicroExpense], default None
+    
+    Methods
+    -------
+    project(months, start=None, output="series", seed=None, n_sims=1)
+        Total expense projection
+    summary(months, start=None) -> pd.Series
+        Statistical summary of expenses
+    plot(months, start=None, **kwargs)
+        Visualize expense streams
+    """
+    fixed: Optional[FixedExpense] = None
+    variable: Optional[VariableExpense] = None
+    micro: Optional[MicroExpense] = None
+
+
+------------------------------------------------------------------------------
+PHASE 2: Extended Income Model Integration
+------------------------------------------------------------------------------
+
+File: src/income.py (MODIFICATIONS)
+
+Changes to IncomeModel:
+-----------------------
+
+class IncomeModel:
+    """
+    Extended to support expense modeling.
+    
+    NEW Parameters
+    --------------
+    expenses : Optional[ExpenseModel], default None
+        Expense model for computing net/disposable income
+    
+    NEW Methods
+    -----------
+    gross_income(months, ...) -> np.ndarray
+        I_t = y_fixed + y_variable (current project() behavior)
+    
+    net_income(months, ...) -> np.ndarray
+        Net = I_t - C_t (income after expenses, can be negative)
+    
+    disposable_income(months, ...) -> np.ndarray
+        D_t = max(0, I_t - C_t) (clamped to non-negative)
+    
+    contributions_from_disposable(months, savings_rate=0.3, ...) -> np.ndarray
+        A_t = savings_rate * D_t (alternative to current contributions())
+    
+    waste_impact_analysis(months, waste_scenario, ...) -> dict
+        Quantify impact of waste reduction on savings
+    """
+
+Implementation Details:
+-----------------------
+
+def gross_income(
+    self,
+    months: int,
+    *,
+    start: Optional[date] = None,
+    seed: Optional[int] = None,
+    n_sims: int = 1,
+) -> np.ndarray:
+    """
+    Total income before expenses (current behavior).
+    Returns shape (n_sims, months) or (months,) if n_sims=1.
+    """
+    result = self.project(months, start=start, seed=seed, output="array", n_sims=n_sims)
+    return result["total"]
+
+
+def net_income(
+    self,
+    months: int,
+    *,
+    start: Optional[date] = None,
+    seed: Optional[int] = None,
+    n_sims: int = 1,
+) -> np.ndarray:
+    """
+    Income after expenses: Net_t = I_t - C_t
+    Can be negative if expenses exceed income.
+    
+    Returns shape (n_sims, months) or (months,) if n_sims=1.
+    """
+    if self.expenses is None:
+        return self.gross_income(months, start=start, seed=seed, n_sims=n_sims)
+    
+    I = self.gross_income(months, start=start, seed=seed, n_sims=n_sims)
+    C = self.expenses.project(months, start=start, seed=seed+2 if seed else None, 
+                              output="array", n_sims=n_sims)
+    return I - C["total"]
+
+
+def disposable_income(
+    self,
+    months: int,
+    *,
+    start: Optional[date] = None,
+    seed: Optional[int] = None,
+    n_sims: int = 1,
+) -> np.ndarray:
+    """
+    Non-negative disposable income: D_t = max(0, I_t - C_t)
+    """
+    net = self.net_income(months, start=start, seed=seed, n_sims=n_sims)
+    return np.maximum(net, 0.0)
+
+
+def contributions_from_disposable(
+    self,
+    months: int,
+    *,
+    savings_rate: Union[float, np.ndarray] = 0.3,
+    start: Optional[date] = None,
+    seed: Optional[int] = None,
+    n_sims: int = 1,
+) -> np.ndarray:
+    """
+    Contributions as fraction of disposable income.
+    
+    A_t = savings_rate * D_t
+    
+    Parameters
+    ----------
+    savings_rate : float or ndarray
+        If float: constant rate for all months
+        If ndarray shape (12,): monthly rotating rates (like current contributions)
+        If ndarray shape (months,): specific rate per month
+    """
+    D = self.disposable_income(months, start=start, seed=seed, n_sims=n_sims)
+    
+    if isinstance(savings_rate, (int, float)):
+        return savings_rate * D
+    
+    # Handle array savings rates with rotation
+    savings_rate = np.asarray(savings_rate)
+    if savings_rate.shape == (12,):
+        offset = normalize_start_month(start)
+        rate_full = savings_rate[(offset + np.arange(months)) % 12]
+    else:
+        rate_full = savings_rate[:months]
+    
+    if n_sims == 1:
+        return rate_full * D
+    else:
+        return rate_full[None, :] * D
+
+
+------------------------------------------------------------------------------
+PHASE 3: Portfolio Dynamics with Withdrawals
+------------------------------------------------------------------------------
+
+File: src/portfolio.py (MODIFICATIONS)
+File: src/rewards.py (NEW MODULE)
+
+NEW: src/rewards.py
+-------------------
+
+@dataclass(frozen=True)
+class Reward:
+    """
+    Single planned purchase/reward requiring portfolio withdrawal.
+    
+    Parameters
+    ----------
+    name : str
+        Description (e.g., "Vacation", "New Computer")
+    amount : float
+        Nominal cost in CLP
+    month : int
+        Target month (1-indexed offset from start)
+    account : Optional[Union[int, str]], default None
+        Preferred account to withdraw from. If None, uses withdrawal_policy.
+    optional : bool, default False
+        If True, optimizer can decide u_k in [0,1] (partial purchase)
+    priority : int, default 1
+        Relative importance (higher = more important)
+    """
+    name: str
+    amount: float
+    month: int
+    account: Optional[Union[int, str]] = None
+    optional: bool = False
+    priority: int = 1
+
+
+@dataclass(frozen=False)
+class RewardSchedule:
+    """
+    Collection of planned purchases with withdrawal scheduling.
+    
+    Parameters
+    ----------
+    rewards : List[Reward]
+        List of planned purchases
+    withdrawal_policy : Literal["proportional", "priority", "single_account"], default "proportional"
+        How to distribute withdrawals across accounts:
+        - "proportional": withdraw from all accounts proportionally to wealth
+        - "priority": withdraw from lowest-risk account first
+        - "single_account": all from specified account (requires account param)
+    default_account : Optional[Union[int, str]], default None
+        Default account for "single_account" policy
+    
+    Methods
+    -------
+    get_withdrawals(T, accounts, start=None) -> np.ndarray
+        Returns Y schedule of shape (T, M) for fixed withdrawals
+    to_optimization_params(T, M, start=None) -> dict
+        Returns parameters for CVaR optimizer
+    """
+    rewards: List[Reward]
+    withdrawal_policy: Literal["proportional", "priority", "single_account"] = "proportional"
+    default_account: Optional[Union[int, str]] = None
+
+    def get_fixed_withdrawals(
+        self,
+        T: int,
+        M: int,
+        accounts: List[Account],
+        start: Optional[date] = None
+    ) -> np.ndarray:
+        """
+        Generate fixed withdrawal matrix for non-optional rewards.
+        
+        Returns Y of shape (T, M) where Y[t, m] = withdrawal from account m at time t.
+        
+        For optional rewards, returns zeros (handled by optimizer).
+        """
+        Y = np.zeros((T, M), dtype=float)
+        
+        for reward in self.rewards:
+            if reward.optional:
+                continue  # Optimizer decides
+            
+            t = reward.month - 1  # Convert to 0-indexed
+            if t < 0 or t >= T:
+                continue
+            
+            if self.withdrawal_policy == "single_account":
+                m = self._resolve_account(reward.account or self.default_account, accounts)
+                Y[t, m] = reward.amount
+            elif self.withdrawal_policy == "proportional":
+                # Distribute proportionally (placeholder - needs W_t)
+                # For fixed schedule, use equal split
+                Y[t, :] = reward.amount / M
+            elif self.withdrawal_policy == "priority":
+                # Withdraw from lowest-volatility account first
+                sorted_accounts = sorted(enumerate(accounts), 
+                                        key=lambda x: x[1].return_strategy["sigma"])
+                Y[t, sorted_accounts[0][0]] = reward.amount
+        
+        return Y
+
+
+MODIFICATIONS: src/portfolio.py
+-------------------------------
+
+class Portfolio:
+    """
+    Extended to support withdrawals Y in wealth dynamics.
+    """
+    
+    def simulate(
+        self,
+        A: np.ndarray,
+        R: np.ndarray,
+        X: np.ndarray,
+        method: Literal["recursive", "affine"] = "affine",
+        W0_override: Optional[np.ndarray] = None,
+        Y: Optional[np.ndarray] = None,  # NEW PARAMETER
+    ) -> dict:
+        """
+        Execute wealth dynamics with optional withdrawals.
+        
+        Extended Dynamics:
+            W_{t+1}^m = (W_t^m + A_t x_t^m - y_t^m)(1 + R_t^m)
+        
+        Parameters
+        ----------
+        Y : np.ndarray, shape (T, M) or (n_sims, T, M), optional
+            Withdrawal schedule.
+            - If None: no withdrawals (original behavior)
+            - If (T, M): fixed schedule broadcast across simulations
+            - If (n_sims, T, M): scenario-dependent withdrawals
+        
+        NEW Return Keys
+        ---------------
+        - "withdrawals": np.ndarray, shape matching Y (for reporting)
+        """
+        # ... existing validation ...
+        
+        # Handle Y parameter
+        if Y is None:
+            Y_broadcast = np.zeros((n_sims, T, self.M), dtype=float)
+        elif Y.ndim == 2:
+            Y_broadcast = np.broadcast_to(Y[None, :, :], (n_sims, T, self.M))
+        else:
+            Y_broadcast = Y
+        
+        if method == "affine":
+            return self._simulate_affine(A, R, X, W0, Y_broadcast)
+        else:
+            return self._simulate_recursive(A, R, X, W0, Y_broadcast)
+
+
+    def _simulate_affine(self, A, R, X, W0, Y):
+        """
+        Affine simulation with withdrawals.
+        
+        Extended closed-form:
+            W_t^m(X,Y) = W_0^m F_{0,t}^m + sum_{s=0}^{t-1} (A_s x_s^m - y_s^m) F_{s,t}^m
+        
+        This remains AFFINE in (X, Y) jointly.
+        """
+        n_sims, T, M = R.shape
+        F = self.compute_accumulation_factors(R)  # (n_sims, T+1, T+1, M)
+        
+        W = np.zeros((n_sims, T+1, M), dtype=float)
+        W[:, 0, :] = W0
+        
+        for t in range(1, T+1):
+            for m in range(M):
+                # Constant term: initial wealth compounded
+                W[:, t, m] = W0[m] * F[:, 0, t, m]
+                # Sum of net contributions compounded
+                for s in range(t):
+                    net_contribution = A[:, s] * X[s, m] - Y[:, s, m]
+                    W[:, t, m] += net_contribution * F[:, s, t, m]
+        
+        return {
+            "wealth": W,
+            "total_wealth": W.sum(axis=2),
+            "withdrawals": Y,
+            "accumulation_factors": F,
+        }
+
+
+------------------------------------------------------------------------------
+PHASE 4: Optimization Extensions (CVaR with Rewards)
+------------------------------------------------------------------------------
+
+File: src/optimization.py (MODIFICATIONS)
+
+Key Extensions:
+---------------
+1. Add Y (withdrawals) as optional decision variables
+2. Add liquidity constraints: y_t^m <= W_t^m
+3. Add optional reward purchase decisions: u_k in [0,1]
+4. Extend affine wealth builder to include -y terms
+5. New objectives incorporating withdrawal costs
+
+class CVaROptimizer(AllocationOptimizer):
+    """
+    Extended to support withdrawal decisions.
+    
+    NEW Parameters
+    --------------
+    enable_withdrawal_decisions : bool, default False
+        If True, Y becomes decision variable (not just fixed schedule)
+    reward_schedule : Optional[RewardSchedule], default None
+        Schedule of planned purchases
+    
+    NEW Constraints
+    ---------------
+    - Liquidity: y_t^m <= W_t^m for all t, m (only if enable_withdrawal_decisions)
+    - Budget: sum_m y_t^m = Y_t (total withdrawal at t)
+    
+    NEW Objective Components
+    ------------------------
+    - reward_utility: sum_k v_k u_k (utility from purchases)
+    - withdrawal_penalty: lambda_w * sum_{t,m} w_m * y_t^m (penalize early/risky withdrawals)
+    """
+    
+    def __init__(
+        self,
+        n_accounts: int,
+        objective: str = 'balanced',
+        objective_params: Optional[Dict[str, Any]] = None,
+        account_names: Optional[List[str]] = None,
+        enable_withdrawal_decisions: bool = False,  # NEW
+        reward_schedule: Optional[RewardSchedule] = None,  # NEW
+    ):
+        super().__init__(n_accounts, objective, objective_params, account_names)
+        self.enable_withdrawal_decisions = enable_withdrawal_decisions
+        self.reward_schedule = reward_schedule
+
+
+    def solve(
+        self,
+        T: int,
+        A: np.ndarray,
+        R: np.ndarray,
+        W0: np.ndarray,
+        goal_set: GoalSet,
+        X_init: Optional[np.ndarray] = None,
+        Y_fixed: Optional[np.ndarray] = None,  # NEW: fixed withdrawal schedule
+        **solver_kwargs
+    ) -> OptimizationResult:
+        """
+        Extended solve with withdrawal handling.
+        
+        NEW Parameters
+        --------------
+        Y_fixed : np.ndarray, shape (T, M), optional
+            Fixed withdrawal schedule (not decision).
+            If enable_withdrawal_decisions=False, this is used directly.
+            If enable_withdrawal_decisions=True, this provides targets.
+        """
+        cp = self.cp
+        
+        # ... existing setup ...
+        
+        # Decision variables
+        X = cp.Variable((T, M), nonneg=True, name="allocations")
+        
+        # NEW: Withdrawal decision variables (if enabled)
+        if self.enable_withdrawal_decisions:
+            Y = cp.Variable((T, M), nonneg=True, name="withdrawals")
+            
+            # Optional purchase fractions (for optional rewards)
+            if self.reward_schedule:
+                optional_rewards = [r for r in self.reward_schedule.rewards if r.optional]
+                if optional_rewards:
+                    U = {r.name: cp.Variable(nonneg=True, name=f"u_{r.name}") 
+                         for r in optional_rewards}
+                    for r in optional_rewards:
+                        constraints.append(U[r.name] <= 1.0)
+        else:
+            # Y is fixed data, not decision
+            if Y_fixed is not None:
+                Y_data = Y_fixed
+            elif self.reward_schedule:
+                Y_data = self.reward_schedule.get_fixed_withdrawals(T, M, goal_set.accounts)
+            else:
+                Y_data = np.zeros((T, M))
+        
+        # MODIFIED: Affine wealth builder with withdrawals
+        def build_wealth_affine(t: int, m: int):
+            """
+            Build W[:,t,m] = W_0 F_{0,t} + sum_{s<t} (A_s x_s - y_s) F_{s,t}
+            """
+            b = W0[m] * F[:, 0, t, m]
+            
+            if t == 0:
+                return b
+            
+            # Contribution term (affine in X)
+            Phi_A = A[:, :t] * F[:, :t, t, m]
+            contribution_term = Phi_A @ X[:t, m]
+            
+            # Withdrawal term (affine in Y or constant if Y_fixed)
+            if self.enable_withdrawal_decisions:
+                Phi_Y = F[:, :t, t, m]  # Just accumulation factors
+                # Y[:t, m] is decision variable
+                withdrawal_term = Phi_Y @ Y[:t, m]
+                return b + contribution_term - withdrawal_term
+            else:
+                # Y_data is constant
+                withdrawal_data = Y_data[:t, m]
+                withdrawal_term = (F[:, :t, t, m] * withdrawal_data[None, :]).sum(axis=1)
+                return b + contribution_term - withdrawal_term
+        
+        # NEW: Liquidity constraints (if withdrawal decisions enabled)
+        if self.enable_withdrawal_decisions:
+            for t in range(T):
+                for m in range(M):
+                    W_t_m = build_wealth_affine(t, m)
+                    # Cannot withdraw more than available
+                    constraints.append(Y[t, m] <= W_t_m)
+            
+            # Budget constraint: total withdrawal matches scheduled amount
+            if self.reward_schedule:
+                for reward in self.reward_schedule.rewards:
+                    if not reward.optional:
+                        t = reward.month - 1
+                        if 0 <= t < T:
+                            constraints.append(cp.sum(Y[t, :]) >= reward.amount)
+        
+        # ... rest of solve (CVaR constraints, objective, etc.) ...
+
+
+NEW Objectives with Rewards:
+----------------------------
+
+# Add to objective computation
+if self.reward_schedule and hasattr(self, 'U'):
+    # Utility from optional purchases
+    reward_utility = sum(
+        r.priority * U[r.name] * r.amount 
+        for r in self.reward_schedule.rewards 
+        if r.optional
+    )
+    objective_expr = objective_expr + reward_utility
+
+# Withdrawal penalty (opportunity cost)
+if self.enable_withdrawal_decisions:
+    lambda_w = self.objective_params.get("lambda_withdrawal", 0.0)
+    if lambda_w > 0:
+        # Weight by account volatility (penalize withdrawing from growth accounts)
+        weights = np.array([acc.return_strategy["sigma"] for acc in goal_set.accounts])
+        withdrawal_penalty = lambda_w * cp.sum(cp.multiply(weights, Y))
+        objective_expr = objective_expr - withdrawal_penalty
+
+
+------------------------------------------------------------------------------
+PHASE 5: Visualization and Reporting
+------------------------------------------------------------------------------
+
+File: src/model.py (EXTENSIONS)
+
+NEW Plot Modes:
+---------------
+- mode="expenses": Expense breakdown over time
+- mode="disposable": Disposable income vs gross income
+- mode="withdrawals": Withdrawal schedule visualization
+- mode="opportunity_cost": Future value of current spending
+
+NEW Analysis Methods:
+---------------------
+
+class FinancialModel:
+    """Extended with expense and reward analysis."""
+    
+    def waste_analysis(
+        self,
+        T: int,
+        waste_scenarios: Dict[str, float],  # {"current": 1.0, "reduced": 0.7, ...}
+        start: Optional[date] = None,
+        n_sims: int = 500,
+        seed: Optional[int] = None,
+    ) -> pd.DataFrame:
+        """
+        Analyze impact of waste reduction on terminal wealth.
+        
+        For each scenario, computes:
+        - Mean terminal wealth
+        - Probability of meeting goals
+        - "Burn multiple": future value per unit of waste
+        """
+        pass
+    
+    def opportunity_cost(
+        self,
+        expense_delta: float,
+        at_month: int,
+        horizon: int,
+        X: np.ndarray,
+        n_sims: int = 500,
+    ) -> dict:
+        """
+        Compute opportunity cost of an expense.
+        
+        Returns:
+        - expected_cost: E[delta * F_{at_month, horizon}]
+        - worst_case_cost: CVaR of the above
+        - horizon_impact: days added to reach goal
+        """
+        pass
+    
+    def plot(
+        self,
+        mode: str,
+        ...
+    ):
+        """
+        Extended with new modes:
+        - "expenses": Expense breakdown
+        - "net_income": Gross vs net income
+        - "withdrawals": Reward schedule timeline
+        - "opportunity_cost": Burn multiple analysis
+        """
+        pass
+
+
+================================================================================
+4. DETAILED CLASS SPECIFICATIONS
+================================================================================
+
+See sections above for each class. Summary of new/modified classes:
+
+NEW CLASSES:
+  src/expenses.py:
+    - FixedExpense (frozen dataclass)
+    - VariableExpense (frozen dataclass)
+    - MicroExpense (frozen dataclass)
+    - ExpenseModel (dataclass)
+    - ExpenseMetrics (frozen dataclass)
+
+  src/rewards.py:
+    - Reward (frozen dataclass)
+    - RewardSchedule (dataclass)
+
+MODIFIED CLASSES:
+  src/income.py:
+    - IncomeModel: add expenses parameter, new methods
+
+  src/portfolio.py:
+    - Portfolio.simulate(): add Y parameter
+
+  src/optimization.py:
+    - CVaROptimizer: add withdrawal handling
+
+  src/model.py:
+    - FinancialModel: add waste_analysis, opportunity_cost methods
+
+================================================================================
+5. MATHEMATICAL FORMULATIONS (Code-Ready)
+================================================================================
+
+5.1 Extended Wealth Dynamics
+-----------------------------
+
+Original:
+  W_{t+1}^m = (W_t^m + A_t x_t^m)(1 + R_t^m)
+
+Extended with withdrawals:
+  W_{t+1}^m = (W_t^m + A_t x_t^m - y_t^m)(1 + R_t^m)
+
+Closed-form (AFFINE in X and Y):
+  W_t^m(X,Y) = W_0^m F_{0,t}^m + sum_{s=0}^{t-1} (A_s x_s^m - y_s^m) F_{s,t}^m
+
+Where:
+  F_{s,t}^m = prod_{r=s}^{t-1} (1 + R_r^m)  [accumulation factor]
+
+Key property: W is LINEAR in (X, Y) jointly for fixed scenario -> CONVEXITY PRESERVED
+
+5.2 Expense Impact on Contributions
+-----------------------------------
+
+Gross income: I_t = y_t^fixed + y_t^variable
+Total expense: C_t = c_t^fixed + c_t^variable + c_t^micro
+Disposable income: D_t = max(0, I_t - C_t)
+Contributions: A_t = alpha_t * D_t
+
+5.3 Micro-Expense (Compound Poisson)
+------------------------------------
+
+C_t^micro = sum_{j=1}^{N_t} S_j
+
+N_t ~ Poisson(lambda_t)
+S_j ~ LogNormal(mu_s, sigma_s^2)
+
+Expected value: E[C_micro] = lambda * E[S] = lambda * exp(mu_s + sigma_s^2/2)
+Variance: Var[C_micro] = lambda * (Var[S] + E[S]^2)
+
+5.4 Opportunity Cost of Spending
+--------------------------------
+
+If you spend delta at month s instead of investing:
+
+Future value lost (account m):
+  Delta W_T^m = delta * F_{s,T}^m
+
+Expected opportunity cost:
+  E[Delta W_T] = delta * E[F_{s,T}] = delta * (1 + mu_m)^{T-s}
+
+Burn multiple:
+  BM_s = E[sum_m weight_m * F_{s,T}^m]
+  "Each 1 CLP spent at month s costs BM_s CLP at horizon T"
+
+5.5 CVaR with Withdrawals (Liquidity)
+-------------------------------------
+
+Standard CVaR constraint:
+  CVaR_epsilon(b - W_t^m(X,Y)) <= 0
+
+NEW liquidity constraint:
+  y_t^m <= W_t^m(X,Y)  for all t, m, scenarios
+
+This is LINEAR in (X, Y) because W is affine -> CONVEX
+
+================================================================================
+6. TEST SPECIFICATIONS
+================================================================================
+
+File: tests/unit/test_expenses.py
+----------------------------------
+
+class TestFixedExpense:
+    def test_deterministic_projection(self):
+        """Fixed expense is deterministic."""
+        fe = FixedExpense(base=500_000, annual_inflation=0.04)
+        arr = fe.project(12, n_sims=100)
+        assert arr.shape == (100, 12)
+        assert np.allclose(arr[0], arr[50])  # All sims identical
+    
+    def test_inflation_compounding(self):
+        """Monthly compounding of inflation."""
+        fe = FixedExpense(base=100_000, annual_inflation=0.12)
+        arr = fe.project(12)
+        assert arr[-1] / arr[0] == pytest.approx(1.12, rel=0.01)
+    
+    def test_step_changes(self):
+        """Step changes applied at correct months."""
+        fe = FixedExpense(
+            base=500_000,
+            step_changes={date(2025, 7, 1): 50_000}
+        )
+        arr = fe.project(12, start=date(2025, 1, 1))
+        assert arr[5] == 500_000  # June
+        assert arr[6] == 550_000  # July
+
+
+class TestVariableExpense:
+    def test_stochastic_noise(self):
+        """Non-zero sigma produces variation."""
+        ve = VariableExpense(base=200_000, sigma=0.1, seed=42)
+        arr = ve.project(12, n_sims=100)
+        assert arr.std(axis=0).mean() > 0
+    
+    def test_seasonality_applied(self):
+        """Seasonality factors applied correctly."""
+        seasonality = [1.0]*11 + [1.5]  # December 50% higher
+        ve = VariableExpense(base=100_000, seasonality=seasonality, sigma=0.0)
+        arr = ve.project(12, start=date(2025, 1, 1))
+        assert arr[11] / arr[0] == pytest.approx(1.5, rel=0.01)
+    
+    def test_floor_cap_guardrails(self):
+        """Floor and cap enforced."""
+        ve = VariableExpense(base=100_000, sigma=0.5, floor=50_000, cap=200_000, seed=42)
+        arr = ve.project(120, n_sims=1000)
+        assert arr.min() >= 50_000
+        assert arr.max() <= 200_000
+
+
+class TestMicroExpense:
+    def test_compound_poisson_mean(self):
+        """Expected value matches lambda * E[S]."""
+        me = MicroExpense(
+            lambda_base=30,
+            severity_mean=2_000,
+            severity_std=500,
+            seed=42
+        )
+        arr = me.project(120, n_sims=10000)
+        empirical_mean = arr.mean()
+        theoretical_mean = 30 * 2_000  # lambda * E[S] = 60_000
+        assert empirical_mean == pytest.approx(theoretical_mean, rel=0.05)
+    
+    def test_lognormal_severity(self):
+        """Lognormal severity distribution."""
+        me = MicroExpense(
+            lambda_base=1,
+            severity_mean=1_000,
+            severity_std=200,
+            severity_distribution="lognormal",
+            seed=42
+        )
+        # Single event per month on average
+        arr = me.project(10000, n_sims=1)
+        # Should see lognormal-like distribution
+
+
+class TestExpenseModel:
+    def test_combined_projection(self):
+        """All expense types combined."""
+        em = ExpenseModel(
+            fixed=FixedExpense(base=500_000),
+            variable=VariableExpense(base=200_000, sigma=0.1),
+            micro=MicroExpense(lambda_base=30, severity_mean=2_000, severity_std=500)
+        )
+        result = em.project(12, n_sims=100, output="array")
+        assert "total" in result
+        assert result["total"].shape == (100, 12)
+
+
+File: tests/unit/test_rewards.py
+--------------------------------
+
+class TestReward:
+    def test_frozen_dataclass(self):
+        """Reward is immutable."""
+        r = Reward(name="Vacation", amount=2_000_000, month=6)
+        with pytest.raises(FrozenInstanceError):
+            r.amount = 3_000_000
+
+
+class TestRewardSchedule:
+    def test_fixed_withdrawals_single_account(self):
+        """Fixed withdrawals with single account policy."""
+        rewards = [
+            Reward(name="Laptop", amount=1_000_000, month=3),
+            Reward(name="Vacation", amount=2_000_000, month=6),
+        ]
+        schedule = RewardSchedule(rewards, withdrawal_policy="single_account", default_account=0)
+        accounts = [Account.from_annual("Cash", 0.02, 0.01)]
+        
+        Y = schedule.get_fixed_withdrawals(T=12, M=1, accounts=accounts)
+        assert Y.shape == (12, 1)
+        assert Y[2, 0] == 1_000_000  # Month 3 (0-indexed: 2)
+        assert Y[5, 0] == 2_000_000  # Month 6 (0-indexed: 5)
+
+
+File: tests/unit/test_portfolio_extended.py
+-------------------------------------------
+
+class TestPortfolioWithdrawals:
+    def test_withdrawal_reduces_wealth(self):
+        """Withdrawals reduce terminal wealth."""
+        accounts = [Account.from_annual("Test", 0.08, 0.10, initial_wealth=1_000_000)]
+        portfolio = Portfolio(accounts)
+        
+        A = np.ones((100, 12)) * 100_000
+        R = np.zeros((100, 12, 1)) + 0.01
+        X = np.ones((12, 1))
+        
+        # Without withdrawals
+        result_no_y = portfolio.simulate(A, R, X, Y=None)
+        
+        # With withdrawal at month 6
+        Y = np.zeros((12, 1))
+        Y[5, 0] = 500_000
+        result_with_y = portfolio.simulate(A, R, X, Y=Y)
+        
+        assert result_with_y["wealth"][:, -1, 0].mean() < result_no_y["wealth"][:, -1, 0].mean()
+    
+    def test_affine_representation_with_y(self):
+        """Closed-form equals recursive with withdrawals."""
+        accounts = [Account.from_annual("Test", 0.08, 0.10, initial_wealth=100_000)]
+        portfolio = Portfolio(accounts)
+        
+        np.random.seed(42)
+        A = np.random.uniform(50_000, 150_000, (50, 12))
+        R = np.random.normal(0.01, 0.03, (50, 12, 1))
+        X = np.ones((12, 1))
+        Y = np.random.uniform(0, 10_000, (12, 1))
+        
+        result_affine = portfolio.simulate(A, R, X, Y=Y, method="affine")
+        result_recursive = portfolio.simulate(A, R, X, Y=Y, method="recursive")
+        
+        assert np.allclose(result_affine["wealth"], result_recursive["wealth"], rtol=1e-6)
+
+
+File: tests/unit/test_income_extended.py
+----------------------------------------
+
+class TestIncomeModelWithExpenses:
+    def test_net_income_calculation(self):
+        """Net income = gross - expenses."""
+        income = IncomeModel(
+            fixed=FixedIncome(base=1_500_000),
+            variable=VariableIncome(base=0, sigma=0),
+            expenses=ExpenseModel(
+                fixed=FixedExpense(base=500_000)
+            )
+        )
+        
+        net = income.net_income(12, n_sims=1)
+        gross = income.gross_income(12, n_sims=1)
+        expense = 500_000 * 12  # Fixed expense total
+        
+        assert net.sum() == pytest.approx(gross.sum() - expense, rel=0.01)
+    
+    def test_disposable_income_non_negative(self):
+        """Disposable income clamped to zero."""
+        income = IncomeModel(
+            fixed=FixedIncome(base=500_000),
+            variable=VariableIncome(base=0, sigma=0),
+            expenses=ExpenseModel(
+                fixed=FixedExpense(base=700_000)  # Exceeds income
+            )
+        )
+        
+        disposable = income.disposable_income(12, n_sims=1)
+        assert np.all(disposable >= 0)
+
+
+File: tests/integration/test_optimization_rewards.py
+----------------------------------------------------
+
+class TestCVaROptimizerWithRewards:
+    def test_fixed_withdrawals_feasibility(self):
+        """Optimization feasible with scheduled withdrawals."""
+        # Setup with enough initial wealth to cover withdrawals
+        accounts = [
+            Account.from_annual("Cash", 0.03, 0.02, initial_wealth=3_000_000),
+            Account.from_annual("Growth", 0.10, 0.15, initial_wealth=500_000)
+        ]
+        
+        rewards = [Reward(name="Purchase", amount=1_000_000, month=6)]
+        schedule = RewardSchedule(rewards, withdrawal_policy="single_account", default_account=0)
+        
+        optimizer = CVaROptimizer(
+            n_accounts=2,
+            objective="balanced",
+            reward_schedule=schedule
+        )
+        
+        # Run optimization
+        # ... test that optimal solution exists and satisfies goals
+    
+    def test_liquidity_constraint_respected(self):
+        """Cannot withdraw more than available."""
+        # Setup with insufficient wealth
+        accounts = [Account.from_annual("Cash", 0.03, 0.02, initial_wealth=100_000)]
+        
+        rewards = [Reward(name="Too Big", amount=1_000_000, month=1)]
+        schedule = RewardSchedule(rewards, withdrawal_policy="single_account", default_account=0)
+        
+        optimizer = CVaROptimizer(
+            n_accounts=1,
+            enable_withdrawal_decisions=True,
+            reward_schedule=schedule
+        )
+        
+        # Expect infeasibility or Y constrained by W
+
+
+================================================================================
+7. MIGRATION GUIDE
+================================================================================
+
+7.1 Backward Compatibility
+---------------------------
+
+All changes are ADDITIVE. Existing code continues to work:
+
+# Old code (still works)
+income = IncomeModel(fixed=fi, variable=vi)
+A = income.contributions(24)
+result = portfolio.simulate(A, R, X)
+
+# New code (expenses + rewards)
+income = IncomeModel(fixed=fi, variable=vi, expenses=em)
+A = income.contributions_from_disposable(24, savings_rate=0.3)
+result = portfolio.simulate(A, R, X, Y=Y_schedule)
+
+7.2 Migration Steps
+--------------------
+
+Step 1: Add expenses.py (no changes to existing code)
+Step 2: Add rewards.py (no changes to existing code)
+Step 3: Extend IncomeModel (add optional expenses parameter)
+Step 4: Extend Portfolio.simulate (add optional Y parameter)
+Step 5: Extend CVaROptimizer (add withdrawal handling)
+Step 6: Add new plot modes to FinancialModel
+
+7.3 Configuration Migration
+----------------------------
+
+Add to src/config.py:
+
+class ExpenseConfig(BaseModel):
+    fixed_base: float = 0.0
+    fixed_inflation: float = 0.0
+    variable_base: float = 0.0
+    variable_sigma: float = 0.0
+    micro_lambda: float = 0.0
+    micro_severity_mean: float = 0.0
+
+class RewardConfig(BaseModel):
+    name: str
+    amount: float
+    month: int
+    optional: bool = False
+
+================================================================================
+8. APPENDIX: Full Code Templates
+================================================================================
+
+See individual phase sections for complete class definitions.
+
+Key files to create/modify:
+- NEW: src/expenses.py (~400 lines)
+- NEW: src/rewards.py (~200 lines)
+- MODIFY: src/income.py (~100 lines added)
+- MODIFY: src/portfolio.py (~80 lines added)
+- MODIFY: src/optimization.py (~150 lines added)
+- MODIFY: src/model.py (~100 lines added)
+- NEW: tests/unit/test_expenses.py (~200 lines)
+- NEW: tests/unit/test_rewards.py (~100 lines)
+- NEW: tests/unit/test_portfolio_extended.py (~100 lines)
+- NEW: tests/unit/test_income_extended.py (~100 lines)
+- NEW: tests/integration/test_optimization_rewards.py (~150 lines)
+
+Total estimated new code: ~1,500 lines
+
+================================================================================
+END OF IMPLEMENTATION GUIDE
+================================================================================

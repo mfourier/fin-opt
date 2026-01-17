@@ -53,7 +53,3 @@ Thumbs.db
 # Cache
 .cache/
 *.log
-
-#llm
-llm_waste_reward_complete_implementation.txt
-llm_waste_reward_math_explanation.txt

@@ -1,0 +1,560 @@
+llm_waste_reward_math_explanation.txt
+FinOpt Extension: Gastos (waste/micro-gastos) y Premios/Compras (retiros) - Explicacion matematica rigurosa
+===============================================================================================
+
+Contexto
+--------
+Este documento asume el marco FinOpt descrito (Monte Carlo + restricciones de chance reformuladas con CVaR + busqueda de horizonte T).
+La meta de esta extension es:
+
+(1) Incluir gastos recurrentes (fijos + variables + micro-gastos) que reducen el ahorro disponible.
+(2) Incluir "premios" / compras deseadas que se pagan retirando directamente desde el portafolio (shock de retiro).
+(3) Mantener, en lo posible, la propiedad clave: la riqueza W_t^m es afina en las variables de decision, para preservar convexidad
+    al aplicar la reformulacion CVaR.
+
+Se usan solo caracteres ASCII. Las expresiones en LaTeX usan comandos ASCII.
+
+Notacion base (resumen)
+-----------------------
+- t = 0,1,...,T (meses). Se trabaja con indices 0-based internamente; metas pueden venir como offset 1-based desde fechas.
+- i = 1,...,N escenarios Monte Carlo (simulaciones).
+- m = 1,...,M cuentas/activos (dimensiones de portafolio).
+- R_{t}^{i,m} retorno aritmetico del activo m en el mes t bajo escenario i.
+- F_{s,t}^{i,m} = prod_{r=s}^{t-1} (1 + R_r^{i,m}) factor de acumulacion desde s hasta t.
+- W_t^{i,m} riqueza en cuenta m en tiempo t, escenario i.
+- W_0^m riqueza inicial por cuenta (determinista o escenario-dependiente si se desea).
+- A_t^i contribucion neta (ahorro) que se deposita en el portafolio en t en el escenario i (despues de ingresos y gastos).
+- X = (x_t^m) asignacion de contribuciones por mes: x_t^m >= 0, sum_m x_t^m = 1.
+  (En el marco original, X decide como repartir A_t. No se rebalancea riqueza previa.)
+
+La extension introduce procesos de gasto y retiros:
+- C_t^i gasto "regular" que ocurre en t (fijo + variable + micro-gastos).
+- Q_{k} retiro asociado al premio/compra k (monto nominal), ejecutado en tiempo tau_k (fijo) o bajo una regla (opcional).
+- Y = (y_t^m) variables de retiro por cuenta (si se permite decidir de que cuenta sale el gasto/retiro).
+
+Parte I: Modelado de gastos como flujo (income/expenses) y su impacto sobre contribuciones
+----------------------------------------------------------------------------------------
+
+1. Descomposicion de ingresos y gastos
+-------------------------------------
+Defina el ingreso bruto mensual bajo escenario i:
+
+I_t^i = Y_{t,fixed} + Y_{t,var}^i
+
+donde:
+- Y_{t,fixed} es determinista (o con shocks discretos predefinidos).
+- Y_{t,var}^i es estocastico (tendencia + estacionalidad + ruido), como en tu income.py.
+
+Defina el gasto total mensual como:
+
+C_t^i = C_{t,fixed} + C_{t,var}^i + C_{t,micro}^i
+
+- C_{t,fixed}: arriendo, servicios, cuotas, etc. Puede tener escalones (ajustes) y/o indexacion a inflacion.
+- C_{t,var}^i: gasto variable "macro" (alimentacion, transporte, etc.) modelado con estacionalidad y ruido.
+- C_{t,micro}^i: suma de micro-gastos (pequenos gastos frecuentes) modelados como proceso de eventos.
+
+(1.1) Indexacion a inflacion (opcional, recomendado)
+----------------------------------------------------
+Si quieres separar montos reales vs nominales:
+- Sea P_t^i el indice de precios (inflacion) bajo escenario i (o determinista).
+- Si defines todo en terminos reales, entonces conviertes a nominal al simular aportes/retornos nominales.
+  Ejemplo: monto nominal = monto_real * P_t.
+Esto evita inconsistencias si tus retornos estan en nominal y gastos en real.
+
+2. Contribucion neta (ahorro) como funcion de ingreso y gasto
+-------------------------------------------------------------
+La pregunta "incluir gastos en lo que nos separas para el ahorro" se traduce como:
+
+A_t^i = S( I_t^i, C_t^i; parametros )
+
+donde S(\cdot) implementa tu regla de ahorro.
+
+Formas comunes:
+
+2.1 Regla de ahorro como fraccion del ingreso disponible
+--------------------------------------------------------
+Defina ingreso disponible (antes de ahorro):
+
+D_t^i = I_t^i - C_t^i
+
+Luego define ahorro como:
+
+A_t^i = clip( s_t * D_t^i, 0, A_{t,max} )
+
+donde:
+- s_t \in [0,1] es tasa de ahorro (determinista por mes, o dependiente de estacionalidad).
+- clip(x,0,Amax) = min(Amax, max(0,x)) impone no-negatividad y tope.
+
+Nota de convexidad:
+- A_t^i es exogeno para el optimizador si S se aplica antes de optimizar (en el generador de escenarios).
+- clip introduce no-linealidad, pero como A_t^i queda fijo por escenario, NO afecta convexidad del problema interno.
+- Si deseas optimizar s_t (tasa de ahorro) como variable, ver seccion II.2 (reparametrizacion convexa).
+
+2.2 Regla por presupuesto: ahorro fijo + ajuste por gastos
+---------------------------------------------------------
+A_t^i = A_{t,plan} - (C_t^i - C_{t,plan})
+
+y luego truncas a A_t^i >= 0. Util para "mantener ahorro objetivo" y ver cuando se rompe por sobre-gasto.
+
+2.3 Separacion "gasto necesario" vs "waste" (desperdicio)
+---------------------------------------------------------
+Para responder "cuanto de tu ahorro te cuesta tu gasto" conviene separar:
+
+C_t^i = C_{t,need}^i + C_{t,waste}^i
+
+y tratar C_{t,waste} como variable de control o al menos como variable de reporte.
+Matematicamente, el "costo" de C_{t,waste} se puede medir en:
+(a) reduccion de A_t,
+(b) reduccion de riqueza futura por menor capital aportado,
+(c) aumento del horizonte minimo T* para cumplir metas,
+(d) incremento del riesgo (mas probabilidad de shortfall).
+
+La forma (b) se deriva con factores F_{s,t} (ver Parte IV).
+
+3. Modelos estocasticos recomendados para gastos variables y micro-gastos
+-------------------------------------------------------------------------
+
+3.1 Gasto variable macro C_{t,var}^i
+------------------------------------
+Analogamente al ingreso variable, usa:
+- tendencia con crecimiento anual g_c (o inflacion),
+- estacionalidad mensual c_{(t mod 12)},
+- ruido lognormal o normal truncado.
+
+Modelo lognormal (garantiza positividad):
+Sea U_t^i ~ Normal(mu_t, sigma_t^2), define C_{t,var}^i = exp(U_t^i).
+Calibras mu_t para que E[C] coincida con tu base.
+
+Modelo normal truncado:
+C_{t,var}^i = max(0, mu_t * (1 + eta_t^i)), eta_t^i ~ Normal(0, sigma^2), con floor/cap.
+
+3.2 Micro-gastos como proceso compuesto (compound Poisson)
+----------------------------------------------------------
+Una representacion natural:
+- N_t^i ~ Poisson(lambda_t) numero de micro-eventos en el mes t.
+- Severidad de cada evento: S_{t,j}^i iid con distribucion positiva (LogNormal, Gamma).
+Entonces:
+C_{t,micro}^i = sum_{j=1}^{N_t^i} S_{t,j}^i
+
+Esto reproduce "muchos pequenos retiros". Ajusta lambda_t con estacionalidad (ej., mas micro-gastos en diciembre).
+
+3.3 Correlacion con ingresos (opcional, realista)
+-------------------------------------------------
+En la practica, gastos variables crecen con ingresos.
+Una forma simple: correlacionar los ruidos:
+- epsilon_y,t (ingreso) y epsilon_c,t (gasto) con corr rho_yc.
+Si generas ambos via un vector normal correlacionado por mes, mantienes coherencia.
+Esto solo afecta la simulacion; el optimizador interno sigue recibiendo A_t^i y (si aplica) C_t^i exogenos.
+
+Parte II: Gastos como decision (opcional) y preservacion de convexidad
+-----------------------------------------------------------------------
+
+Hay dos niveles:
+Nivel A (simple, recomendado para primera implementacion):
+- Los gastos C_t^i se generan exogenamente.
+- El optimizador solo decide X (asignacion de aportes) y satisface metas bajo CVaR.
+
+Nivel B (mas rico):
+- Incluyes decisiones de "recorte de waste" o "presupuesto de gasto" como variables,
+  para cuantificar trade-offs (consumo vs metas).
+
+El desafio: evitar bilinearidades y mantener convexidad.
+
+1. Decision de reducir waste como variable g_t (convexo)
+--------------------------------------------------------
+Define un "gasto waste base" \bar{C}_{t,waste}^i generado por simulacion (lo que gastarias sin control).
+Introduce decision u_t \in [0,1] que representa fraccion del waste permitido:
+C_{t,waste}^i(u_t) = u_t * \bar{C}_{t,waste}^i
+
+Entonces:
+C_t^i(u) = C_{t,need}^i + u_t * \bar{C}_{t,waste}^i + C_{t,micro}^i
+
+Luego:
+D_t^i(u) = I_t^i - C_t^i(u)
+A_t^i(u) = S(D_t^i(u))
+
+Problema: A_t^i(u) se vuelve afina en u_t si S es lineal (ej., A = s * D sin clip).
+Si aplicas clip, la relacion se vuelve piecewise, aun convexa si se formula con variables auxiliares y desigualdades.
+Pero recuerda: el modelo original trata A como dato. Si ahora A depende de u, A se vuelve decision.
+
+Para mantener convexidad con clip:
+Introduce variable a_t^i >= 0 que representa contribucion y restricciones lineales:
+a_t^i <= s_t * D_t^i(u)
+a_t^i <= A_{t,max}
+a_t^i >= 0
+y maximizas algo que incentive a_t (o solo lo usas en dinamica). Esto es lineal porque D_t^i(u) es afina en u.
+
+2. Evitar bilinearidad ahorro-rate x asignacion
+------------------------------------------------
+Si quieres optimizar simultaneamente "cuanto ahorrar" y "a que activos asignar", el naive es:
+aporte a activo m en t = a_t^i * x_t^m
+Si a_t^i es variable y x_t^m tambien, aparece bilinearidad.
+
+Truco convexificador (reparametrizacion):
+Define directamente variables de aporte por activo:
+p_{t}^m >= 0, con sum_m p_t^m <= 1
+y aporte a activo m en escenario i:
+A_{t}^{i,m} = D_t^i * p_t^m
+
+Interpretacion:
+- p_t^m es fraccion del ingreso disponible invertida en activo m.
+- el leftover 1 - sum_m p_t^m es ingreso disponible no invertido (consumo adicional o liquidez fuera del portafolio).
+
+Si quieres mantener "simplex exacta" como en el marco original, puedes anadir un activo "cash_out" (m=0) con retorno 0
+para absorber leftover. Entonces sum_m p_t^m = 1 (simplex) y parte de la masa se interpreta como no-inversion.
+Con esto, desaparece el producto a_t * x_t^m, y el modelo sigue lineal por escenario.
+
+Parte III: Premios / compras como retiros desde el portafolio
+-------------------------------------------------------------
+
+Ahora agregamos eventos que "sacan del ahorro directamente": compras grandes, premios, metas de consumo.
+Esto requiere modificar la dinamica de W.
+
+1. Dinamica extendida con retiros por cuenta
+--------------------------------------------
+Defina y_t^{i,m} >= 0 el retiro desde cuenta m en tiempo t, escenario i.
+Entonces la recursion por escenario es:
+
+W_{t+1}^{i,m} = ( W_t^{i,m} + A_t^i x_t^m - y_t^{i,m} ) * (1 + R_t^{i,m})
+
+Comparado con el original, solo aparece el termino -y.
+
+Casos:
+- Si el retiro se paga desde el portafolio total sin elegir cuenta, puedes imponer una regla fija:
+  y_t^{i,m} = pi_t^m * Y_t^i, con pi_t^m dado y sum_m pi_t^m = 1.
+  Entonces no agregas variables, y sigues con afinidad en X.
+- Si quieres optimizar "de que cuenta sale" (liquidez), mantienes y_t^{i,m} como variable y agregas restricciones lineales.
+
+2. Restricciones de factibilidad de retiros (liquidez)
+------------------------------------------------------
+Para que no puedas retirar mas de lo que hay:
+
+y_t^{i,m} <= W_t^{i,m}   para todo i,t,m
+
+Esta restriccion es lineal porque W_t^{i,m} es afina en las variables (ver Parte IV).
+Opcional: imponer W_t^{i,m} >= 0 (sin deuda) para todo i,t,m.
+
+Si modelas compras como retiro total Y_t^i (suma sobre cuentas):
+sum_m y_t^{i,m} = Y_t^i
+donde Y_t^i es monto requerido ese mes (premios + otros retiros directos).
+
+3. Modelar premios/compras como cronograma fijo (exogeno)
+---------------------------------------------------------
+Sea K el numero de premios.
+Cada premio k tiene:
+- tiempo tau_k (mes de compra)
+- costo nominal q_k
+Entonces define:
+Y_t^i = sum_{k=1}^K q_k * 1{t = tau_k}
+
+Si hay incertidumbre del costo (precio variable, tipo de cambio), usa q_k^i por escenario.
+
+En este caso, y se puede fijar por regla pi (por ejemplo, "sale del cash asset"), o se optimiza con variables y.
+
+4. Premios opcionales: variable continua (convexo) vs binaria (MIP)
+-------------------------------------------------------------------
+Muchas veces quieres que el optimizador decida si comprar o no (trade-off con metas de riqueza).
+
+4.1 Opcion convexa (compra fraccionable)
+----------------------------------------
+Introduce decision u_k in [0,1] (fraccion del premio comprado).
+Monto retirado:
+Y_t^i(u) = sum_k (u_k * q_k^i) * 1{t = tau_k}
+
+Objetivo puede maximizar utilidad:
+max sum_k v_k u_k  - penalizaciones
+sujeto a restricciones CVaR de metas y restricciones de liquidez.
+
+Esto se mantiene convexo (lineal en u_k) si v_k >= 0.
+
+4.2 Opcion exacta (todo-o-nada)
+-------------------------------
+u_k in {0,1} crea variables binarias -> problema mixto (MIP).
+Puedes:
+- aceptarlo si K es pequeno,
+- o usar relajacion u_k in [0,1] como aproximacion,
+- o usar tecnica de penalizacion concava (no convexa) si estas dispuesto.
+
+Para mantener el espiritu FinOpt (convexo), se recomienda la version fraccionable o cronograma fijo.
+
+Parte IV: Representacion cerrada (afinidad) con retiros
+-------------------------------------------------------
+
+La propiedad clave "W es afina en variables" se mantiene si:
+- (1+R) son constantes por escenario (datos),
+- A es dato o variable lineal,
+- y es variable lineal,
+- no hay productos decision*decision.
+
+1. Forma cerrada extendida
+--------------------------
+Con la recursion:
+W_{t+1}^{i,m} = ( W_t^{i,m} + A_t^i x_t^m - y_t^{i,m} ) * (1 + R_t^{i,m})
+
+Defina F_{s,t}^{i,m} = prod_{r=s}^{t-1} (1+R_r^{i,m}).
+
+Entonces por induccion:
+
+W_t^{i,m}(X,Y) = W_0^m F_{0,t}^{i,m} + sum_{s=0}^{t-1} ( A_s^i x_s^m - y_s^{i,m} ) F_{s,t}^{i,m}
+
+Esto es afina en (X,Y) para cada escenario i.
+Gradientes:
+- d W_t^{i,m} / d x_s^m = A_s^i F_{s,t}^{i,m}
+- d W_t^{i,m} / d y_s^{i,m} = - F_{s,t}^{i,m}
+
+Interpetacion inmediata (costo futuro de un retiro):
+Un retiro delta en s desde cuenta m reduce W_t en delta * F_{s,t}^{i,m}.
+Al promediar sobre escenarios obtienes el "costo esperado" en t.
+
+2. Costo matematico de un gasto: valor futuro / costo de oportunidad
+--------------------------------------------------------------------
+Esta es la respuesta formal a "cuanto de tu ahorro te cuesta tu gasto".
+
+Caso A: gasto reduce contribucion (antes de entrar al portafolio)
+----------------------------------------------------------------
+Si un gasto adicional +delta ocurre en mes s, reduce ingreso disponible D_s en delta, y por ende reduce aporte A_s en:
+Delta A_s = -kappa_s * delta
+donde kappa_s depende de tu regla (por ejemplo kappa_s = s_savings si A = s*D).
+
+Impacto en riqueza terminal de cuenta m:
+Delta W_T^{i,m} = (Delta A_s) * x_s^m * F_{s,T}^{i,m}
+= -kappa_s * delta * x_s^m * F_{s,T}^{i,m}
+
+Suma sobre m (riqueza total):
+Delta W_T^i = -kappa_s * delta * sum_m x_s^m F_{s,T}^{i,m}
+
+Define el factor de costo de oportunidad por escenario:
+OC_{s->T}^i(X) = kappa_s * sum_m x_s^m F_{s,T}^{i,m}
+
+y el costo esperado:
+E[Delta W_T] = -delta * E[OC_{s->T}^i(X)]
+
+Caso B: gasto es retiro desde portafolio (premio/compra)
+--------------------------------------------------------
+Si retiras delta desde cuenta m en s (y_s^{i,m} += delta), entonces:
+Delta W_T^{i,m} = -delta * F_{s,T}^{i,m}
+Si el retiro se distribuye con pesos pi_s^m:
+Delta W_T^i = -delta * sum_m pi_s^m F_{s,T}^{i,m}
+
+Esto te permite reportar al usuario:
+"Si gastas delta hoy (mes s), el valor futuro esperado en T perdido es aproximadamente delta * E[sum_m weight * F_{s,T}]."
+
+3. Derivadas de riesgo (CVaR) respecto a gastos/retiros
+-------------------------------------------------------
+Sea una meta: P(W_t^{m_g} >= b) >= 1 - epsilon.
+En CVaR: CVaR_epsilon( b - W_t^{m_g}(X,Y) ) <= 0.
+
+Como W es afina, el shortfall L_i = b - W_i es afina, y CVaR es convexa.
+La sensibilidad marginal de la CVaR respecto a un retiro y_s^{i,m} es:
+d/dy CVaR_epsilon(L) = E[ F_{s,t}^{i,m} * w_i ] sobre la cola epsilon,
+donde w_i son pesos subgradiente que seleccionan escenarios en la cola (depende del optimo gamma).
+En implementacion, el dual de las restricciones epigraficas te da esto directamente.
+
+Interpretacion:
+Un retiro aumenta shortfall en escenarios donde ya estas en la cola; por tanto el "costo" de gastar se concentra en malos escenarios.
+
+Parte V: Reformulacion CVaR con retiros y nuevas clases de metas
+---------------------------------------------------------------
+
+1. Metas originales, pero con dinamica extendida
+------------------------------------------------
+Nada cambia estructuralmente: solo cambias el calculo de W_{t_g}^{m_g}(X,Y) usando la forma cerrada con -y.
+
+Para cada meta g:
+- L_i = b_g - W_{t_g}^{i,m_g}(X,Y)
+- CVaR_epsilon_g(L) <= 0 con variables (gamma_g, z_{g,i})
+
+2. Nuevas metas asociadas a compras/premios (opcional)
+-----------------------------------------------------
+Hay dos filosofias:
+
+2.1 Premios como retiros exogenos (hard schedule)
+-------------------------------------------------
+Tu optimizador debe encontrar X (y/o Y si eliges) tal que, incluso con esos retiros, se cumplan metas.
+No necesitas metas adicionales.
+
+2.2 Premios como metas de consumo (feasibility of funding)
+----------------------------------------------------------
+Quieres garantizar que puedas comprar (retirar) con alta probabilidad sin quebrar liquidez.
+Ejemplo: premio k en tau_k por monto q_k.
+
+Restriccion de capacidad de compra:
+P( W_{tau_k}^{total} >= q_k + buffer_k ) >= 1 - delta_k
+o CVaR_{delta_k}( q_k + buffer_k - W_{tau_k}^{total} ) <= 0
+
+Luego, al ejecutar la compra, reduces riqueza y sigues con otras metas.
+
+Esta aproximacion separa "poder comprar" de "cumplir metas terminales".
+
+3. Metas de gasto (control de waste)
+------------------------------------
+Si introduces variables u_t para recorte de waste, puedes imponer:
+P( sum_{t in H} C_{t,waste}(u_t) <= B ) >= 1 - eta
+y reformular con CVaR si deseas. Esto cuantifica disciplina de gasto bajo incertidumbre.
+
+Parte VI: Nuevas funciones objetivo convexas (exploracion)
+----------------------------------------------------------
+
+El marco original soporta objetivos de riqueza y turnover.
+Con gastos y premios aparecen nuevos trade-offs. A continuacion, objetivos convexos o DCP-friendly:
+
+0) Nota sobre signos:
+Si usas CVXPY, recuerda: maximizacion de una funcion concava o minimizacion de convexa.
+
+1) Maximizar riqueza esperada neta de penalizacion por gasto waste
+------------------------------------------------------------------
+Decision u_t (recorte) y asignacion X (o P).
+Objetivo:
+max  E[ W_T^{total} ]  - lambda * sum_t u_t
+Interpretacion: menor u_t -> menos waste; penalizas usar u_t alto.
+Si u_t representa "fraccion de waste permitida", penaliza sum u_t o sum (u_t * base_waste).
+
+2) Minimizar "horizonte esperado" vs utilidad de premios (multiobjetivo)
+------------------------------------------------------------------------
+En bilevel ya minimizas T.
+Dentro del problema para T fijo, puedes:
+max  E[W_T] + sum_k v_k u_k - lambda_turnover * ||delta x||_2^2
+sujeto a CVaR metas.
+
+3) Objetivo de "suavidad de consumo" (convexo)
+----------------------------------------------
+Si modelas una variable de consumo discrecional c_t (o leftover), puedes penalizar variaciones:
+min sum_t (c_{t+1} - c_t)^2
+Esto induce planes de gasto mas estables.
+
+4) Penalizacion L1 de retiros / costos de liquidez (convexo)
+------------------------------------------------------------
+Para incentivar pagar compras desde una cuenta "cash" (m=1) sin forzarlo:
+min sum_{t,m} w_m * y_t^m
+con w_m alto para activos riesgosos (penaliza venderlos).
+Lineal -> LP.
+
+5) CVaR / Std sobre riqueza despues de compras (convexo/coherente)
+------------------------------------------------------------------
+Puedes incluir un termino de riesgo en el objetivo:
+max E[W_T] - beta * CVaR_alpha( -W_T )
+o
+max E[W_T] - beta * ||W_T - E[W_T]||_2
+Este ultimo es equivalente a penalizar desviacion estandar (convexo como norma).
+
+6) Objetivo de "costo de oportunidad" explicitado
+-------------------------------------------------
+Define el costo futuro esperado de gastos/retirps:
+OC = E[ sum_{t,m} y_t^m * F_{t,T}^{m} ]  (con F por escenario)
+Como F es dato por escenario, esto es lineal en y.
+Entonces:
+max E[W_T] - beta * OC
+equivale a castigar retiros tempranos (porque F_{t,T} grande para t pequeno).
+
+Parte VII: Integracion en GoalSeeker (bilevel) y factibilidad
+-------------------------------------------------------------
+
+1. Busqueda de T con compras
+----------------------------
+Con cronograma fijo de compras, la factibilidad puede volverse no monotona en T si compras tardias aparecen.
+Sin embargo, si compras ocurren antes de T_min (max(t_g)), entonces al aumentar T se suele facilitar metas terminales.
+Si agregas compras despues, debes definir si:
+- las compras solo se consideran si tau_k < T (si el horizonte no llega, no se ejecutan),
+- o siempre se consideran en el plan (entonces tau_k debe estar <= T).
+
+Recomendacion:
+- Modelar premios con tau_k <= T (solo entran si el horizonte incluye ese mes).
+- Para busqueda monotona, fija todos los premios dentro de [0, T_max] y al aumentar T no agregues nuevas compras "obligatorias"
+  que rompan monotonicidad; o define T_start >= max tau_k.
+
+2. Verificacion out-of-sample con gastos
+----------------------------------------
+El chequeo exacto SAA (indicatriz) debe simular:
+- ingresos
+- gastos y micro-gastos
+- compras/retiros
+- retornos
+con X* (y u*, u_k* si aplica).
+Luego computas tasa de violacion empirica por meta.
+
+Importante:
+Si tu optimizador asume independencia (semillas separadas) pero en verificacion introduces correlacion,
+la performance puede degradar; al menos reporta ambas metricas.
+
+Parte VIII: Recomendaciones de implementacion matematica (sin codigo)
+---------------------------------------------------------------------
+
+1) Separar claramente tres capas de cashflow
+--------------------------------------------
+Capa A: ingreso bruto I_t^i.
+Capa B: gasto regular C_t^i (need + waste + micro).
+Capa C: premios/retiros Y_t^i (grandes compras) desde portafolio.
+
+Ahorro neto hacia portafolio:
+A_t^i = S(I_t^i - C_t^i)
+
+Retiros desde portafolio:
+sum_m y_t^{i,m} = Y_t^i(u)   (si premios decision) o = Y_t^i (si fijo)
+
+2) Mantener afinidad: el principio rector
+-----------------------------------------
+Para que el problema interno siga convexo:
+- todo lo aleatorio va a los datos por escenario (A_t^i, R_t^{i,m}, costos q_k^i, etc.)
+- las decisiones aparecen linealmente (X, Y, u_k, u_t, p_t^m)
+- evitas productos decision*decision (si quieres dos decisiones multiplicandose, reparametriza)
+
+3) Eleccion de politica de retiro (y) para minimizar cambios
+------------------------------------------------------------
+Si quieres una primera version sin tocar el optimizador:
+- define una sola cuenta "cash" (por ejemplo, m=0) con retorno fijo (o bajo riesgo),
+- fuerza que todos los premios salgan de esa cuenta con una regla,
+- ajusta el generador de contribuciones para cargar esa cuenta con una fraccion fija de aportes.
+Esto evita introducir y como variable.
+
+Si quieres version completa y aun convexa:
+- introduce y_t^m como variable, con constraints:
+  y_t^m >= 0
+  sum_m y_t^m = Y_t (dato o decision)
+  y_t^m <= W_t^m  (liquidez)
+y modifica la expresion de W en el armado CVaR.
+
+4) Reportes cuantitativos que el sistema puede entregar (intuicion al usuario)
+------------------------------------------------------------------------------
+- "Future value lost" de un gasto: delta * E[sum_m weight * F_{s,T}^m]
+- "Risk-adjusted cost" en cola: delta * E_tail[ ... ] derivado de duales CVaR
+- "Horizon impact": diferencia en T* al variar un gasto/premio (analisis de sensibilidad por barrido)
+- "Gasto como % del ahorro": C_t / (A_t + eps) y su distribucion por escenario
+- "Burn multiple": (costo futuro esperado) / (delta) = E[sum_m weight * F_{s,T}^m]
+  Interpretable como "cada 1 peso gastado hoy equivale a X pesos en el horizonte".
+
+5) Complejidad y memoria
+------------------------
+La forma cerrada con F_{s,t}^{i,m} sigue siendo O(N T^2 M) memoria si almacenas todo F.
+Con retiros y objetivos nuevos no cambia el orden.
+Si T crece, considera:
+- truncar F (calcular on-the-fly para cada t_g necesario),
+- almacenar cumulativos G_t = prod_{r=0}^{t-1}(1+R_r) y obtener F_{s,t} = G_t / G_s cuando sea numericamente estable,
+- o trabajar en log-espacio para productos (luego exp).
+
+Parte IX: Checklist matematico para validar la extension
+--------------------------------------------------------
+
+A) Validaciones de simulacion
+- C_t >= 0 siempre.
+- micro-gastos suman correctamente y su varianza coincide con parametros.
+- A_t = S(I_t - C_t) no es negativo (o si lo es, se interpreta como deuda; si no quieres deuda, truncar a 0).
+
+B) Validaciones de dinamica con retiros
+- W_t^m no se vuelve negativa si impones W>=0.
+- y_t^m <= W_t^m se cumple por escenario si y es dato; si y es variable, la restriccion debe estar en el optimizador.
+
+C) Validaciones de convexidad (conceptual)
+- W_t^m es afina en decisiones (X,Y,...) para cada escenario.
+- L_i = b - W_i es afina.
+- CVaR epigrafica es convexa (LP/SOCP segun objetivos).
+- Objetivo elegido respeta DCP (concava si max, convexa si min).
+
+D) Verificacion (SAA) de chance constraints
+- medir violacion empirica para cada meta:
+  viol_g = (1/N) sum_i 1{ W_{t_g}^{i,m_g} < b_g }
+- comparar con epsilon_g y reportar margenes.
+
+Fin
+---
+Este archivo define la intuicion matematica completa para introducir gastos (incluyendo micro-gastos) y premios/compras como retiros,
+manteniendo el nucleo convexo del modelo. La regla de oro: todo lo aleatorio a escenarios, decisiones lineales, y evitar productos de decisiones.
