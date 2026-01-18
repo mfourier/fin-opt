@@ -51,6 +51,14 @@ from .portfolio import Account, Portfolio
 # Return generation
 from .returns import ReturnModel
 
+# Withdrawal modeling
+from .withdrawal import (
+    WithdrawalEvent,
+    WithdrawalSchedule,
+    StochasticWithdrawal,
+    WithdrawalModel,
+)
+
 # Orchestration facade
 from .model import FinancialModel, SimulationResult
 
@@ -99,6 +107,11 @@ __all__ = [
     "Portfolio",
     # Returns
     "ReturnModel",
+    # Withdrawals
+    "WithdrawalEvent",
+    "WithdrawalSchedule",
+    "StochasticWithdrawal",
+    "WithdrawalModel",
     # Model
     "FinancialModel",
     "SimulationResult",

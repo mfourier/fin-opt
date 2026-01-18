@@ -79,6 +79,7 @@ import pandas as pd
 # Lazy imports for optimization (avoid circular dependencies)
 if TYPE_CHECKING:
     from .optimization import AllocationOptimizer, OptimizationResult
+    from .withdrawal import WithdrawalModel
 
 # Direct imports (always available)
 from .income import IncomeModel
@@ -101,12 +102,12 @@ __all__ = [
 class SimulationResult:
     """
     Container for complete Monte Carlo simulation results with metadata.
-    
+
     Stores all outputs from a FinancialModel.simulate() run, including
-    wealth trajectories, contributions, returns, income breakdown, and
-    all parameters needed for reproducibility. Provides analytical methods
+    wealth trajectories, contributions, returns, withdrawals, income breakdown,
+    and all parameters needed for reproducibility. Provides analytical methods
     for computing financial metrics and statistical summaries.
-    
+
     Attributes
     ----------
     wealth : np.ndarray, shape (n_sims, T+1, M)
@@ -124,12 +125,17 @@ class SimulationResult:
     income : dict
         Income breakdown with keys:
         - "fixed": np.ndarray, fixed income stream
-        - "variable": np.ndarray, variable income stream  
+        - "variable": np.ndarray, variable income stream
         - "total": np.ndarray, total income
         All arrays have shape (n_sims, T) or (T,) depending on stochasticity.
     allocation : np.ndarray, shape (T, M)
         Allocation policy X used in simulation.
         X[t, m] = fraction of A_t allocated to account m.
+    withdrawals : np.ndarray, optional
+        Monthly withdrawals from accounts.
+        - Shape (n_sims, T, M) if stochastic withdrawals present
+        - Shape (T, M) if only deterministic withdrawals
+        - None if no withdrawals specified
     T : int
         Time horizon (number of months).
     n_sims : int
@@ -189,7 +195,7 @@ class SimulationResult:
     returns: np.ndarray
     income: dict
     allocation: np.ndarray
-    
+
     # Metadata
     T: int
     n_sims: int
@@ -197,7 +203,10 @@ class SimulationResult:
     start: date
     seed: Optional[int]
     account_names: List[str]
-    
+
+    # Optional: withdrawals (added in v0.2)
+    withdrawals: Optional[np.ndarray] = field(default=None)  # (n_sims, T, M) or (T, M) or None
+
     # Internal cache for lazy computation
     _metrics: Optional[dict[str, pd.DataFrame]] = field(default=None, init=False, repr=False)
     _aggregate_metrics: Optional[dict[str, dict]] = field(default=None, init=False, repr=False)
@@ -618,20 +627,22 @@ class FinancialModel:
         n_sims: int = 1,
         start: Optional[date] = None,
         seed: Optional[int] = None,
-        use_cache: bool = True
+        use_cache: bool = True,
+        withdrawals: Optional[WithdrawalModel] = None
     ) -> SimulationResult:
         """
         Run Monte Carlo simulation with automatic caching.
-        
+
         Executes the full pipeline:
         1. Generate income projections and contributions (uses seed)
         2. Generate correlated returns (uses seed+1 for independence)
-        3. Simulate wealth dynamics under allocation policy X
-        4. Package results with metadata for reproducibility
-        
-        Results are cached by (T, X, n_sims, start, seed) hash.
+        3. Generate withdrawals if WithdrawalModel provided (uses seed+2)
+        4. Simulate wealth dynamics under allocation policy X
+        5. Package results with metadata for reproducibility
+
+        Results are cached by (T, X, n_sims, start, seed, withdrawals) hash.
         Subsequent calls with identical parameters return cached result.
-        
+
         Parameters
         ----------
         T : int
@@ -653,54 +664,63 @@ class FinancialModel:
             Random seed for reproducibility.
             - Income component uses seed
             - Returns component uses seed+1 (ensures independence)
+            - Withdrawals component uses seed+2 (ensures independence)
             - If None, simulation is non-deterministic
         use_cache : bool, default True
             If True, returns cached result if available.
             If False, forces re-simulation.
-        
+        withdrawals : WithdrawalModel, optional
+            Scheduled and/or stochastic withdrawals from accounts.
+            If None, no withdrawals (D_t^m = 0 for all t, m).
+
         Returns
         -------
         SimulationResult
-            Immutable dataclass containing:
+            Dataclass containing:
             - wealth: (n_sims, T+1, M) trajectories
             - total_wealth: (n_sims, T+1) portfolio totals
             - contributions: (n_sims, T) or (T,) monthly contributions
             - returns: (n_sims, T, M) monthly returns
+            - withdrawals: (n_sims, T, M) or None
             - income: dict with fixed/variable/total breakdown
             - allocation: (T, M) policy used
             - Metadata: T, n_sims, M, start, seed, account_names
-        
+
         Raises
         ------
         ValueError
             If X.shape != (T, M).
             If portfolio.simulate() detects invalid allocation (sum != 1, etc.).
-        
+
         Notes
         -----
-        - Seed propagation ensures statistical independence between income and returns
+        - Seed propagation ensures statistical independence between income, returns, and withdrawals
         - Uses portfolio.simulate(method="recursive") internally for efficiency
         - Deterministic income (sigma=0) results in contributions.shape = (T,)
         - Stochastic income (sigma>0) results in contributions.shape = (n_sims, T)
         - Cache key computed via SHA256 hash (deterministic, collision-resistant)
-        
+        - Withdrawals occur at the START of each month (before returns applied)
+
+        Wealth dynamics with withdrawals:
+            W_{t+1}^m = (W_t^m + A_t·x_t^m - D_t^m)(1 + R_t^m)
+
         Examples
         --------
-        >>> # Basic simulation
+        >>> # Basic simulation (no withdrawals)
         >>> X = np.tile([0.7, 0.3], (24, 1))
         >>> result = model.simulate(T=24, X=X, n_sims=500, seed=42)
-        >>> 
-        >>> # Second call: cached (instant)
-        >>> result2 = model.simulate(T=24, X=X, n_sims=500, seed=42)
-        >>> assert result is result2  # same object
-        >>> 
-        >>> # Force re-simulation
-        >>> result3 = model.simulate(T=24, X=X, n_sims=500, seed=42, use_cache=False)
-        >>> 
-        >>> # Access results
-        >>> print(result.summary())
-        >>> final_wealth = result.total_wealth[:, -1]
-        >>> print(f"Mean: ${final_wealth.mean():,.0f}")
+        >>>
+        >>> # With scheduled withdrawals
+        >>> from finopt.withdrawal import WithdrawalModel, WithdrawalSchedule, WithdrawalEvent
+        >>> from datetime import date
+        >>>
+        >>> withdrawals = WithdrawalModel(
+        ...     scheduled=WithdrawalSchedule(events=[
+        ...         WithdrawalEvent("Aggressive", 2_000_000, date(2026, 6, 1), "Vacation")
+        ...     ])
+        ... )
+        >>> result = model.simulate(T=24, X=X, n_sims=500, seed=42, withdrawals=withdrawals)
+        >>> result.withdrawals.shape  # (500, 24, 2)
         """
 
         # Validate number of simulations
@@ -714,19 +734,19 @@ class FinancialModel:
                 f"X must be a (T, M) matrix where X[t, m] is the fraction allocated "
                 f"to account m at month t."
             )
-        
-        # Check cache
+
+        # Check cache (include withdrawals in cache key)
         if self._cache_enabled and use_cache:
-            cache_key = self._hash_simulation_params(T, X, n_sims, start, seed)
-            
+            cache_key = self._hash_simulation_params(T, X, n_sims, start, seed, withdrawals)
+
             if cache_key in self._simulation_cache:
                 return self._simulation_cache[cache_key]
-        
+
         # Infer effective start date if None
         start_effective = start if start is not None else date.today()
-        
+
         # Generate stochastic inputs with seed propagation
-        
+
         # Income uses provided seed
         A = self.income.contributions(
             months=T,
@@ -735,7 +755,7 @@ class FinancialModel:
             output="array",
             n_sims=n_sims
         )  # (n_sims, T) or (T,)
-        
+
         # Full income breakdown
         income_full = self.income.project(
             months=T,
@@ -744,21 +764,42 @@ class FinancialModel:
             output="array",
             n_sims=n_sims
         )  # dict with {"fixed": ..., "variable": ..., "total": ...}
-        
+
         # Returns use seed+1 for independence
         R = self.returns.generate(
             T=T,
             n_sims=n_sims,
             seed=None if seed is None else seed + 1
         )  # (n_sims, T, M)
-        
+
+        # Generate withdrawals if model provided
+        D = None
+        D_array = None
+        if withdrawals is not None:
+            # Import here to avoid circular imports
+            from .withdrawal import WithdrawalModel as WM
+            if not isinstance(withdrawals, WM):
+                raise TypeError(
+                    f"withdrawals must be WithdrawalModel, got {type(withdrawals)}"
+                )
+
+            D_array = withdrawals.to_array(
+                T=T,
+                start_date=start_effective,
+                accounts=self.accounts,
+                n_sims=n_sims,
+                seed=None if seed is None else seed + 2
+            )  # (n_sims, T, M)
+            D = D_array
+
         # Simulate wealth dynamics
         portfolio_result = self.portfolio.simulate(
             A=A,
             R=R,
-            X=X
+            X=X,
+            D=D
         )
-        
+
         # Package into result container
         result = SimulationResult(
             wealth=portfolio_result["wealth"],
@@ -772,29 +813,32 @@ class FinancialModel:
             M=self.M,
             start=start_effective,
             seed=seed,
-            account_names=[acc.name for acc in self.accounts]
+            account_names=[acc.name for acc in self.accounts],
+            withdrawals=D_array
         )
-        
+
         # Store in cache
         if self._cache_enabled and use_cache:
             self._simulation_cache[cache_key] = result
-        
+
         return result
     
     def _hash_simulation_params(
-        self, 
-        T: int, 
-        X: np.ndarray, 
-        n_sims: int, 
-        start: Optional[date], 
-        seed: Optional[int]
+        self,
+        T: int,
+        X: np.ndarray,
+        n_sims: int,
+        start: Optional[date],
+        seed: Optional[int],
+        withdrawals: Optional[WithdrawalModel] = None
     ) -> str:
         """
         Compute deterministic hash of simulation parameters.
-        
-        Uses SHA256 on pickled tuple of (T, X_bytes, n_sims, start, seed).
+
+        Uses SHA256 on pickled tuple of (T, X_bytes, n_sims, start, seed, withdrawals_dict).
         X is converted to bytes via tobytes() for efficiency.
-        
+        Withdrawals are serialized via to_dict() method.
+
         Returns
         -------
         str
@@ -802,10 +846,15 @@ class FinancialModel:
         """
         # Convert X to bytes (more efficient than pickling full array)
         X_bytes = X.tobytes()
-        
+
+        # Serialize withdrawals (if present) to dict for hashing
+        withdrawals_dict = None
+        if withdrawals is not None:
+            withdrawals_dict = withdrawals.to_dict()
+
         # Tuple of parameters
-        params = (T, X_bytes, n_sims, start, seed)
-        
+        params = (T, X_bytes, n_sims, start, seed, withdrawals_dict)
+
         # Serialize and hash
         params_serialized = pickle.dumps(params, protocol=pickle.HIGHEST_PROTOCOL)
         return hashlib.sha256(params_serialized).hexdigest()
@@ -872,6 +921,7 @@ class FinancialModel:
         start: Optional[date] = None,
         verbose: bool = True,
         search_method: str = "binary",
+        withdrawals: Optional[WithdrawalModel] = None,
         **solver_kwargs
     ) -> OptimizationResult:
         """
@@ -1006,10 +1056,18 @@ class FinancialModel:
         >>> status = model.verify_goals(sim_result, goals)
         """
         from .optimization import GoalSeeker, AllocationOptimizer, OptimizationResult
-        
+
         # Validate inputs
         if not goals:
             raise ValueError("goals list cannot be empty")
+
+        # Withdrawals not yet supported in optimization
+        if withdrawals is not None:
+            raise NotImplementedError(
+                "Withdrawals in optimize() are not yet supported. "
+                "Withdrawals affect the wealth dynamics in the inner problem solver. "
+                "For now, use simulate() with withdrawals to analyze specific policies."
+            )
         if not hasattr(optimizer, 'solve') or not callable(optimizer.solve):
             raise TypeError(
                 f"optimizer must implement AllocationOptimizer interface "

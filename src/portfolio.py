@@ -504,11 +504,12 @@ class Portfolio:
         A: np.ndarray,  # Contributions: (T,) or (n_sims, T)
         R: np.ndarray,  # Returns: (n_sims, T, M)
         X: np.ndarray,  # Allocations: (T, M)
+        D: Optional[np.ndarray] = None,  # Withdrawals: (T, M) or (n_sims, T, M)
         method: Literal["recursive", "affine"] = "recursive",
         W0_override: Optional[np.ndarray] = None
     ) -> dict:
         """
-        Execute wealth dynamics W_{t+1}^m = (W_t^m + A_t^m)(1 + R_t^m).
+        Execute wealth dynamics W_{t+1}^m = (W_t^m + A_t^m - D_t^m)(1 + R_t^m).
         
         Supports batch processing of Monte Carlo samples with automatic broadcasting
         and optional initial wealth override for optimization scenarios.
@@ -524,6 +525,11 @@ class Portfolio:
         X : np.ndarray, shape (T, M)
             Allocation policy: X[t, m] = fraction of A_t to account m.
             Must satisfy: X[t, :].sum() = 1, X[t, m] ≥ 0.
+        D : np.ndarray, optional
+            Monthly withdrawals from accounts.
+            - Shape (T, M): deterministic withdrawals (broadcast across simulations)
+            - Shape (n_sims, T, M): stochastic withdrawals (per scenario)
+            - None (default): no withdrawals (D_t^m = 0 for all t, m)
         method : {"recursive", "affine"}, default "recursive"
             Computation method:
             - "recursive": iterative W_{t+1} = (W_t + A_t)(1+R_t) [faster]
@@ -625,11 +631,32 @@ class Portfolio:
         else:
             raise ValueError(f"A must be 1D or 2D, got shape {A.shape}")
         
+        # Handle D broadcasting and validation
+        if D is not None:
+            if D.ndim == 2:
+                # Deterministic: (T, M) -> broadcast to (n_sims, T, M)
+                if D.shape != (T, M):
+                    raise ValueError(f"D shape {D.shape} != expected ({T}, {M})")
+                D_expanded = np.tile(D[np.newaxis, :, :], (n_sims, 1, 1))
+            elif D.ndim == 3:
+                # Stochastic: (n_sims, T, M)
+                if D.shape != (n_sims, T, M):
+                    raise ValueError(f"D shape {D.shape} != expected ({n_sims}, {T}, {M})")
+                D_expanded = D
+            else:
+                raise ValueError(f"D must be 2D or 3D, got shape {D.shape}")
+            
+            # Validate D is non-negative
+            if np.any(D_expanded < 0):
+                raise ValueError("D must be non-negative (withdrawals cannot be negative)")
+        else:
+            D_expanded = None
+
         # Dispatch to computation method
         if method == "recursive":
-            W = self._simulate_recursive(A_expanded, R, X, W0_override)
+            W = self._simulate_recursive(A_expanded, R, X, D_expanded, W0_override)
         elif method == "affine":
-            W = self._simulate_affine(A_expanded, R, X, W0_override)
+            W = self._simulate_affine(A_expanded, R, X, D_expanded, W0_override)
         else:
             raise ValueError(f"method must be 'recursive' or 'affine', got {method}")
         
@@ -646,10 +673,11 @@ class Portfolio:
         A: np.ndarray,  # (n_sims, T)
         R: np.ndarray,  # (n_sims, T, M)
         X: np.ndarray,  # (T, M)
+        D: Optional[np.ndarray] = None,  # (n_sims, T, M) or None
         W0_override: Optional[np.ndarray] = None
     ) -> np.ndarray:
         """
-        Recursive wealth dynamics: W_{t+1}^m = (W_t^m + A_t^m)(1 + R_t^m).
+        Recursive wealth dynamics: W_{t+1}^m = (W_t^m + A_t^m - D_t^m)(1 + R_t^m).
         
         Vectorized over simulations (no Python loops over n_sims).
         
@@ -675,9 +703,13 @@ class Portfolio:
             # Broadcasting: (n_sims, 1) * (1, M) → (n_sims, M)
             A_allocated = A[:, t, None] * X[t, :]
             
-            # W_{t+1} = (W_t + A_t) * (1 + R_t)
-            # All operations vectorized over n_sims
-            W[:, t + 1, :] = (W[:, t, :] + A_allocated) * (1 + R[:, t, :])
+            # Apply withdrawals if provided
+            if D is not None:
+                # W_{t+1} = (W_t + A_t - D_t) * (1 + R_t)
+                W[:, t + 1, :] = (W[:, t, :] + A_allocated - D[:, t, :]) * (1 + R[:, t, :])
+            else:
+                # W_{t+1} = (W_t + A_t) * (1 + R_t)
+                W[:, t + 1, :] = (W[:, t, :] + A_allocated) * (1 + R[:, t, :])
         
         return W
     
@@ -686,10 +718,11 @@ class Portfolio:
         A: np.ndarray,  # (n_sims, T)
         R: np.ndarray,  # (n_sims, T, M)
         X: np.ndarray,  # (T, M)
+        D: Optional[np.ndarray] = None,  # (n_sims, T, M) or None
         W0_override: Optional[np.ndarray] = None
     ) -> np.ndarray:
         """
-        Affine wealth representation: W_t^m = W_0^m F_{0,t}^m + Σ_s A_s x_s^m F_{s,t}^m.
+        Affine wealth representation: W_t^m = W_0^m F_{0,t}^m + Σ_s (A_s x_s^m - D_s^m) F_{s,t}^m.
         
         Closed-form formula, useful for optimization (wealth is linear in X).
         
@@ -712,22 +745,26 @@ class Portfolio:
         W = np.zeros((n_sims, T + 1, M))
         W[:, 0, :] = W0
 
-        # Precompute contribution-weighted allocations
-        # contrib_weighted[i, s, m] = A[i, s] * X[s, m]
+        # Precompute contribution-weighted allocations minus withdrawals
+        # net_cashflow[i, s, m] = A[i, s] * X[s, m] - D[i, s, m]
         # Shape: (n_sims, T, M)
         contrib_weighted = A[:, :, None] * X[None, :, :]
+        if D is not None:
+            net_cashflow = contrib_weighted - D
+        else:
+            net_cashflow = contrib_weighted
 
         # Apply affine formula for each time t (vectorized inner sum)
-        # W_t^m = W_0^m * F_{0,t}^m + Σ_{s=0}^{t-1} (A_s * x_s^m) * F_{s,t}^m
+        # W_t^m = W_0^m * F_{0,t}^m + Σ_{s=0}^{t-1} (A_s * x_s^m - D_s^m) * F_{s,t}^m
         for t in range(1, T + 1):
             # Initial wealth term: W_0^m F_{0,t}^m
             W[:, t, :] = W0 * F[:, 0, t, :]
 
-            # Contribution term: vectorized sum over s ∈ [0, t)
+            # Net cashflow term: vectorized sum over s ∈ [0, t)
             # F[:, :t, t, :] has shape (n_sims, t, M)
-            # contrib_weighted[:, :t, :] has shape (n_sims, t, M)
+            # net_cashflow[:, :t, :] has shape (n_sims, t, M)
             # Element-wise multiply and sum over axis=1 (time dimension)
-            W[:, t, :] += (contrib_weighted[:, :t, :] * F[:, :t, t, :]).sum(axis=1)
+            W[:, t, :] += (net_cashflow[:, :t, :] * F[:, :t, t, :]).sum(axis=1)
 
         return W
     
