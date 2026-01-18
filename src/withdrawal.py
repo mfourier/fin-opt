@@ -92,6 +92,8 @@ if TYPE_CHECKING:
 __all__ = [
     "WithdrawalEvent",
     "WithdrawalSchedule",
+    "StochasticWithdrawal",
+    "WithdrawalModel",
 ]
 
 
@@ -447,3 +449,477 @@ class WithdrawalSchedule:
                 description=e.get("description", "")
             ))
         return cls(events=events)
+
+
+# ---------------------------------------------------------------------------
+# Stochastic Withdrawal (Withdrawal with Uncertainty)
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class StochasticWithdrawal:
+    """
+    Withdrawal with variability/uncertainty.
+
+    Models withdrawals that have a base expected amount but may vary across
+    scenarios due to uncertainty (e.g., variable medical expenses, emergency costs).
+    Generates samples from a truncated Gaussian distribution.
+
+    Parameters
+    ----------
+    account : int or str
+        Target account identifier (index or name).
+    base_amount : float
+        Expected withdrawal amount (mean of distribution).
+    sigma : float
+        Standard deviation of withdrawal amount.
+    month : int, optional
+        Month offset from start_date (0-indexed). Mutually exclusive with date.
+    date : datetime.date, optional
+        Calendar date of withdrawal. Mutually exclusive with month.
+    floor : float, default=0.0
+        Minimum withdrawal amount (truncation lower bound).
+    cap : float, optional
+        Maximum withdrawal amount (truncation upper bound). None = no cap.
+    seed : int, optional
+        Random seed for reproducibility.
+
+    Notes
+    -----
+    - Samples from N(base_amount, sigma²) truncated to [floor, cap]
+    - Only one of month/date should be specified
+    - Follows VariableIncome pattern for stochastic sampling
+    - Immutable specification (frozen dataclass)
+
+    Examples
+    --------
+    >>> withdrawal = StochasticWithdrawal(
+    ...     account="Conservador",
+    ...     base_amount=300_000,
+    ...     sigma=50_000,
+    ...     date=date(2025, 9, 1),
+    ...     floor=200_000,
+    ...     cap=500_000
+    ... )
+    >>> samples = withdrawal.sample(n_sims=1000, start_date=date(2025, 1, 1))
+    >>> samples.shape
+    (1000,)
+    >>> (samples >= 200_000).all() and (samples <= 500_000).all()
+    True
+    """
+    account: Union[int, str]
+    base_amount: float
+    sigma: float
+    month: Optional[int] = None
+    date: Optional[date] = None
+    floor: float = 0.0
+    cap: Optional[float] = None
+    seed: Optional[int] = None
+
+    def __post_init__(self):
+        """Validate stochastic withdrawal parameters."""
+        # Mutually exclusive month/date
+        if self.month is not None and self.date is not None:
+            raise ValueError("Specify either month or date, not both")
+        if self.month is None and self.date is None:
+            raise ValueError("Must specify either month or date")
+
+        # Validate amounts
+        if self.base_amount < 0:
+            raise ValueError(f"base_amount must be non-negative, got {self.base_amount}")
+        if self.sigma < 0:
+            raise ValueError(f"sigma must be non-negative, got {self.sigma}")
+        if self.floor < 0:
+            raise ValueError(f"floor must be non-negative, got {self.floor}")
+        if self.cap is not None and self.cap < self.floor:
+            raise ValueError(f"cap ({self.cap}) must be >= floor ({self.floor})")
+
+        # Check if month is valid
+        if self.month is not None and self.month < 0:
+            raise ValueError(f"month must be non-negative, got {self.month}")
+
+    def resolve_month(self, start_date: date) -> int:
+        """
+        Resolve withdrawal timing to month offset.
+
+        Parameters
+        ----------
+        start_date : datetime.date
+            Simulation start date.
+
+        Returns
+        -------
+        int
+            Month offset (0-indexed).
+        """
+        if self.month is not None:
+            return self.month
+        else:
+            # Use same logic as WithdrawalEvent
+            year_diff = self.date.year - start_date.year
+            month_diff = self.date.month - start_date.month
+            return year_diff * 12 + month_diff
+
+    def sample(self, n_sims: int, start_date: Optional[date] = None) -> np.ndarray:
+        """
+        Generate random samples of withdrawal amount.
+
+        Parameters
+        ----------
+        n_sims : int
+            Number of scenarios to generate.
+        start_date : datetime.date, optional
+            Required if self.date is specified (for month resolution).
+
+        Returns
+        -------
+        np.ndarray, shape (n_sims,)
+            Sampled withdrawal amounts, truncated to [floor, cap].
+
+        Examples
+        --------
+        >>> withdrawal = StochasticWithdrawal(
+        ...     account="Conservador",
+        ...     base_amount=300_000,
+        ...     sigma=50_000,
+        ...     month=6,
+        ...     floor=200_000,
+        ...     cap=500_000,
+        ...     seed=42
+        ... )
+        >>> samples = withdrawal.sample(n_sims=5)
+        >>> samples.shape
+        (5,)
+        """
+        # Set random seed if provided
+        rng = np.random.default_rng(self.seed)
+
+        # Sample from Gaussian
+        samples = rng.normal(loc=self.base_amount, scale=self.sigma, size=n_sims)
+
+        # Apply floor
+        samples = np.maximum(samples, self.floor)
+
+        # Apply cap
+        if self.cap is not None:
+            samples = np.minimum(samples, self.cap)
+
+        return samples
+
+    def __repr__(self) -> str:
+        """Readable representation."""
+        timing = f"month={self.month}" if self.month is not None else f"date={self.date.isoformat()}"
+        return (
+            f"StochasticWithdrawal(account={self.account!r}, "
+            f"base={self.base_amount:,.0f}, sigma={self.sigma:,.0f}, {timing})"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Withdrawal Model (Facade combining deterministic + stochastic)
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=False)
+class WithdrawalModel:
+    """
+    Unified withdrawal model combining scheduled and stochastic withdrawals.
+
+    Facade that orchestrates deterministic (WithdrawalSchedule) and stochastic
+    (StochasticWithdrawal) withdrawals into a single (n_sims, T, M) array for
+    portfolio simulation.
+
+    Parameters
+    ----------
+    scheduled : WithdrawalSchedule, optional
+        Fixed scheduled withdrawals (broadcast to all scenarios).
+    stochastic : List[StochasticWithdrawal], optional
+        Withdrawals with uncertainty (sampled per scenario).
+
+    Methods
+    -------
+    to_array(T, start_date, accounts, n_sims, seed) -> np.ndarray
+        Generate combined withdrawal array (n_sims, T, M).
+    total_expected(accounts) -> Dict[str, float]
+        Expected total withdrawal per account.
+
+    Notes
+    -----
+    - Scheduled withdrawals: same across all scenarios
+    - Stochastic withdrawals: independent sampling per scenario
+    - Empty model (both None) returns zeros (no withdrawals)
+    - Follows IncomeModel pattern (facade combining FixedIncome + VariableIncome)
+
+    Examples
+    --------
+    >>> from datetime import date
+    >>> withdrawals = WithdrawalModel(
+    ...     scheduled=WithdrawalSchedule(events=[
+    ...         WithdrawalEvent("Conservador", 400_000, date(2025, 6, 1))
+    ...     ]),
+    ...     stochastic=[
+    ...         StochasticWithdrawal(
+    ...             account="Conservador",
+    ...             base_amount=300_000,
+    ...             sigma=50_000,
+    ...             date=date(2025, 9, 1),
+    ...             seed=42
+    ...         )
+    ...     ]
+    ... )
+    >>> D = withdrawals.to_array(
+    ...     T=36,
+    ...     start_date=date(2025, 1, 1),
+    ...     accounts=accounts,
+    ...     n_sims=100,
+    ...     seed=42
+    ... )
+    >>> D.shape
+    (100, 36, 2)
+    >>> D[:, 5, 0].std()  # Month 5 (June): deterministic, std=0
+    0.0
+    >>> D[:, 8, 0].std()  # Month 8 (Sep): stochastic, std>0
+    47832.5
+    """
+    scheduled: Optional[WithdrawalSchedule] = None
+    stochastic: Optional[List[StochasticWithdrawal]] = None
+
+    def to_array(
+        self,
+        T: int,
+        start_date: date,
+        accounts: List[Account],
+        n_sims: int = 1,
+        seed: Optional[int] = None
+    ) -> np.ndarray:
+        """
+        Generate withdrawal array combining scheduled and stochastic withdrawals.
+
+        Parameters
+        ----------
+        T : int
+            Simulation horizon in months.
+        start_date : datetime.date
+            Simulation start date.
+        accounts : List[Account]
+            Portfolio accounts for name-to-index resolution.
+        n_sims : int, default=1
+            Number of Monte Carlo scenarios.
+        seed : int, optional
+            Random seed for stochastic withdrawals. Overrides individual seeds.
+
+        Returns
+        -------
+        np.ndarray, shape (n_sims, T, M)
+            Withdrawal array where D[i, t, m] = withdrawal from account m
+            in month t for scenario i.
+
+        Warns
+        -----
+        UserWarning
+            If any withdrawal date falls outside the simulation horizon.
+
+        Examples
+        --------
+        >>> D = model.to_array(T=36, start_date=date(2025, 1, 1),
+        ...                    accounts=accounts, n_sims=500, seed=42)
+        >>> D.shape
+        (500, 36, 2)
+        """
+        M = len(accounts)
+        D = np.zeros((n_sims, T, M), dtype=float)
+
+        # Add scheduled withdrawals (broadcast to all scenarios)
+        if self.scheduled is not None:
+            D_scheduled = self.scheduled.to_array(T, start_date, accounts)  # (T, M)
+            D += D_scheduled[np.newaxis, :, :]  # Broadcast to (n_sims, T, M)
+
+        # Add stochastic withdrawals (sample per scenario)
+        if self.stochastic is not None:
+            account_names = [acc.name for acc in accounts]
+
+            for withdrawal in self.stochastic:
+                # Resolve account index
+                if isinstance(withdrawal.account, int):
+                    if not (0 <= withdrawal.account < M):
+                        raise ValueError(
+                            f"Account index {withdrawal.account} out of range [0, {M})"
+                        )
+                    acc_idx = withdrawal.account
+                else:
+                    try:
+                        acc_idx = account_names.index(withdrawal.account)
+                    except ValueError:
+                        raise ValueError(
+                            f"Account name {withdrawal.account!r} not found. "
+                            f"Available accounts: {account_names}"
+                        ) from None
+
+                # Resolve month
+                month = withdrawal.resolve_month(start_date)
+
+                # Check if within horizon
+                if month < 0:
+                    warnings.warn(
+                        f"Stochastic withdrawal at month {month} is before start. Ignoring.",
+                        UserWarning
+                    )
+                    continue
+
+                if month >= T:
+                    warnings.warn(
+                        f"Stochastic withdrawal at month {month} is beyond horizon T={T}. Ignoring.",
+                        UserWarning
+                    )
+                    continue
+
+                # Sample withdrawals for all scenarios
+                # Use global seed if provided, otherwise use withdrawal's seed
+                effective_seed = seed if seed is not None else withdrawal.seed
+                if effective_seed is not None:
+                    # Derive unique seed per withdrawal to avoid correlation
+                    effective_seed = effective_seed + hash((withdrawal.account, month)) % 10000
+
+                # Create a new StochasticWithdrawal with the effective seed
+                temp_withdrawal = StochasticWithdrawal(
+                    account=withdrawal.account,
+                    base_amount=withdrawal.base_amount,
+                    sigma=withdrawal.sigma,
+                    month=month,
+                    floor=withdrawal.floor,
+                    cap=withdrawal.cap,
+                    seed=effective_seed
+                )
+                samples = temp_withdrawal.sample(n_sims, start_date)
+
+                # Add to array
+                D[:, month, acc_idx] += samples
+
+        return D
+
+    def total_expected(self, accounts: List[Account]) -> Dict[str, float]:
+        """
+        Compute expected total withdrawals per account.
+
+        Parameters
+        ----------
+        accounts : List[Account]
+            Portfolio accounts for name resolution.
+
+        Returns
+        -------
+        Dict[str, float]
+            Mapping from account name to expected total withdrawal amount.
+            For stochastic withdrawals, uses base_amount as expectation.
+
+        Examples
+        --------
+        >>> model.total_expected(accounts)
+        {'Conservador': 700000.0, 'Agresivo': 2000000.0}
+        """
+        totals: Dict[str, float] = {acc.name: 0.0 for acc in accounts}
+        account_names = [acc.name for acc in accounts]
+
+        # Add scheduled withdrawals
+        if self.scheduled is not None:
+            scheduled_totals = self.scheduled.total_by_account(accounts)
+            for name, amount in scheduled_totals.items():
+                totals[name] += amount
+
+        # Add expected stochastic withdrawals
+        if self.stochastic is not None:
+            for withdrawal in self.stochastic:
+                # Resolve account name
+                if isinstance(withdrawal.account, int):
+                    if 0 <= withdrawal.account < len(accounts):
+                        name = account_names[withdrawal.account]
+                    else:
+                        continue  # Invalid index
+                else:
+                    name = withdrawal.account
+                    if name not in totals:
+                        continue  # Unknown account
+
+                totals[name] += withdrawal.base_amount
+
+        return totals
+
+    def __repr__(self) -> str:
+        """Readable representation."""
+        parts = []
+        if self.scheduled is not None:
+            n_scheduled = len(self.scheduled)
+            parts.append(f"scheduled={n_scheduled}")
+        if self.stochastic is not None:
+            parts.append(f"stochastic={len(self.stochastic)}")
+
+        if not parts:
+            return "WithdrawalModel(empty)"
+
+        return f"WithdrawalModel({', '.join(parts)})"
+
+    # -------------------------- Serialization helpers ----------------------
+    def to_dict(self) -> dict:
+        """
+        Serialize WithdrawalModel to dictionary.
+
+        Returns
+        -------
+        dict
+            Dictionary with 'scheduled' and 'stochastic' keys.
+        """
+        result = {}
+
+        if self.scheduled is not None:
+            result["scheduled"] = self.scheduled.to_dict()
+
+        if self.stochastic is not None:
+            result["stochastic"] = [
+                {
+                    "account": w.account,
+                    "base_amount": w.base_amount,
+                    "sigma": w.sigma,
+                    "month": w.month,
+                    "date": w.date.isoformat() if w.date is not None else None,
+                    "floor": w.floor,
+                    "cap": w.cap,
+                    "seed": w.seed
+                }
+                for w in self.stochastic
+            ]
+
+        return result
+
+    @classmethod
+    def from_dict(cls, payload: dict) -> "WithdrawalModel":
+        """
+        Deserialize WithdrawalModel from dictionary.
+
+        Parameters
+        ----------
+        payload : dict
+            Dictionary with 'scheduled' and/or 'stochastic' keys.
+
+        Returns
+        -------
+        WithdrawalModel
+            Reconstructed model.
+        """
+        scheduled = None
+        if "scheduled" in payload:
+            scheduled = WithdrawalSchedule.from_dict(payload["scheduled"])
+
+        stochastic = None
+        if "stochastic" in payload:
+            stochastic = []
+            for w in payload["stochastic"]:
+                stochastic.append(StochasticWithdrawal(
+                    account=w["account"],
+                    base_amount=float(w["base_amount"]),
+                    sigma=float(w["sigma"]),
+                    month=w.get("month"),
+                    date=date.fromisoformat(w["date"]) if w.get("date") else None,
+                    floor=float(w.get("floor", 0.0)),
+                    cap=float(w["cap"]) if w.get("cap") is not None else None,
+                    seed=w.get("seed")
+                ))
+
+        return cls(scheduled=scheduled, stochastic=stochastic)
