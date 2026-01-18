@@ -398,8 +398,7 @@ class AllocationOptimizer(ABC):
         X_normalized = X_normalized / row_sums
         
         result = portfolio.simulate(
-            A=A, R=R, X=X_normalized, 
-            method="affine", 
+            A=A, R=R, X=X_normalized,
             W0_override=W0
         )
         W = result["wealth"]  # (n_sims, T+1, M)
