@@ -386,8 +386,8 @@ class ReturnModel:
         ax_hist = fig.add_subplot(gs[0, 1])
         ax_stats = fig.add_subplot(gs[1, :])
         
-        # Account names and colors
-        names = [acc.name for acc in self.accounts]
+        # Account labels for display
+        names = [acc.label for acc in self.accounts]
         colors = plt.cm.Dark2(np.linspace(0, 1, self.M))
         
         # ========== Panel 1: Trajectories ==========
@@ -608,7 +608,7 @@ class ReturnModel:
             time_axis = np.arange(T + 1)
             xlabel = "Month"
         
-        names = [acc.name for acc in self.accounts]
+        names = [acc.label for acc in self.accounts]
         colors = plt.cm.tab10(np.linspace(0, 1, self.M))
         
         if self.M == 1:
@@ -772,7 +772,7 @@ class ReturnModel:
             # ===== SINGLE ACCOUNT MODE =====
             mu_monthly = self.accounts[0].monthly_params["mu"]  # Usar monthly_params
             sigma_monthly = self.accounts[0].monthly_params["sigma"]
-            account_label = self.accounts[0].name
+            account_label = self.accounts[0].label
             
             expected_return = np.power(1 + mu_monthly, T_months) - 1
             volatility = sigma_monthly * np.sqrt(T_months)
@@ -845,7 +845,7 @@ class ReturnModel:
             for m in range(self.M):
                 mu_monthly = self.accounts[m].monthly_params["mu"]  # Usar monthly_params
                 sigma_monthly = self.accounts[m].monthly_params["sigma"]
-                account_label = self.accounts[m].name
+                account_label = self.accounts[m].label
                 
                 expected_return = np.power(1 + mu_monthly, T_months) - 1
                 volatility = sigma_monthly * np.sqrt(T_months)

@@ -679,7 +679,7 @@ class FinancialModel:
         Notes
         -----
         - Seed propagation ensures statistical independence between income and returns
-        - Uses portfolio.simulate(method="affine") internally for optimization readiness
+        - Uses portfolio.simulate(method="recursive") internally for efficiency
         - Deterministic income (sigma=0) results in contributions.shape = (T,)
         - Stochastic income (sigma>0) results in contributions.shape = (n_sims, T)
         - Cache key computed via SHA256 hash (deterministic, collision-resistant)
@@ -756,8 +756,7 @@ class FinancialModel:
         portfolio_result = self.portfolio.simulate(
             A=A,
             R=R,
-            X=X,
-            method="affine"
+            X=X
         )
         
         # Package into result container
@@ -1670,6 +1669,8 @@ class FinancialModel:
         for i, acc in enumerate(self.accounts):
             if acc.name in colors:
                 account_colors.append(colors[acc.name])
+            elif acc.label in colors:
+                account_colors.append(colors[acc.label])
             elif i in colors:
                 account_colors.append(colors[i])
             else:
@@ -1705,7 +1706,7 @@ class FinancialModel:
                 bottom=bottom,
                 width=bar_width,
                 color=account_colors[m],
-                label=self.accounts[m].name,
+                label=self.accounts[m].label,
                 edgecolor='white',
                 linewidth=0.3,
                 alpha=0.85
@@ -1730,7 +1731,7 @@ class FinancialModel:
         ax_absolute.stackplot(
             time_axis_policy,
             *[A_abs[:, m] for m in range(M)],
-            labels=[acc.name for acc in self.accounts],
+            labels=[acc.label for acc in self.accounts],
             colors=account_colors,
             alpha=0.8
         )
@@ -1832,7 +1833,7 @@ class FinancialModel:
         
         ax_decomposition.set_xticks(x_pos)
         ax_decomposition.set_xticklabels(
-            [acc.name for acc in self.accounts], 
+            [acc.label for acc in self.accounts],
             rotation=25,
             ha='right',
             fontsize=9

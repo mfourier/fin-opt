@@ -70,6 +70,56 @@ class TestAccountInstantiation:
             acc.name = "Changed"
 
 
+class TestAccountDisplayName:
+    """Test Account display_name functionality."""
+
+    def test_display_name_from_annual(self):
+        """Test display_name with from_annual."""
+        acc = Account.from_annual(
+            "RN", annual_return=0.12, annual_volatility=0.15,
+            display_name="Risky Norris (Fintual)"
+        )
+
+        assert acc.name == "RN"
+        assert acc.display_name == "Risky Norris (Fintual)"
+        assert acc.label == "Risky Norris (Fintual)"
+
+    def test_display_name_from_monthly(self):
+        """Test display_name with from_monthly."""
+        acc = Account.from_monthly(
+            "SLV", monthly_mu=0.005, monthly_sigma=0.03,
+            display_name="iShares Silver Trust"
+        )
+
+        assert acc.name == "SLV"
+        assert acc.label == "iShares Silver Trust"
+
+    def test_label_fallback_to_name(self):
+        """Test label falls back to name when display_name not set."""
+        acc = Account.from_annual("Emergency", annual_return=0.04, annual_volatility=0.05)
+
+        assert acc.display_name is None
+        assert acc.label == "Emergency"
+
+    def test_repr_with_display_name(self):
+        """Test __repr__ shows both name and display_name."""
+        acc = Account.from_annual(
+            "CC", annual_return=0.08, annual_volatility=0.10,
+            display_name="Conservative Clooney"
+        )
+
+        repr_str = repr(acc)
+        assert "CC" in repr_str
+        assert "Conservative Clooney" in repr_str
+
+    def test_repr_without_display_name(self):
+        """Test __repr__ only shows name when no display_name."""
+        acc = Account.from_annual("Test", annual_return=0.04, annual_volatility=0.05)
+
+        repr_str = repr(acc)
+        assert "Test" in repr_str
+
+
 class TestAccountFromMonthly:
     """Test Account.from_monthly() factory method."""
 
@@ -429,6 +479,136 @@ class TestPortfolioEdgeCases:
 
         result = portfolio.simulate(A=A, R=R, X=X)
         assert result["wealth"].shape == (n_sims, T + 1, M)
+
+
+class TestPortfolioNumericalStability:
+    """Test numerical stability and mathematical properties."""
+
+    @pytest.fixture
+    def portfolio(self):
+        """Create test portfolio."""
+        accounts = [
+            Account.from_annual("A", 0.08, 0.12, initial_wealth=1_000_000),
+            Account.from_annual("B", 0.12, 0.18, initial_wealth=500_000),
+        ]
+        return Portfolio(accounts)
+
+    def test_methods_agree_long_horizon(self, portfolio):
+        """Test recursive and affine methods agree for longer horizons."""
+        np.random.seed(42)
+        T = 60
+        n_sims = 50
+        M = 2
+
+        A = np.full((n_sims, T), 100_000.0)
+        R = np.random.randn(n_sims, T, M) * 0.03 + 0.005
+        X = np.random.dirichlet([1, 1], size=T)
+
+        result_rec = portfolio.simulate(A=A, R=R, X=X, method="recursive")
+        result_aff = portfolio.simulate(A=A, R=R, X=X, method="affine")
+
+        # Allow for floating point accumulation
+        np.testing.assert_allclose(
+            result_rec["wealth"],
+            result_aff["wealth"],
+            rtol=1e-10,
+            atol=1e-6
+        )
+
+    def test_affine_property_wealth_linear_in_X(self, portfolio):
+        """Test that wealth is linear in allocation X (with W0=0)."""
+        np.random.seed(123)
+
+        # Create portfolio with zero initial wealth for strict linearity
+        accounts = [
+            Account.from_annual("A", 0.08, 0.12, initial_wealth=0),
+            Account.from_annual("B", 0.12, 0.18, initial_wealth=0),
+        ]
+        portfolio_zero = Portfolio(accounts)
+
+        T, n_sims = 24, 100
+        A = np.full((n_sims, T), 100_000.0)
+        R = np.random.randn(n_sims, T, 2) * 0.02 + 0.005
+
+        X1 = np.tile([0.7, 0.3], (T, 1))
+        X2 = np.tile([0.2, 0.8], (T, 1))
+        alpha = 0.6
+        X_combo = alpha * X1 + (1 - alpha) * X2
+
+        W1 = portfolio_zero.simulate(A=A, R=R, X=X1)["wealth"]
+        W2 = portfolio_zero.simulate(A=A, R=R, X=X2)["wealth"]
+        W_combo = portfolio_zero.simulate(A=A, R=R, X=X_combo)["wealth"]
+
+        # W(αX1 + (1-α)X2) = αW(X1) + (1-α)W(X2)
+        expected = alpha * W1 + (1 - alpha) * W2
+
+        np.testing.assert_allclose(W_combo, expected, rtol=1e-10, atol=1e-6)
+
+    def test_accumulation_factors_multiplicative_property(self, portfolio):
+        """Test F[s,t] * F[t,u] = F[s,u] (chain rule)."""
+        np.random.seed(456)
+        T = 20
+        n_sims = 30
+        M = 2
+
+        R = np.random.randn(n_sims, T, M) * 0.02 + 0.005
+        F = portfolio.compute_accumulation_factors(R)
+
+        # Test chain rule: F[s,t] * F[t,u] = F[s,u]
+        for s in range(0, T - 2, 3):
+            for t in range(s + 1, T - 1, 2):
+                for u in range(t + 1, T + 1, 2):
+                    lhs = F[:, s, t, :] * F[:, t, u, :]
+                    rhs = F[:, s, u, :]
+                    np.testing.assert_allclose(
+                        lhs, rhs, rtol=1e-12,
+                        err_msg=f"Chain rule failed: s={s}, t={t}, u={u}"
+                    )
+
+    def test_extreme_returns_stability(self):
+        """Test numerical stability with extreme (but valid) returns."""
+        accounts = [Account.from_annual("A", 0.08, 0.12)]
+        portfolio = Portfolio(accounts)
+
+        T = 24
+        n_sims = 10
+
+        # Returns close to -1 (but > -1, as guaranteed by lognormal)
+        R_low = np.full((n_sims, T, 1), -0.15)  # -15% per month
+        A = np.full(T, 100_000.0)
+        X = np.array([[1.0]] * T)
+
+        result = portfolio.simulate(A=A, R=R_low, X=X)
+
+        # Wealth should remain finite and non-negative
+        assert np.all(np.isfinite(result["wealth"]))
+        assert np.all(result["wealth"] >= 0)
+
+    def test_zero_horizon_edge_case(self):
+        """Test T=0 edge case."""
+        accounts = [Account.from_annual("A", 0.08, 0.12, initial_wealth=1_000_000)]
+        portfolio = Portfolio(accounts)
+
+        R = np.zeros((5, 0, 1))  # T=0
+        A = np.zeros((5, 0))
+        X = np.zeros((0, 1))
+
+        result = portfolio.simulate(A=A, R=R, X=X)
+
+        # Only initial wealth at t=0
+        assert result["wealth"].shape == (5, 1, 1)
+        assert np.all(result["wealth"][:, 0, 0] == 1_000_000)
+
+    def test_accumulation_factors_T_zero(self):
+        """Test accumulation factors with T=0."""
+        accounts = [Account.from_annual("A", 0.08, 0.12)]
+        portfolio = Portfolio(accounts)
+
+        R = np.zeros((5, 0, 1))  # T=0
+        F = portfolio.compute_accumulation_factors(R)
+
+        assert F.shape == (5, 1, 1, 1)
+        assert np.all(F == 1.0)
 
 
 if __name__ == "__main__":

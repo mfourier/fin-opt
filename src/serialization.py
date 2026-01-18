@@ -98,12 +98,15 @@ def account_to_dict(account: Account) -> Dict[str, Any]:
     dict
         Dictionary with account configuration
     """
-    return {
+    result = {
         "name": account.name,
         "annual_return": account.annual_params["return"],
         "annual_volatility": account.annual_params["volatility"],
         "initial_wealth": account.initial_wealth,
     }
+    if account.display_name:
+        result["display_name"] = account.display_name
+    return result
 
 
 def account_from_dict(data: Dict[str, Any]) -> Account:
@@ -130,6 +133,7 @@ def account_from_dict(data: Dict[str, Any]) -> Account:
         annual_return=config.annual_return,
         annual_volatility=config.annual_volatility,
         initial_wealth=config.initial_wealth,
+        display_name=data.get("display_name"),
     )
 
 

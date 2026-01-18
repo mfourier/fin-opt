@@ -106,69 +106,78 @@ __all__ = [
 class Account:
     """
     Portfolio account metadata with dual temporal parameter access.
-    
+
     Represents a single investment account with return characteristics.
     Return generation is delegated to returns.py (ReturnModel consumes this metadata).
-    
+
     Internal storage uses monthly parameters (canonical form), but provides
     seamless access to both monthly and annual representations via properties.
-    
+
     Parameters
     ----------
     name : str
-        Account identifier (e.g., "Emergency", "Housing", "Brokerage").
+        Short account identifier used for goal references (e.g., "RN", "CC", "SLV").
+        This is the key used when specifying goals: TerminalGoal(account="RN", ...).
     initial_wealth : float
         Starting balance W_0^m (non-negative).
     return_strategy : dict
         Expected return and volatility in **monthly arithmetic** space:
         {"mu": float, "sigma": float}
-        
+
         - mu: monthly expected return (e.g., 0.0033 for ~4% annual)
         - sigma: monthly volatility (e.g., 0.0144 for ~5% annual)
-        
+
         For annual parameters, use Account.from_annual() instead (recommended).
         For monthly parameters, use Account.from_monthly() (advanced/explicit).
-    
+    display_name : str, optional
+        Long descriptive name for plots and reports (e.g., "Risky Norris (Fintual)").
+        If not provided, `name` is used for display. This allows using short
+        acronyms for goal specification while showing descriptive names in visuals.
+
     Properties
     ----------
+    label : str
+        Display name for plots (returns display_name if set, otherwise name).
     monthly_params : Dict[str, float]
         Monthly return parameters {"mu": float, "sigma": float}.
     annual_params : Dict[str, float]
         Annualized return parameters {"return": float, "volatility": float}.
-    
+
     Methods
     -------
-    from_annual(name, annual_return, annual_volatility, initial_wealth=0.0)
+    from_annual(name, annual_return, annual_volatility, initial_wealth=0.0, display_name=None)
         Create account from annual parameters (recommended API).
-    from_monthly(name, monthly_mu, monthly_sigma, initial_wealth=0.0)
+    from_monthly(name, monthly_mu, monthly_sigma, initial_wealth=0.0, display_name=None)
         Create account from monthly parameters (advanced/explicit API).
-        
+
     Examples
     --------
-    # Recommended: Annual parameters (user-friendly)
+    # With display_name for cleaner goal specification
+    >>> risky = Account.from_annual("RN", annual_return=0.12,
+    ...                             annual_volatility=0.15,
+    ...                             display_name="Risky Norris (Fintual)")
+    >>> print(risky.name)       # Short name for goals
+    'RN'
+    >>> print(risky.label)      # Long name for plots
+    'Risky Norris (Fintual)'
+
+    # Goal uses short name
+    >>> goal = TerminalGoal(account="RN", threshold=5_000_000, confidence=0.8)
+
+    # Without display_name (backward compatible)
     >>> emergency = Account.from_annual("Emergency", annual_return=0.04,
-    ...                                 annual_volatility=0.05, initial_wealth=0)
-    >>> print(emergency)
-    Account('Emergency': 4.0%/year, σ=5.0%, W₀=$0)
-    
-    # Introspection: dual temporal views
-    >>> emergency.annual_params
-    {'return': 0.04, 'volatility': 0.05}
-    >>> emergency.monthly_params
-    {'mu': 0.0032737, 'sigma': 0.0144338}
-    
-    # Advanced: Monthly parameters (explicit control)
-    >>> custom = Account.from_monthly("Custom", monthly_mu=0.0058, 
-    ...                               monthly_sigma=0.0347, initial_wealth=50_000)
-    >>> custom.annual_params
-    {'return': 0.0719..., 'volatility': 0.1201...}
-    
+    ...                                 annual_volatility=0.05)
+    >>> print(emergency.label)  # Falls back to name
+    'Emergency'
+
     # Low-level: Direct construction (deserialization/internal use)
-    >>> acc = Account("Legacy", 10_000, {"mu": 0.005, "sigma": 0.03})
+    >>> acc = Account("SLV", 10_000, {"mu": 0.005, "sigma": 0.03},
+    ...               display_name="iShares Silver Trust")
     """
     name: str
     initial_wealth: float
     return_strategy: dict  # {"mu": monthly, "sigma": monthly}
+    display_name: Optional[str] = None
 
     def __post_init__(self):
         if self.initial_wealth < 0:
@@ -185,62 +194,63 @@ class Account:
         annual_return: float,
         annual_volatility: float,
         initial_wealth: float = 0.0,
+        display_name: Optional[str] = None,
     ) -> "Account":
         """
         Create account from annual return parameters (recommended API).
-        
+
         Converts annual parameters to monthly representation internally,
         following the same pattern as FixedIncome.annual_growth and
         VariableIncome.annual_growth in income.py.
-        
+
         Parameters
         ----------
         name : str
-            Account identifier (e.g., "Emergency", "Housing").
+            Short account identifier for goal references (e.g., "RN", "CC").
         annual_return : float
             Expected annual return (e.g., 0.09 for 9%/year).
         annual_volatility : float
             Annual volatility (e.g., 0.15 for 15%/year).
         initial_wealth : float, default 0.0
             Starting balance W_0^m (non-negative).
-        
+        display_name : str, optional
+            Long descriptive name for plots (e.g., "Risky Norris (Fintual)").
+            If not provided, `name` is used for display.
+
         Returns
         -------
         Account
             Account instance with monthly parameters in return_strategy.
-        
+
         Notes
         -----
         Conversion formulas:
         - mu_monthly = (1 + annual_return)^(1/12) - 1  [compounded]
         - sigma_monthly = annual_volatility / sqrt(12)  [time scaling]
-        
+
         Examples
         --------
-        >>> # Conservative emergency fund: 4% annual return, 5% vol
+        >>> # With display_name for cleaner goal specification
+        >>> risky = Account.from_annual("RN", annual_return=0.12,
+        ...                             annual_volatility=0.15,
+        ...                             display_name="Risky Norris (Fintual)")
+        >>> risky.name, risky.label
+        ('RN', 'Risky Norris (Fintual)')
+
+        >>> # Without display_name (backward compatible)
         >>> emergency = Account.from_annual("Emergency", annual_return=0.04,
         ...                                 annual_volatility=0.05)
-        >>> emergency.annual_params
-        {'return': 0.04, 'volatility': 0.05}
-        
-        >>> # Aggressive growth account: 12% annual return, 20% vol
-        >>> growth = Account.from_annual("Growth", annual_return=0.12,
-        ...                              annual_volatility=0.20,
-        ...                              initial_wealth=100_000)
-        
-        >>> # Verify round-trip conversion
-        >>> monthly_to_annual(emergency.return_strategy["mu"])
-        0.04  # recovers annual_return
-        >>> emergency.return_strategy["sigma"] * np.sqrt(12)
-        0.05  # recovers annual_volatility
+        >>> emergency.label
+        'Emergency'
         """
         mu_monthly = annual_to_monthly(annual_return)
         sigma_monthly = annual_volatility / np.sqrt(12)
-        
+
         return cls(
             name=name,
             initial_wealth=initial_wealth,
-            return_strategy={"mu": mu_monthly, "sigma": sigma_monthly}
+            return_strategy={"mu": mu_monthly, "sigma": sigma_monthly},
+            display_name=display_name
         )
     
     @classmethod
@@ -250,45 +260,46 @@ class Account:
         monthly_mu: float,
         monthly_sigma: float,
         initial_wealth: float = 0.0,
+        display_name: Optional[str] = None,
     ) -> "Account":
         """
         Create account from monthly return parameters (advanced/explicit API).
-        
+
         For most use cases, prefer from_annual() which uses more intuitive
         annualized inputs. Use this method when you have explicit monthly
         parameters from external sources or require precise control.
-        
+
         Parameters
         ----------
         name : str
-            Account identifier.
+            Short account identifier for goal references.
         monthly_mu : float
             Monthly expected return (arithmetic).
         monthly_sigma : float
             Monthly volatility (arithmetic).
         initial_wealth : float, default 0.0
             Starting balance W_0^m (non-negative).
-        
+        display_name : str, optional
+            Long descriptive name for plots. If not provided, `name` is used.
+
         Returns
         -------
         Account
             Account instance with monthly parameters in return_strategy.
-        
+
         Examples
         --------
         >>> # Explicit monthly parameters
-        >>> acc = Account.from_monthly("Tactical", monthly_mu=0.0058,
-        ...                            monthly_sigma=0.0347)
-        >>> acc.annual_params
-        {'return': 0.0719..., 'volatility': 0.1201...}
-        
-        >>> # Deserialization use case
-        >>> saved_params = {"mu": 0.0065, "sigma": 0.04}
-        >>> acc = Account.from_monthly("Restored", **saved_params)
+        >>> acc = Account.from_monthly("TAC", monthly_mu=0.0058,
+        ...                            monthly_sigma=0.0347,
+        ...                            display_name="Tactical Fund")
+        >>> acc.name, acc.label
+        ('TAC', 'Tactical Fund')
         """
         return cls(
             name=name,
             initial_wealth=initial_wealth,
+            display_name=display_name,
             return_strategy={"mu": monthly_mu, "sigma": monthly_sigma}
         )
     
@@ -344,20 +355,50 @@ class Account:
             "return": mu_annual,
             "volatility": sigma_annual
         }
-    
+
+    @property
+    def label(self) -> str:
+        """
+        Display name for plots and reports.
+
+        Returns display_name if set, otherwise falls back to name.
+        Use this property when displaying account names in visualizations.
+
+        Returns
+        -------
+        str
+            Human-readable account name for display purposes.
+
+        Examples
+        --------
+        >>> acc = Account.from_annual("RN", 0.12, 0.15,
+        ...                           display_name="Risky Norris (Fintual)")
+        >>> acc.label
+        'Risky Norris (Fintual)'
+
+        >>> acc2 = Account.from_annual("Emergency", 0.04, 0.05)
+        >>> acc2.label
+        'Emergency'
+        """
+        return self.display_name if self.display_name else self.name
+
     def __repr__(self) -> str:
         """
         String representation showing annualized parameters (user-friendly).
-        
+
         Examples
         --------
-        >>> acc = Account.from_annual("Emergency", 0.04, 0.05, 10_000)
+        >>> acc = Account.from_annual("RN", 0.12, 0.15, 10_000,
+        ...                           display_name="Risky Norris")
         >>> print(acc)
-        Account('Emergency': 4.0%/year, σ=5.0%, W₀=$10,000)
+        Account('RN' [Risky Norris]: 12.0%/year, σ=15.0%, W₀=$10,000)
         """
         ap = self.annual_params
+        name_part = f"'{self.name}'"
+        if self.display_name:
+            name_part += f" [{self.display_name}]"
         return (
-            f"Account('{self.name}': {ap['return']:.1%}/year, "
+            f"Account({name_part}: {ap['return']:.1%}/year, "
             f"σ={ap['volatility']:.1%}, W₀=${self.initial_wealth:,.0f})"
         )
 
@@ -383,7 +424,7 @@ class Portfolio:
     
     Methods
     -------
-    simulate(A, R, X, method="affine", W0_override=None) -> dict
+    simulate(A, R, X, method="recursive", W0_override=None) -> dict
         Execute wealth dynamics for given contributions, returns, and allocations.
         Supports batch processing of Monte Carlo samples and W0 override.
     compute_accumulation_factors(R) -> np.ndarray
@@ -463,7 +504,7 @@ class Portfolio:
         A: np.ndarray,  # Contributions: (T,) or (n_sims, T)
         R: np.ndarray,  # Returns: (n_sims, T, M)
         X: np.ndarray,  # Allocations: (T, M)
-        method: Literal["recursive", "affine"] = "affine",
+        method: Literal["recursive", "affine"] = "recursive",
         W0_override: Optional[np.ndarray] = None
     ) -> dict:
         """
@@ -483,9 +524,9 @@ class Portfolio:
         X : np.ndarray, shape (T, M)
             Allocation policy: X[t, m] = fraction of A_t to account m.
             Must satisfy: X[t, :].sum() = 1, X[t, m] ≥ 0.
-        method : {"recursive", "affine"}, default "affine"
+        method : {"recursive", "affine"}, default "recursive"
             Computation method:
-            - "recursive": iterative W_{t+1} = (W_t + A_t)(1+R_t)
+            - "recursive": iterative W_{t+1} = (W_t + A_t)(1+R_t) [faster]
             - "affine": closed-form W_t = W_0 F_{0,t} + Σ_s A_s x_s F_{s,t}
         W0_override : np.ndarray, shape (M,), optional
             Override initial wealth vector. If None, uses self.initial_wealth_vector.
@@ -663,27 +704,31 @@ class Portfolio:
         """
         n_sims, T, M = R.shape
         W0 = W0_override if W0_override is not None else self.initial_wealth_vector
-        
+
         # Compute accumulation factors: (n_sims, T+1, T+1, M)
         F = self.compute_accumulation_factors(R)
-        
+
         # Initialize wealth
         W = np.zeros((n_sims, T + 1, M))
         W[:, 0, :] = W0
-        
-        # Apply affine formula for each time t
+
+        # Precompute contribution-weighted allocations
+        # contrib_weighted[i, s, m] = A[i, s] * X[s, m]
+        # Shape: (n_sims, T, M)
+        contrib_weighted = A[:, :, None] * X[None, :, :]
+
+        # Apply affine formula for each time t (vectorized inner sum)
+        # W_t^m = W_0^m * F_{0,t}^m + Σ_{s=0}^{t-1} (A_s * x_s^m) * F_{s,t}^m
         for t in range(1, T + 1):
             # Initial wealth term: W_0^m F_{0,t}^m
-            # Broadcasting: (M,) * (n_sims, M) → (n_sims, M)
             W[:, t, :] = W0 * F[:, 0, t, :]
-            
-            # Contribution term: Σ_{s=0}^{t-1} A_s x_s^m F_{s,t}^m
-            for s in range(t):
-                # Allocate: A_s * X[s,:]: (n_sims, 1) * (1, M) → (n_sims, M)
-                contrib = A[:, s, None] * X[s, :]
-                # contrib * F_{s,t}^m: (n_sims, M) * (n_sims, M) → (n_sims, M)
-                W[:, t, :] += contrib * F[:, s, t, :]
-        
+
+            # Contribution term: vectorized sum over s ∈ [0, t)
+            # F[:, :t, t, :] has shape (n_sims, t, M)
+            # contrib_weighted[:, :t, :] has shape (n_sims, t, M)
+            # Element-wise multiply and sum over axis=1 (time dimension)
+            W[:, t, :] += (contrib_weighted[:, :t, :] * F[:, :t, t, :]).sum(axis=1)
+
         return W
     
     def compute_accumulation_factors(self, R: np.ndarray) -> np.ndarray:
@@ -759,18 +804,32 @@ class Portfolio:
         """
         n_sims, T, M = R.shape
         F = np.ones((n_sims, T + 1, T + 1, M))
-        
+
+        if T == 0:
+            return F
+
         gross_returns = 1.0 + R  # (n_sims, T, M)
-        
-        # Vectorized computation over simulations
-        # F[i, s, t, m] = ∏_{r=s}^{t-1} gross_returns[i, r, m]
-        for s in range(T):
-            for t in range(s + 1, T + 1):
-                # Product over axis=1 (time dimension) for slice [s:t]
-                # gross_returns[:, s:t, :]: (n_sims, t-s, M)
-                # prod(axis=1): (n_sims, M)
-                F[:, s, t, :] = np.prod(gross_returns[:, s:t, :], axis=1)
-        
+
+        # Optimized computation using cumulative products
+        # Key insight: F[s, t] = C[t] / C[s] where C[t] = ∏_{r=0}^{t-1} (1+R_r)
+        #
+        # This reduces redundant product calculations:
+        # - Old: O(T²) calls to np.prod, each computing products from scratch
+        # - New: O(T) for cumprod + O(T²) divisions (much faster than products)
+
+        # C[t] = cumulative product from time 0 to t-1
+        # Shape: (n_sims, T, M) where C[:, t, :] = ∏_{r=0}^{t} gross_returns[:, r, :]
+        cum_prod = np.cumprod(gross_returns, axis=1)  # (n_sims, T, M)
+
+        # Fill F using the relationship F[s, t] = C[t-1] / C[s-1]
+        for t in range(1, T + 1):
+            # F[0, t] = C[t-1] = ∏_{r=0}^{t-1} (1+R_r)
+            F[:, 0, t, :] = cum_prod[:, t - 1, :]
+
+            # F[s, t] = C[t-1] / C[s-1] for s > 0
+            for s in range(1, t):
+                F[:, s, t, :] = cum_prod[:, t - 1, :] / cum_prod[:, s - 1, :]
+
         return F
     
     def plot(
@@ -869,7 +928,7 @@ class Portfolio:
             time_axis = np.arange(T_plus_1)
             xlabel = "Month"
         
-        # Setup colors
+        # Setup colors (lookup by name or label for flexibility)
         if colors is None:
             colors = {}
         default_colors = plt.cm.Dark2(np.linspace(0, 1, M))
@@ -877,6 +936,8 @@ class Portfolio:
         for i, acc in enumerate(self.accounts):
             if acc.name in colors:
                 account_colors.append(colors[acc.name])
+            elif acc.label in colors:
+                account_colors.append(colors[acc.label])
             elif i in colors:
                 account_colors.append(colors[i])
             else:
@@ -912,7 +973,7 @@ class Portfolio:
                 mean_wealth,
                 color=account_colors[m],
                 linewidth=2.5,
-                label=f"{self.accounts[m].name}"
+                label=self.accounts[m].label
             )
         
         ax_accounts.yaxis.set_major_formatter(FuncFormatter(millions_formatter))
@@ -1082,7 +1143,7 @@ class Portfolio:
         ax_composition.stackplot(
             time_axis,
             *[mean_wealth_by_account[:, m] for m in range(M)],
-            labels=[acc.name for acc in self.accounts],
+            labels=[acc.label for acc in self.accounts],
             colors=account_colors,
             alpha=0.7
         )
@@ -1107,7 +1168,7 @@ class Portfolio:
                 bottom=bottom,
                 width=bar_width,
                 color=account_colors[m],
-                label=self.accounts[m].name,
+                label=self.accounts[m].label,
                 edgecolor='white',
                 linewidth=0.3,
                 alpha=0.85
