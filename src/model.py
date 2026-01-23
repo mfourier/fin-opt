@@ -922,18 +922,19 @@ class FinancialModel:
         verbose: bool = True,
         search_method: str = "binary",
         withdrawals: Optional[WithdrawalModel] = None,
+        withdrawal_epsilon: float = 0.05,
         **solver_kwargs
     ) -> OptimizationResult:
         """
         Find minimum-horizon allocation policy satisfying financial goals.
-        
+
         Executes bilevel optimization:
         - Outer problem: min T (via linear search)
         - Inner problem: find feasible X* at horizon T
-        
+
         Uses intelligent horizon estimation for terminal-only goals via
         heuristic in goals.py (avoids testing infeasible T=1,2,3...).
-        
+
         Parameters
         ----------
         goals : List[Union[IntermediateGoal, TerminalGoal]]
@@ -942,16 +943,15 @@ class FinancialModel:
             - TerminalGoal: ℙ(W_T^m ≥ b) ≥ 1-ε at variable horizon T
         optimizer : AllocationOptimizer
             Inner problem solver. Available implementations:
-            - SAAOptimizer: Sigmoid-smoothed SAA (recommended)
-            - CVaROptimizer: Risk-adjusted (requires CVXPY, stub)
+            - CVaROptimizer: Convex reformulation (recommended)
         T_max : int, default 240
             Maximum search horizon (months). Typical: 120-240 (10-20 years).
         n_sims : int, default 500
             Monte Carlo scenarios for chance constraint approximation.
             Higher → better approximation, slower. Minimum: 100.
         seed : int, optional
-            Random seed for reproducibility. Propagated to income (seed)
-            and returns (seed+1) generators.
+            Random seed for reproducibility. Propagated to income (seed),
+            returns (seed+1), and withdrawals (seed+2) generators.
         start : date, optional
             Calendar start date for goal resolution. If None, uses today.
         verbose : bool, default True
@@ -960,11 +960,19 @@ class FinancialModel:
             Horizon search strategy:
             - "binary": Binary search (faster, ~50% fewer iterations)
             - "linear": Sequential search (safer, guaranteed to find solution)
+        withdrawals : WithdrawalModel, optional
+            Scheduled cash outflows from accounts. If provided, adds
+            withdrawal feasibility constraints: ℙ(W_t^m ≥ D_t^m) ≥ 1-ε
+            ensuring sufficient wealth before each withdrawal.
+        withdrawal_epsilon : float, default 0.05
+            Confidence level for withdrawal feasibility (95% default).
+            Lower values are more conservative.
         **solver_kwargs
             Forwarded to AllocationOptimizer.solve():
-            - maxiter : int, default 1000 (SLSQP iterations)
-            - gtol : float, default 1e-6 (gradient tolerance)
-            - ftol : float, default 1e-9 (function tolerance)
+            - solver : str, default 'ECOS' (CVXPY solver)
+            - max_iters : int, default 10000
+            - abstol : float, default 1e-7
+            - reltol : float, default 1e-6
         
         Returns
         -------
@@ -1061,13 +1069,6 @@ class FinancialModel:
         if not goals:
             raise ValueError("goals list cannot be empty")
 
-        # Withdrawals not yet supported in optimization
-        if withdrawals is not None:
-            raise NotImplementedError(
-                "Withdrawals in optimize() are not yet supported. "
-                "Withdrawals affect the wealth dynamics in the inner problem solver. "
-                "For now, use simulate() with withdrawals to analyze specific policies."
-            )
         if not hasattr(optimizer, 'solve') or not callable(optimizer.solve):
             raise TypeError(
                 f"optimizer must implement AllocationOptimizer interface "
@@ -1078,13 +1079,13 @@ class FinancialModel:
                 f"optimizer.M={getattr(optimizer, 'M', None)} must match "
                 f"model.M={self.M}"
             )
-        
+
         # Create bilevel solver
         seeker = GoalSeeker(optimizer, T_max=T_max, verbose=verbose)
-        
+
         # Build generators using model components
         start_date = start if start is not None else date.today()
-        
+
         def A_generator(T: int, n: int, s: Optional[int]) -> np.ndarray:
             """Generate contribution scenarios."""
             return self.income.contributions(
@@ -1094,14 +1095,27 @@ class FinancialModel:
                 output="array",
                 start=start_date
             )
-        
+
         def R_generator(T: int, n: int, s: Optional[int]) -> np.ndarray:
             """Generate return scenarios."""
             return self.returns.generate(T, n_sims=n, seed=s)
-        
+
+        # Build D_generator if withdrawals provided
+        D_generator = None
+        if withdrawals is not None:
+            def D_generator(T: int, n: int, s: Optional[int]) -> np.ndarray:
+                """Generate withdrawal scenarios."""
+                return withdrawals.to_array(
+                    T=T,
+                    start_date=start_date,
+                    accounts=self.accounts,
+                    n_sims=n,
+                    seed=None if s is None else s + 2
+                )
+
         # Extract initial wealth
         W0 = self.portfolio.initial_wealth_vector
-        
+
         # Execute bilevel optimization
         return seeker.seek(
             goals=goals,
@@ -1113,6 +1127,8 @@ class FinancialModel:
             n_sims=n_sims,
             seed=seed,
             search_method=search_method,
+            D_generator=D_generator,
+            withdrawal_epsilon=withdrawal_epsilon,
             **solver_kwargs
         )
 
