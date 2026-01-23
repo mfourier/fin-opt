@@ -361,13 +361,15 @@ class AllocationOptimizer(ABC):
         R: np.ndarray,
         W0: np.ndarray,
         portfolio: Portfolio,
-        goal_set: GoalSet
+        goal_set: GoalSet,
+        D: Optional[np.ndarray] = None,
+        withdrawal_epsilon: float = 0.05
     ) -> bool:
         """
-        Check if allocation X satisfies all goals using exact SAA.
-        
+        Check if allocation X satisfies all goals and withdrawal constraints.
+
         Uses non-smoothed indicator function for final validation.
-        
+
         Parameters
         ----------
         X : np.ndarray, shape (T, M)
@@ -378,55 +380,81 @@ class AllocationOptimizer(ABC):
             Return scenarios
         W0 : np.ndarray, shape (M,)
         portfolio : Portfolio
-            Portfolio instance 
+            Portfolio instance
         goal_set : GoalSet
             Validated goal collection
-        
+        D : np.ndarray, optional
+            Withdrawals array, shape (T, M) or (n_sims, T, M)
+        withdrawal_epsilon : float, default=0.05
+            Confidence level for withdrawal feasibility
+
         Returns
         -------
         bool
-            True if all goals satisfied, False otherwise
+            True if all goals and withdrawals satisfied, False otherwise
         """
-        
+
         X_normalized = X.copy()
         row_sums = X_normalized.sum(axis=1, keepdims=True)
-        
+
         max_deviation = np.abs(row_sums - 1.0).max()
         if max_deviation > 0.01:
             return False
-        
+
         X_normalized = X_normalized / row_sums
-        
+
+        T = X.shape[0]
+        n_sims = A.shape[0]
+        M = X.shape[1]
+
         result = portfolio.simulate(
-            A=A, R=R, X=X_normalized,
+            A=A, R=R, X=X_normalized, D=D,
             W0_override=W0
         )
         W = result["wealth"]  # (n_sims, T+1, M)
-        
+
         # Check intermediate goals
         for goal in goal_set.intermediate_goals:
             m = goal_set.get_account_index(goal)
             t = goal_set.get_resolved_month(goal)
-            
+
             W_t_m = W[:, t, m]
             violations = W_t_m < goal.threshold
             violation_rate = violations.mean()
-            
+
             if violation_rate > goal.epsilon:
                 return False
-        
+
         # Check terminal goals
-        T = X.shape[0]
         for goal in goal_set.terminal_goals:
             m = goal_set.get_account_index(goal)
-            
+
             W_T_m = W[:, T, m]
             violations = W_T_m < goal.threshold
             violation_rate = violations.mean()
-            
+
             if violation_rate > goal.epsilon:
                 return False
-        
+
+        # Check withdrawal feasibility constraints
+        if D is not None:
+            # Expand D if deterministic
+            if D.ndim == 2:
+                D_expanded = np.tile(D[np.newaxis, :, :], (n_sims, 1, 1))
+            else:
+                D_expanded = D
+
+            for t in range(1, T + 1):
+                for m in range(M):
+                    D_tm = D_expanded[:, t - 1, m]
+                    if np.any(D_tm > 0):
+                        W_t_m = W[:, t, m]
+                        violations = W_t_m < D_tm
+                        violation_rate = violations.mean()
+
+                        if violation_rate > withdrawal_epsilon:
+                            return False
+
         return True
     
     def _compute_objective(
@@ -670,11 +698,13 @@ class CVaROptimizer(AllocationOptimizer):
         W0: np.ndarray,
         goal_set: GoalSet,
         X_init: Optional[np.ndarray] = None,
+        D: Optional[np.ndarray] = None,
+        withdrawal_epsilon: float = 0.05,
         **solver_kwargs
     ) -> OptimizationResult:
         """
         Solve the portfolio allocation problem using convex optimization.
-        
+
         Parameters
         ----------
         T : int
@@ -692,6 +722,16 @@ class CVaROptimizer(AllocationOptimizer):
             Must be created by caller before calling solve().
         X_init : ndarray, optional
             Initial guess for allocations (ignored by CVXPY)
+        D : ndarray, optional
+            Monthly withdrawals from accounts.
+            - Shape (T, M): deterministic withdrawals (broadcast across scenarios)
+            - Shape (n_sims, T, M): stochastic withdrawals (per scenario)
+            - None (default): no withdrawals
+            Withdrawals occur at START of month (before returns applied).
+        withdrawal_epsilon : float, default=0.05
+            Confidence level for withdrawal feasibility constraints.
+            Constraint: P(W_t^m >= D_t^m) >= 1 - withdrawal_epsilon
+            Default 0.05 means 95% confidence of meeting withdrawals.
         **solver_kwargs
             Additional solver options:
             - solver : {'ECOS', 'SCS', 'CLARABEL'}, default='ECOS'
@@ -699,7 +739,7 @@ class CVaROptimizer(AllocationOptimizer):
             - max_iters : int, default=10000
             - abstol : float, default=1e-7 (absolute tolerance)
             - reltol : float, default=1e-6 (relative tolerance)
-        
+
         Returns
         -------
         OptimizationResult
@@ -710,20 +750,24 @@ class CVaROptimizer(AllocationOptimizer):
             - feasible : whether all goals are satisfied
             - solve_time : solver time in seconds
             - diagnostics : dict with solver information
-        
+
         Raises
         ------
         ValueError
             If intermediate goal exceeds horizon T
         RuntimeError
             If solver succeeds but returns None for X.value
-        
+
         Notes
         -----
         The solver automatically handles numerical tolerances. If the simplex
         constraint is violated within numerical precision (< 1e-6), the solution
         is projected back to the simplex via normalization.
-        
+
+        Withdrawal feasibility constraints ensure sufficient wealth before each
+        withdrawal via CVaR reformulation: CVaR_eps(D_t^m - W_t^m) <= 0.
+        Since D is a PARAMETER (not decision variable), convexity is preserved.
+
         Solver selection:
         - ECOS: Fast, recommended for LP/SOCP (default)
         - SCS: More robust, handles ill-conditioned problems
@@ -760,14 +804,39 @@ class CVaROptimizer(AllocationOptimizer):
             raise ValueError(
                 f"goal_set.M={goal_set.M} != n_accounts={M}"
             )
-        
+
+        # Validate and expand D (withdrawals) if provided
+        D_expanded = None
+        if D is not None:
+            if D.ndim == 2:
+                # Deterministic: (T, M) -> broadcast to (n_sims, T, M)
+                if D.shape != (T, M):
+                    raise ValueError(
+                        f"D must have shape ({T}, {M}) for deterministic withdrawals, "
+                        f"got {D.shape}"
+                    )
+                D_expanded = np.tile(D[np.newaxis, :, :], (n_sims, 1, 1))
+            elif D.ndim == 3:
+                # Stochastic: (n_sims, T, M) - use as-is
+                if D.shape != (n_sims, T, M):
+                    raise ValueError(
+                        f"D must have shape ({n_sims}, {T}, {M}) for stochastic withdrawals, "
+                        f"got {D.shape}"
+                    )
+                D_expanded = D
+            else:
+                raise ValueError(f"D must be 2D or 3D array, got {D.ndim}D")
+
+            if np.any(D_expanded < 0):
+                raise ValueError("D must be non-negative (withdrawals cannot be negative)")
+
         # Extract solver options
         solver_name = solver_kwargs.get('solver', 'ECOS')
         verbose = solver_kwargs.get('verbose', False)
         max_iters = solver_kwargs.get('max_iters', 10000)
         abstol = solver_kwargs.get('abstol', 1e-7)
         reltol = solver_kwargs.get('reltol', 1e-6)
-        
+
         # Precompute accumulation factors: (n_sims, T+1, T+1, M)
         portfolio = Portfolio(goal_set.accounts)
         F = portfolio.compute_accumulation_factors(R)
@@ -783,28 +852,33 @@ class CVaROptimizer(AllocationOptimizer):
         z = {}      # z^i: excess over VaR in scenario i (vector per goal)
         
         # ============= HELPER FUNCTION: AFFINE WEALTH =============
-        
+
         def build_wealth_affine(t: int, m: int):
             """
-            Build affine expression for wealth: W[:,t,m] = b + Φ @ X[:t,m]
-            
-            Mathematical formulation:
-                W[i,t,m] = W0[m] * F[i,0,t,m] + Σ_{s=0}^{t-1} A[i,s] * X[s,m] * F[i,s,t,m]
-            
+            Build affine expression for wealth including withdrawals.
+
+            Mathematical formulation (with withdrawals D):
+                W[i,t,m] = W0[m] * F[i,0,t,m]
+                         + Σ_{s=0}^{t-1} (A[i,s] * X[s,m] - D[i,s,m]) * F[i,s,t,m]
+
             Matrix form:
-                W[:,t,m] = b_{t,m} + Φ_{t,m} @ X[:t,m]
-                
+                W[:,t,m] = b_{t,m} + Φ_{t,m} @ X[:t,m] - withdrawal_term
+
                 where:
-                - b[i] = W0[m] * F[i,0,t,m]  (constant term)
-                - Φ[i,s] = A[i,s] * F[i,s,t,m]  (coefficient matrix)
-            
+                - b[i] = W0[m] * F[i,0,t,m]  (initial wealth compounded)
+                - Φ[i,s] = A[i,s] * F[i,s,t,m]  (contribution coefficients)
+                - withdrawal_term = Σ_s D[i,s,m] * F[i,s,t,m]  (constant)
+
+            Since D is a PARAMETER (not decision variable), wealth remains
+            AFFINE in X, preserving convexity for CVaR optimization.
+
             Parameters
             ----------
             t : int
                 Time index (1 <= t <= T)
             m : int
                 Account index (0 <= m < M)
-            
+
             Returns
             -------
             W_t_m : cp.Expression, shape (n_sims,)
@@ -813,17 +887,26 @@ class CVaROptimizer(AllocationOptimizer):
             """
             # Constant term: initial wealth compounded to time t
             b = W0[m] * F[:, 0, t, m]  # shape: (n_sims,)
-            
+
             if t == 0:
-                return b  # No contributions before t=0
-            
+                return b  # No contributions/withdrawals before t=0
+
             # Coefficient matrix: Φ[i,s] = A[i,s] * F[i,s,t,m]
-            # Element-wise multiplication creates the affine coefficients
             Phi = A[:, :t] * F[:, :t, t, m]  # shape: (n_sims, t)
-            
-            # Wealth = constant + matrix @ decision_vars
-            # W[:,t,m] = b + Φ @ X[:t,m]
-            return b + Phi @ X[:t, m]
+
+            # Contribution term (affine in X)
+            contrib_term = Phi @ X[:t, m]
+
+            # Withdrawal term (constant - D is a PARAMETER)
+            if D_expanded is not None:
+                # D_expanded[:, :t, m] * F[:, :t, t, m] -> (n_sims, t)
+                D_compounded = D_expanded[:, :t, m] * F[:, :t, t, m]
+                withdrawal_term = D_compounded.sum(axis=1)  # (n_sims,)
+            else:
+                withdrawal_term = 0.0
+
+            # Wealth = initial + contributions - withdrawals (all compounded)
+            return b + contrib_term - withdrawal_term
         
         # ============= CONSTRAINTS =============
         
@@ -885,7 +968,45 @@ class CVaROptimizer(AllocationOptimizer):
             constraints.append(
                 gamma[goal] + cp.sum(z[goal]) / (goal.epsilon * n_sims) <= 0
             )
-        
+
+        # 4. CVaR constraints for withdrawal feasibility
+        # Constraint: P(W_t^m >= D_t^m) >= 1 - withdrawal_epsilon
+        # CVaR form: CVaR_eps(D_t^m - W_t^m) <= 0
+        gamma_withdrawal = {}
+        z_withdrawal = {}
+
+        if D_expanded is not None:
+            for t in range(1, T + 1):
+                for m in range(M):
+                    # Withdrawal at month t-1 (0-indexed in D_expanded)
+                    D_tm = D_expanded[:, t - 1, m]
+
+                    # Only add constraint if there's a withdrawal at this (t, m)
+                    if np.any(D_tm > 0):
+                        # Wealth at time t, account m (after contributions, before returns)
+                        W_t_m = build_wealth_affine(t, m)
+
+                        # Shortfall: D_t^m - W_t^m (positive = cannot meet withdrawal)
+                        shortfall = D_tm - W_t_m
+
+                        # CVaR auxiliary variables for withdrawal
+                        gamma_withdrawal[(t, m)] = cp.Variable(
+                            name=f"gamma_wd_{t}_{m}"
+                        )
+                        z_withdrawal[(t, m)] = cp.Variable(
+                            n_sims, nonneg=True, name=f"z_wd_{t}_{m}"
+                        )
+
+                        # CVaR epigraphic constraints
+                        constraints.append(
+                            z_withdrawal[(t, m)] >= shortfall - gamma_withdrawal[(t, m)]
+                        )
+                        constraints.append(
+                            gamma_withdrawal[(t, m)]
+                            + cp.sum(z_withdrawal[(t, m)]) / (withdrawal_epsilon * n_sims)
+                            <= 0
+                        )
+
         # ============= OBJECTIVE FUNCTION =============
         
         # Pre-compute total terminal wealth (used by multiple objectives)
@@ -1030,7 +1151,12 @@ class CVaROptimizer(AllocationOptimizer):
                 """Compute W[:,t,m] using NumPy (for diagnostic validation)"""
                 W = W0[m] * F[:, 0, t, m]
                 for s in range(t):
-                    W += A[:, s] * X[s, m] * F[:, s, t, m]
+                    contrib = A[:, s] * X[s, m] * F[:, s, t, m]
+                    if D_expanded is not None:
+                        withdrawal = D_expanded[:, s, m] * F[:, s, t, m]
+                        W += contrib - withdrawal
+                    else:
+                        W += contrib
                 return W
             
             # Validate CVaR constraints and goal satisfaction
@@ -1075,23 +1201,52 @@ class CVaROptimizer(AllocationOptimizer):
                 print(f"    Mean wealth:    {W_t_m.mean():>12,.0f}")
                 print(f"    Violation rate: {violation_rate:.2%} (max: {goal.epsilon:.2%})")
                 print(f"    CVaR value:     {cvar_val:>12,.2f} (target: ≤ 0)")
-        
+
+            # Withdrawal feasibility diagnostics
+            if D_expanded is not None and gamma_withdrawal:
+                print(f"\n[Withdrawal Feasibility Diagnostics]")
+                print(f"  Confidence level: {1 - withdrawal_epsilon:.0%} (ε={withdrawal_epsilon:.0%})")
+
+                for (t, m), gamma_var in gamma_withdrawal.items():
+                    gamma_val = gamma_var.value
+                    z_val = z_withdrawal[(t, m)].value
+                    cvar_val = gamma_val + z_val.sum() / (withdrawal_epsilon * n_sims)
+
+                    # Compute wealth and withdrawal at this point
+                    D_tm = D_expanded[:, t - 1, m]
+                    W_t_m_vals = compute_wealth_numpy(X_star, t, m)
+                    violations = W_t_m_vals < D_tm
+                    violation_rate = violations.mean()
+
+                    status = "✓" if cvar_val <= 1e-4 else "⚠️"
+                    acc_name = goal_set.accounts[m].display_name
+                    print(f"  {status} Month {t}, Account {m} ({acc_name}):")
+                    print(f"    Mean withdrawal: {D_tm.mean():>12,.0f}")
+                    print(f"    Mean wealth:     {W_t_m_vals.mean():>12,.0f}")
+                    print(f"    Violation rate:  {violation_rate:.2%} (max: {withdrawal_epsilon:.2%})")
+                    print(f"    CVaR value:      {cvar_val:>12,.2f} (target: ≤ 0)")
+
         # Exact feasibility check using base class validation
         feasible = self._check_feasibility(
-            X_star, A, R, W0, 
+            X_star, A, R, W0,
             portfolio,
-            goal_set
+            goal_set,
+            D=D_expanded,
+            withdrawal_epsilon=withdrawal_epsilon
         )
-        
+
         # Package diagnostics
+        n_withdrawal_constraints = len(gamma_withdrawal) if D_expanded is not None else 0
         diagnostics = {
             'solver_status': prob.status,
             'solver_time': solve_time,
             'optimal_value': obj_value,
             'solver_name': solver_name,
             'n_constraints': len(constraints),
-            'n_variables': T * M + len(gamma) * (1 + n_sims),
+            'n_variables': T * M + len(gamma) * (1 + n_sims) + n_withdrawal_constraints * (1 + n_sims),
             'objective_type': self.objective,
+            'n_withdrawal_constraints': n_withdrawal_constraints,
+            'withdrawal_epsilon': withdrawal_epsilon if D_expanded is not None else None,
         }
         
         return OptimizationResult(
@@ -1180,11 +1335,13 @@ class GoalSeeker:
         n_sims: int = 500,
         seed: Optional[int] = None,
         search_method: str = "binary",
+        D_generator: Optional[Callable[[int, int, Optional[int]], np.ndarray]] = None,
+        withdrawal_epsilon: float = 0.05,
         **solver_kwargs
     ) -> OptimizationResult:
         """
         Find minimum horizon T* for goal feasibility via intelligent search.
-        
+
         Parameters
         ----------
         goals : List[Union[IntermediateGoal, TerminalGoal]]
@@ -1207,21 +1364,27 @@ class GoalSeeker:
             Search strategy:
             - "linear": Sequential T = T_start, T_start+1, ... (safer, slower)
             - "binary": Binary search (faster, requires monotonicity assumption)
+        D_generator : callable, optional
+            Function (T, n_sims, seed) → D array of shape (n_sims, T, M)
+            Generates withdrawal scenarios. If None, no withdrawals.
+        withdrawal_epsilon : float, default=0.05
+            Confidence level for withdrawal feasibility constraints.
+            P(W_t^m >= D_t^m) >= 1 - withdrawal_epsilon
         **solver_kwargs
             Parameters passed to optimizer.solve()
-        
+
         Returns
         -------
         OptimizationResult
             Result at minimum feasible horizon T*
-        
+
         Notes
         -----
         Binary search assumes monotonicity: if T is feasible, then T+1 is feasible.
         This holds for most practical goal structures but may fail with:
         - Time-dependent contribution schedules with sudden drops
         - Pathological goal configurations
-        
+
         For safety-critical applications, use search_method="linear".
         For typical financial planning, "binary" saves ~50% iterations.
         """
@@ -1280,13 +1443,19 @@ class GoalSeeker:
         # Dispatch to search method
         if search_method == "linear":
             return self._linear_search(
-                T_start, goal_set, A_generator, R_generator, 
-                W0, n_sims, seed, **solver_kwargs
+                T_start, goal_set, A_generator, R_generator,
+                W0, n_sims, seed,
+                D_generator=D_generator,
+                withdrawal_epsilon=withdrawal_epsilon,
+                **solver_kwargs
             )
         elif search_method == "binary":
             return self._binary_search(
                 T_start, goal_set, A_generator, R_generator,
-                W0, n_sims, seed, **solver_kwargs
+                W0, n_sims, seed,
+                D_generator=D_generator,
+                withdrawal_epsilon=withdrawal_epsilon,
+                **solver_kwargs
             )
         else:
             raise ValueError(f"Unknown search_method: {search_method}")
@@ -1300,6 +1469,8 @@ class GoalSeeker:
         W0: np.ndarray,
         n_sims: int,
         seed: Optional[int],
+        D_generator: Optional[Callable] = None,
+        withdrawal_epsilon: float = 0.05,
         **solver_kwargs
     ) -> OptimizationResult:
         """
@@ -1307,34 +1478,41 @@ class GoalSeeker:
 
         """
         X_prev = None
-        
+
         for T in range(T_start, self.T_max + 1):
             if self.verbose:
                 print(f"[Iter {T - T_start + 1}] Testing T={T}...")
-            
+
             A = A_generator(T, n_sims, seed)
             R = R_generator(T, n_sims, None if seed is None else seed + 1)
-            
+
+            # Generate withdrawals if D_generator provided
+            D = None
+            if D_generator is not None:
+                D = D_generator(T, n_sims, seed)
+
             result = self.optimizer.solve(
                 T=T, A=A, R=R, W0=W0,
                 goal_set=goal_set,
                 X_init=X_prev,
+                D=D,
+                withdrawal_epsilon=withdrawal_epsilon,
                 **solver_kwargs
             )
-            
+
             if self.verbose:
                 status = "✓ Feasible" if result.feasible else "✗ Infeasible"
                 print(f"    {status}, obj={result.objective_value:.2f}, "
                     f"time={result.solve_time:.3f}s\n")
-            
+
             if result.feasible:
                 if self.verbose:
                     print(f"=== Optimal: T*={T} ===\n")
                 return result
-            
+
             if result.X is not None:
                 X_prev = np.vstack([result.X, result.X[-1:, :]])
-        
+
         raise ValueError(
             f"No feasible solution found in T ∈ [{T_start}, {self.T_max}]. "
             f"Try increasing T_max or relaxing goal constraints."
@@ -1349,14 +1527,16 @@ class GoalSeeker:
         W0: np.ndarray,
         n_sims: int,
         seed: Optional[int],
+        D_generator: Optional[Callable] = None,
+        withdrawal_epsilon: float = 0.05,
         **solver_kwargs
     ) -> OptimizationResult:
         """
         Binary search for minimum feasible T.
-        
+
         Assumes monotonicity: if T is feasible, then T' > T is also feasible.
         Reduces iterations from O(T_max - T_start) to O(log(T_max - T_start)).
-        
+
         Algorithm
         ---------
         1. Initialize: left = T_start, right = T_max
@@ -1369,22 +1549,27 @@ class GoalSeeker:
         """
         left = T_start
         right = self.T_max
-        
+
         best_result = None
         iteration = 0
-        
+
         while left < right:
             iteration += 1
             mid = (left + right) // 2
-            
+
             if self.verbose:
                 print(f"[Iter {iteration}] Binary search: testing T={mid} "
                     f"(range=[{left}, {right}])...")
-            
+
             # Generate scenarios for mid
             A = A_generator(mid, n_sims, seed)
             R = R_generator(mid, n_sims, None if seed is None else seed + 1)
-            
+
+            # Generate withdrawals if D_generator provided
+            D = None
+            if D_generator is not None:
+                D = D_generator(mid, n_sims, seed)
+
             # Warm start: if we have a previous result, extend it
             X_init = None
             if best_result is not None and best_result.T < mid:
@@ -1394,19 +1579,21 @@ class GoalSeeker:
                     best_result.X,
                     np.tile(best_result.X[-1:, :], (n_extend, 1))
                 ])
-            
+
             result = self.optimizer.solve(
                 T=mid, A=A, R=R, W0=W0,
                 goal_set=goal_set,
                 X_init=X_init,
+                D=D,
+                withdrawal_epsilon=withdrawal_epsilon,
                 **solver_kwargs
             )
-            
+
             if self.verbose:
                 status = "✓ Feasible" if result.feasible else "✗ Infeasible"
                 print(f"    {status}, obj={result.objective_value:.2f}, "
                     f"time={result.solve_time:.3f}s\n")
-            
+
             if result.feasible:
                 # Found feasible solution: try lower half
                 best_result = result
@@ -1414,32 +1601,39 @@ class GoalSeeker:
             else:
                 # Infeasible: try upper half
                 left = mid + 1
-        
+
         # At convergence: left == right
         if best_result is not None and best_result.T == left:
             if self.verbose:
                 print(f"=== Optimal: T*={left} (binary search converged) ===\n")
             return best_result
-        
+
         # Need to verify left (may not have been tested)
         if self.verbose:
             print(f"[Iter {iteration + 1}] Verifying T={left} (final check)...")
-        
+
         A = A_generator(left, n_sims, seed)
         R = R_generator(left, n_sims, None if seed is None else seed + 1)
-        
+
+        # Generate withdrawals for final verification
+        D = None
+        if D_generator is not None:
+            D = D_generator(left, n_sims, seed)
+
         result = self.optimizer.solve(
             T=left, A=A, R=R, W0=W0,
             goal_set=goal_set,
             X_init=None,
+            D=D,
+            withdrawal_epsilon=withdrawal_epsilon,
             **solver_kwargs
         )
-        
+
         if result.feasible:
             if self.verbose:
                 print(f"=== Optimal: T*={left} ===\n")
             return result
-        
+
         raise ValueError(
             f"Binary search failed: T={left} infeasible. "
             f"Monotonicity assumption may be violated."
