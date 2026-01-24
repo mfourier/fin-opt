@@ -86,6 +86,18 @@ from .serialization import (
 # Utilities
 from . import utils
 
+# Exceptions
+from .exceptions import (
+    FinOptError,
+    ConfigurationError,
+    ValidationError,
+    TimeIndexError,
+    AllocationConstraintError,
+    OptimizationError,
+    InfeasibleError,
+    MemoryLimitError,
+)
+
 # Lazy imports for optional dependencies
 def __getattr__(name: str):
     """Lazy import for optimization module (requires cvxpy)."""
@@ -140,4 +152,13 @@ __all__ = [
     "OptimizationResult",
     # Utilities
     "utils",
+    # Exceptions
+    "FinOptError",
+    "ConfigurationError",
+    "ValidationError",
+    "TimeIndexError",
+    "AllocationConstraintError",
+    "OptimizationError",
+    "InfeasibleError",
+    "MemoryLimitError",
 ]
