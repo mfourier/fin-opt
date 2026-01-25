@@ -91,10 +91,12 @@ import numpy as np
 from matplotlib.ticker import FuncFormatter
 
 from .utils import check_non_negative, annual_to_monthly, monthly_to_annual, millions_formatter
+from .exceptions import AllocationConstraintError
 
 __all__ = [
     "Account",
     "Portfolio",
+    "AllocationConstraintError"
 ]
 
 
@@ -611,11 +613,11 @@ class Portfolio:
         
         # Validate allocation policy constraints
         if np.any(X < 0):
-            raise ValueError("X must be non-negative")
+            raise AllocationConstraintError("X must be non-negative")
         row_sums = X.sum(axis=1)
         if not np.allclose(row_sums, 1.0, rtol=1e-6):
             bad_rows = np.where(np.abs(row_sums - 1.0) > 1e-6)[0][:5]
-            raise ValueError(
+            raise AllocationConstraintError(
                 f"X rows must sum to 1. Bad rows: {bad_rows.tolist()}"
             )
         

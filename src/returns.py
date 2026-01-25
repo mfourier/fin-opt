@@ -30,6 +30,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 
+from .exceptions import ValidationError
 from .portfolio import Account
 from .utils import monthly_to_annual
 
@@ -279,7 +280,7 @@ class ReturnModel:
         4. Transform: R = exp(Z) - 1
         """
         if T <= 0:
-            return np.zeros((n_sims, 0, self.M), dtype=float)
+            raise ValidationError(f"T must be positive, got {T}")
         if n_sims <= 0:
             raise ValueError(f"n_sims must be positive, got {n_sims}")
         

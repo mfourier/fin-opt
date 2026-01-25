@@ -59,6 +59,7 @@ import numpy as np
 import pandas as pd
 from matplotlib.ticker import FuncFormatter
 
+from .exceptions import ValidationError
 # Reuse common utilities
 from .utils import (
     check_non_negative,
@@ -178,6 +179,8 @@ class FixedIncome:
 
     def __post_init__(self) -> None:
         check_non_negative("base", self.base)
+        if self.annual_growth <= -1:
+            raise ValidationError(f"annual_growth must be > -1, got {self.annual_growth}")
 
     def project(
         self,

@@ -428,6 +428,7 @@ class TestPortfolioWealthDynamics:
             for i in range(n_sims):
                 np.testing.assert_array_almost_equal(result["wealth"][i, t, :], W0)
 
+
     def test_positive_returns_increase_wealth(self, portfolio):
         """Test wealth increases with positive returns."""
         T = 12
@@ -444,6 +445,72 @@ class TestPortfolioWealthDynamics:
         final_total = result["total_wealth"][:, -1]
         initial_total = result["total_wealth"][:, 0]
         assert np.all(final_total > initial_total)
+
+    def test_wealth_indexing_convention_b(self, portfolio):
+        """
+        Test wealth indexing follows Convention B (Start of Period).
+        
+        Verifies:
+        W_{t+1} = (W_t + A_t*x_t - D_t)(1 + R_t)
+        
+        Using manual calculation for T=2 with withdrawal at t=0.
+        """
+        # 1. Setup
+        # Portfolio: Account A with 0 initial wealth but we'll use W0_override
+        # Creating simple portfolio from fixture
+        
+        T = 2
+        n_sims = 1
+        M = 2 # Use 2 accounts to match fixture portfolio structure
+        
+        # 2. Inputs
+        # R: 10% constant
+        R = np.full((n_sims, T, M), 0.10)
+        
+        # A: 100 constant
+        A = np.full(T, 100.0)
+        
+        # X: 100% to Account A (idx 0), 0% to Account B (idx 1)
+        X = np.zeros((T, M))
+        X[:, 0] = 1.0
+        
+        # D: Withdrawal in month 0 (Jan) of 50 from Account A
+        D = np.zeros((T, M))
+        D[0, 0] = 50.0  # Withdraw 50 from Acc A at start of period 0
+        
+        # W0: Override to start with 1000 in Acc A
+        W0_override = np.array([1000.0, 0.0])
+        
+        # 3. Simulate
+        result = portfolio.simulate(A=A, R=R, X=X, D=D, W0_override=W0_override)
+        W = result["wealth"] # (n_sims, T+1, M)
+        
+        # 4. Verify Account A path
+        w_path = W[0, :, 0]
+        
+        # t=0: Start
+        # W0 = 1000.0
+        # A0 (allocated) = 100.0 * 1.0 = 100.0
+        # D0 = 50.0
+        # Pre-return = 1000 + 100 - 50 = 1050.0
+        # R0 = 0.10
+        # W1 = 1050.0 * 1.1 = 1155.0
+        
+        # t=1:
+        # W1 = 1155.0
+        # A1 (allocated) = 100.0 * 1.0 = 100.0
+        # D1 = 0.0
+        # Pre-return = 1155.0 + 100.0 = 1255.0
+        # R1 = 0.10
+        # W2 = 1255.0 * 1.1 = 1380.5
+        
+        expected = np.array([1000.0, 1155.0, 1380.5])
+        
+        np.testing.assert_allclose(
+            w_path, expected, 
+            err_msg="Wealth dynamics failed to match Convention B [W_{t+1} = (W_t + A - D)(1+R)]"
+        )
+
 
 
 class TestPortfolioEdgeCases:
