@@ -356,6 +356,7 @@ class GoalSet:
         
         # Derive account_names for backward compatibility and string resolution
         self.account_names = [acc.name for acc in accounts]
+        self.account_labels = [acc.label for acc in accounts]
         
         self.start_date = start_date
         
@@ -934,9 +935,10 @@ def print_goal_status(
             location = f"@ T={result.T}"
         
         # Resolve account name
+        # Note: We use the full label (long name) for a more readable report
         goal_set = GoalSet([goal], accounts, start_date)
         account_idx = goal_set.get_account_index(goal)
-        account_name = goal_set.account_names[account_idx]
+        account_name = goal_set.account_labels[account_idx]
         
         print(f"[{symbol}] {goal_type}: {account_name} {location}")
         print(f"    Target: ${goal.threshold:,.0f} | "
