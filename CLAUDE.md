@@ -210,12 +210,48 @@ where `F_{s,t}^m = Π_{τ=s+1}^{t} (1 + R_τ^m)` is the accumulation factor.
 - Analytical gradients: ∂W_t^m/∂x_s^m = A_s · F_{s,t}^m
 - O(1) wealth evaluation (no recursion needed in optimization inner loop)
 
-### Wealth Array Indexing
+### Wealth Array Indexing (Convention B: Start of Period)
 
-The wealth array has shape `(n_sims, T+1, M)`:
-- `wealth[i, 0, m]` = W_0^m (initial wealth, **before** any contributions/returns)
-- `wealth[i, t, m]` = W_t^m (wealth at **end** of month t, after contributions and returns)
-- `wealth[i, T, m]` = terminal wealth (used for TerminalGoal evaluation)
+The wealth array has shape `(n_sims, T+1, M)` using **start-of-period** semantics:
+- `wealth[i, 0, m]` = W_0^m (initial wealth at **start** of period 0)
+- `wealth[i, t, m]` = W_t^m (wealth at **start** of period t, after t periods of dynamics)
+- `wealth[i, T, m]` = terminal wealth at start of period T (used for TerminalGoal evaluation)
+
+**Wealth dynamics equation**:
+```
+W_{t+1} = (W_t + A_t·x_t - D_t)(1 + R_t)
+```
+
+Where during period t:
+- W_t = wealth available at START of period t
+- A_t = contribution received at start of period t (invested immediately)
+- D_t = withdrawal during period t (taken from W_t, before contribution)
+- R_t = return earned during period t
+- W_{t+1} = resulting wealth at START of period t+1
+
+**Timeline example** (start=January 2025, T=12):
+```
+Period:  0 (Jan)    1 (Feb)    ...    5 (Jun)    6 (Jul)    ...
+         ↓          ↓                 ↓          ↓
+W_t:     W_0 ────→ W_1 ────→ ... ──→ W_5 ────→ W_6 ────→ ... ──→ W_12
+         Jan 1     Feb 1             Jun 1      Jul 1            Jan 1, 2026
+```
+
+### Probabilistic Constraints
+
+**Goal constraint** (IntermediateGoal at API month m):
+```
+ℙ(W_m^k ≥ b^k) ≥ 1 - ε^k
+```
+Meaning: "Start period m with at least $b in account k with confidence 1-ε"
+
+**Withdrawal feasibility constraint** (Conservative - Option 1):
+```
+ℙ(W_t^m ≥ D_t^m) ≥ 1 - ε
+```
+Meaning: "Have enough wealth at START of period t to cover withdrawal D_t"
+
+Note: The withdrawal is taken from existing wealth W_t, NOT from W_t + A_t·x_t. This is conservative and ensures the withdrawal is feasible regardless of whether the contribution arrives on time.
 
 ### CVaR Reformulation
 
@@ -306,10 +342,24 @@ All components process full Monte Carlo batches:
 - Returns: `(n_sims, T, M)` return arrays
 - Wealth: `(n_sims, T+1, M)` trajectory arrays (includes t=0)
 
-### Goal Resolution
+### Goal and Withdrawal Month Resolution
 
-- `IntermediateGoal.month`: integer offset from `start_date` OR `datetime.date` (auto-resolved)
-- `account` parameter: integer index OR string name (resolved via `GoalSet`)
+Both goals and withdrawals use **1-indexed API months** that map to 0-indexed array indices:
+
+| Component | Date Example | `resolve_month()` | Array Index | Wealth/Variable |
+|-----------|--------------|-------------------|-------------|-----------------|
+| IntermediateGoal | July 1, 2025 | 6 | - | Checks W_6 |
+| WithdrawalEvent | June 1, 2025 | 6 | 5 | Uses D_5, constraint on W_5 |
+
+**Key insight**: Different dates can resolve to the same API month with different semantics:
+- Goal `date=July 1` → "check wealth at start of July" → W_6
+- Withdrawal `date=June 1` → "withdrawal during June" → D_5, affects W_5 → W_6
+
+This ensures a withdrawal "on June 1" is reflected when checking a goal "by July 1".
+
+**Parameter resolution**:
+- `month`: integer offset (1-indexed) OR `date`: datetime.date (auto-resolved)
+- `account`: integer index OR string name (resolved via `GoalSet`)
 - `confidence`: 1-ε (e.g., 0.80 means 80% probability of success)
 
 ## Code Style and Patterns

@@ -79,24 +79,24 @@ class TestWithdrawalEvent:
             )
 
     def test_resolve_month_forward(self, start_date):
-        """Test month resolution for future dates."""
+        """Test month resolution for future dates (1-indexed)."""
         event = WithdrawalEvent("Conservador", 400_000, date(2025, 6, 1))
-        assert event.resolve_month(start_date) == 5  # June = month 5 (0-indexed)
+        assert event.resolve_month(start_date) == 6  # June = month 6 (1-indexed)
 
     def test_resolve_month_same_month(self, start_date):
-        """Test month resolution for same month."""
+        """Test month resolution for same month (1-indexed)."""
         event = WithdrawalEvent("Conservador", 400_000, date(2025, 1, 1))
-        assert event.resolve_month(start_date) == 0
+        assert event.resolve_month(start_date) == 1  # January = month 1 (1-indexed)
 
     def test_resolve_month_backward(self, start_date):
         """Test month resolution for past dates (negative offset)."""
         event = WithdrawalEvent("Conservador", 400_000, date(2024, 11, 1))
-        assert event.resolve_month(start_date) == -2  # Nov 2024 is 2 months before Jan 2025
+        assert event.resolve_month(start_date) == -1  # Nov 2024 is 1 month before Jan 2025 (1-indexed: 0, then -1)
 
     def test_resolve_month_next_year(self, start_date):
-        """Test month resolution across year boundary."""
+        """Test month resolution across year boundary (1-indexed)."""
         event = WithdrawalEvent("Conservador", 400_000, date(2026, 3, 1))
-        assert event.resolve_month(start_date) == 14  # March 2026 = month 14
+        assert event.resolve_month(start_date) == 15  # March 2026 = month 15 (1-indexed)
 
     def test_repr(self):
         """Test string representation."""
@@ -408,14 +408,14 @@ class TestStochasticWithdrawal:
         assert withdrawal.resolve_month(start_date) == 6
 
     def test_resolve_month_with_date_param(self, start_date):
-        """Test resolve_month when using date parameter."""
+        """Test resolve_month when using date parameter (1-indexed)."""
         withdrawal = StochasticWithdrawal(
             account="Conservador",
             base_amount=300_000,
             sigma=50_000,
             date=date(2025, 9, 1)
         )
-        assert withdrawal.resolve_month(start_date) == 8  # September = month 8
+        assert withdrawal.resolve_month(start_date) == 9  # September = month 9 (1-indexed)
 
 
 # ---------------------------------------------------------------------------

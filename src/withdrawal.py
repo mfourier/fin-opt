@@ -73,7 +73,7 @@ Example
 >>> D = withdrawals.to_array(T=36, start_date=date(2025, 1, 1), accounts=accounts)
 >>> D.shape
 (36, 2)
->>> D[5, 0]  # 400k withdrawal from account 0 in month 5 (June 2025)
+>>> D[5, 0]  # 400k withdrawal from account 0 at array index 5 (month 6, June 2025)
 400000.0
 """
 
@@ -158,22 +158,24 @@ class WithdrawalEvent:
         Parameters
         ----------
         start_date : datetime.date
-            Simulation start date (month 0).
+            Simulation start date.
 
         Returns
         -------
         int
-            Month offset (0-indexed). Can be negative if date < start_date.
+            Month offset (1-indexed to match IntermediateGoal).
+            Month 1 = end of first month of simulation.
+            Can be < 1 if date < start_date.
 
         Examples
         --------
         >>> event = WithdrawalEvent("Account", 100_000, date(2025, 6, 1))
         >>> event.resolve_month(date(2025, 1, 1))
-        5
+        6
         """
         year_diff = self.date.year - start_date.year
         month_diff = self.date.month - start_date.month
-        return year_diff * 12 + month_diff
+        return year_diff * 12 + month_diff + 1  # 1-indexed
 
     def __repr__(self) -> str:
         """Readable representation."""
@@ -291,19 +293,19 @@ class WithdrawalSchedule:
                         f"Available accounts: {account_names}"
                     ) from None
 
-            # Resolve month offset
+            # Resolve month offset (1-indexed)
             month = event.resolve_month(start_date)
 
-            # Check if within simulation horizon
-            if month < 0:
+            # Check if within simulation horizon (month is 1-indexed)
+            if month < 1:
                 warnings.warn(
                     f"Withdrawal {event.description or 'event'} at {event.date} "
-                    f"is before simulation start ({start_date}). Ignoring.",
+                    f"(month {month}) is before simulation start. Ignoring.",
                     UserWarning
                 )
                 continue
 
-            if month >= T:
+            if month > T:
                 warnings.warn(
                     f"Withdrawal {event.description or 'event'} at {event.date} "
                     f"(month {month}) is beyond horizon T={T}. Ignoring.",
@@ -311,8 +313,8 @@ class WithdrawalSchedule:
                 )
                 continue
 
-            # Add to array (supports multiple events on same month/account)
-            D[month, acc_idx] += event.amount
+            # Add to array (convert 1-indexed month to 0-indexed array)
+            D[month - 1, acc_idx] += event.amount
 
         return D
 
@@ -473,7 +475,7 @@ class StochasticWithdrawal:
     sigma : float
         Standard deviation of withdrawal amount.
     month : int, optional
-        Month offset from start_date (0-indexed). Mutually exclusive with date.
+        Month offset from start_date (1-indexed). Mutually exclusive with date.
     date : datetime.date, optional
         Calendar date of withdrawal. Mutually exclusive with month.
     floor : float, default=0.0
@@ -533,9 +535,9 @@ class StochasticWithdrawal:
         if self.cap is not None and self.cap < self.floor:
             raise ValueError(f"cap ({self.cap}) must be >= floor ({self.floor})")
 
-        # Check if month is valid
-        if self.month is not None and self.month < 0:
-            raise ValueError(f"month must be non-negative, got {self.month}")
+        # Check if month is valid (1-indexed)
+        if self.month is not None and self.month < 1:
+            raise ValueError(f"month must be >= 1 (1-indexed), got {self.month}")
 
     def resolve_month(self, start_date: date) -> int:
         """
@@ -549,15 +551,15 @@ class StochasticWithdrawal:
         Returns
         -------
         int
-            Month offset (0-indexed).
+            Month offset (1-indexed to match IntermediateGoal).
         """
         if self.month is not None:
-            return self.month
+            return self.month  # Already 1-indexed
         else:
-            # Use same logic as WithdrawalEvent
+            # Use same logic as WithdrawalEvent (1-indexed)
             year_diff = self.date.year - start_date.year
             month_diff = self.date.month - start_date.month
-            return year_diff * 12 + month_diff
+            return year_diff * 12 + month_diff + 1
 
     def sample(self, n_sims: int, start_date: Optional[date] = None) -> np.ndarray:
         """
@@ -753,18 +755,18 @@ class WithdrawalModel:
                             f"Available accounts: {account_names}"
                         ) from None
 
-                # Resolve month
+                # Resolve month (1-indexed)
                 month = withdrawal.resolve_month(start_date)
 
-                # Check if within horizon
-                if month < 0:
+                # Check if within horizon (month is 1-indexed)
+                if month < 1:
                     warnings.warn(
                         f"Stochastic withdrawal at month {month} is before start. Ignoring.",
                         UserWarning
                     )
                     continue
 
-                if month >= T:
+                if month > T:
                     warnings.warn(
                         f"Stochastic withdrawal at month {month} is beyond horizon T={T}. Ignoring.",
                         UserWarning
@@ -783,15 +785,15 @@ class WithdrawalModel:
                     account=withdrawal.account,
                     base_amount=withdrawal.base_amount,
                     sigma=withdrawal.sigma,
-                    month=month,
+                    month=month,  # 1-indexed
                     floor=withdrawal.floor,
                     cap=withdrawal.cap,
                     seed=effective_seed
                 )
                 samples = temp_withdrawal.sample(n_sims, start_date)
 
-                # Add to array
-                D[:, month, acc_idx] += samples
+                # Add to array (convert 1-indexed month to 0-indexed array)
+                D[:, month - 1, acc_idx] += samples
 
         return D
 
