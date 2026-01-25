@@ -92,6 +92,7 @@ from matplotlib.ticker import FuncFormatter
 
 from .utils import check_non_negative, annual_to_monthly, monthly_to_annual, millions_formatter
 from .exceptions import AllocationConstraintError
+from .types import ReturnStrategyDict, AnnualParamsDict, SimulationResultDict
 
 __all__ = [
     "Account",
@@ -178,7 +179,7 @@ class Account:
     """
     name: str
     initial_wealth: float
-    return_strategy: dict  # {"mu": monthly, "sigma": monthly}
+    return_strategy: ReturnStrategyDict  # {"mu": monthly, "sigma": monthly}
     display_name: Optional[str] = None
 
     def __post_init__(self):
@@ -306,45 +307,45 @@ class Account:
         )
     
     @property
-    def monthly_params(self) -> Dict[str, float]:
+    def monthly_params(self) -> ReturnStrategyDict:
         """
         Monthly return parameters (canonical storage format).
-        
+
         Returns
         -------
-        Dict[str, float]
+        ReturnStrategyDict
             {"mu": float, "sigma": float} in monthly arithmetic space.
-        
+
         Examples
         --------
         >>> acc = Account.from_annual("Test", 0.08, 0.12)
         >>> acc.monthly_params
         {'mu': 0.006434..., 'sigma': 0.034641...}
         """
-        return dict(self.return_strategy)  # Copy to prevent mutation
+        return ReturnStrategyDict(mu=self.return_strategy["mu"], sigma=self.return_strategy["sigma"])
     
     @property
-    def annual_params(self) -> Dict[str, float]:
+    def annual_params(self) -> AnnualParamsDict:
         """
         Annualized return parameters (user-friendly representation).
-        
+
         Converts internal monthly parameters to annualized equivalents
         using standard financial formulas:
         - Return: geometric compounding (1+μ_m)^12 - 1
         - Volatility: time-scaling σ_m * sqrt(12)
-        
+
         Returns
         -------
-        Dict[str, float]
+        AnnualParamsDict
             {"return": float, "volatility": float} in annual space.
-        
+
         Examples
         --------
         >>> acc = Account.from_annual("Test", annual_return=0.08,
         ...                           annual_volatility=0.12)
         >>> acc.annual_params
         {'return': 0.08, 'volatility': 0.12}  # Round-trip recovery
-        
+
         >>> # Conversion from monthly
         >>> acc2 = Account.from_monthly("Test2", monthly_mu=0.005,
         ...                             monthly_sigma=0.03)
@@ -353,10 +354,10 @@ class Account:
         """
         mu_annual = monthly_to_annual(self.return_strategy["mu"])
         sigma_annual = self.return_strategy["sigma"] * np.sqrt(12)
-        return {
+        return AnnualParamsDict(**{
             "return": mu_annual,
             "volatility": sigma_annual
-        }
+        })
 
     @property
     def label(self) -> str:
@@ -509,7 +510,7 @@ class Portfolio:
         D: Optional[np.ndarray] = None,  # Withdrawals: (T, M) or (n_sims, T, M)
         method: Literal["recursive", "affine"] = "recursive",
         initial_wealth: Optional[np.ndarray] = None
-    ) -> dict:
+    ) -> SimulationResultDict:
         """
         Execute wealth dynamics W_{t+1}^m = (W_t^m + A_t^m - D_t^m)(1 + R_t^m).
         

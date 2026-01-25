@@ -29,8 +29,10 @@ Traditional approaches fall short:
 
 ```
 Outer: min T                              # Find shortest horizon
-Inner: find X ∈ Simplex such that         # Allocation policy
-       P(W_t ≥ goal_t) ≥ 1-ε, ∀ goals    # Probabilistic constraints
+Inner: max f(X)                           # Objective (wealth, turnover, risk-adjusted)
+       s.t. X ∈ Simplex                   # Allocation policy
+            P(W_t ≥ goal_t) ≥ 1-ε, ∀ goals    # Goal constraints
+            P(W_t ≥ D_t) ≥ 1-δ, ∀ withdrawals  # Withdrawal feasibility
 ```
 
 The key insight: Using **CVaR reformulation** (Rockafellar & Uryasev, 2000), non-convex chance constraints become convex, enabling global optimality via disciplined convex programming (DCP).
@@ -46,6 +48,8 @@ The key insight: Using **CVaR reformulation** (Rockafellar & Uryasev, 2000), non
 
 ### Practical Capabilities
 - **Multiple goals**: Intermediate (fixed time) + terminal (optimized horizon)
+- **Scheduled withdrawals**: Calendar-based cash outflows with feasibility constraints
+- **Stochastic withdrawals**: Uncertain withdrawals with floor/cap bounds
 - **Stochastic income**: Seasonality, noise, growth, floor/cap constraints
 - **Correlated returns**: Multi-asset portfolios with lognormal shocks
 - **Flexible objectives**: Terminal wealth, low turnover, risk-adjusted, balanced
@@ -58,6 +62,7 @@ The key insight: Using **CVaR reformulation** (Rockafellar & Uryasev, 2000), non
 | Core simulation engine | Stable |
 | CVaR optimization | Stable |
 | SAA optimizer (scipy) | Stable |
+| Withdrawal modeling | Stable |
 | CLI interface | Stable |
 | Serialization/persistence | Stable |
 | Transaction costs | Planned |
@@ -209,13 +214,15 @@ model.plot("wealth", result=result, show_trajectories=True)
         ├──► IncomeModel ──┬──► FixedIncome
         │                  └──► VariableIncome
         │
+        ├──► WithdrawalModel ──┬──► WithdrawalSchedule (deterministic)
+        │                      └──► StochasticWithdrawal (uncertain)
+        │
         ├──► ReturnModel (Lognormal correlations)
         │
         ├──► Portfolio (Wealth dynamics executor)
-        │       W_t = W_0·F_{0,t} + Σ A_s·x_s·F_{s,t}
+        │       W_{t+1} = (W_t + A_t·x_t - D_t)(1 + R_t)
         │
         └──► GoalSeeker ───┬──► AllocationOptimizer
-                           │       ├─► SAAOptimizer (scipy)
                            │       └─► CVaROptimizer (CVXPY)
                            └──► GoalSet (validation)
 ```
@@ -225,6 +232,7 @@ model.plot("wealth", result=result, show_trajectories=True)
 | Module | Purpose | Key Abstractions |
 |--------|---------|------------------|
 | `income.py` | Cash flow modeling | `FixedIncome`, `VariableIncome`, `IncomeModel` |
+| `withdrawal.py` | Cash outflow modeling | `WithdrawalEvent`, `StochasticWithdrawal`, `WithdrawalModel` |
 | `returns.py` | Stochastic shocks | `ReturnModel` (correlated lognormal) |
 | `portfolio.py` | Wealth dynamics | `Account`, `Portfolio` (affine executor) |
 | `goals.py` | Objective specification | `IntermediateGoal`, `TerminalGoal`, `GoalSet` |
@@ -235,12 +243,18 @@ model.plot("wealth", result=result, show_trajectories=True)
 
 ## Mathematical Foundation
 
-### Wealth Dynamics (Affine Representation)
+### Wealth Dynamics
 
-For account $m$ with allocation policy $X = \{x_t^m\}$:
+For account $m$ with allocation policy $X = \{x_t^m\}$ and withdrawals $D_t^m$:
 
 $$
-W_t^m(X) = W_0^m \cdot F_{0,t}^m + \sum_{s=0}^{t-1} A_s \cdot x_s^m \cdot F_{s,t}^m
+W_{t+1}^m = (W_t^m + A_t \cdot x_t^m - D_t^m)(1 + R_t^m)
+$$
+
+**Affine representation** (closed-form for optimization):
+
+$$
+W_t^m(X) = W_0^m \cdot F_{0,t}^m + \sum_{s=0}^{t-1} (A_s \cdot x_s^m - D_s^m) \cdot F_{s,t}^m
 $$
 
 where $F_{s,t}^m = \prod_{\tau=s}^{t-1}(1 + R_\tau^m)$ are accumulation factors.
@@ -285,10 +299,29 @@ s.t. inner problem is feasible
 
 **Inner problem** (allocation):
 ```
-max f(X)                    [Objective: terminal_wealth, balanced, etc.]
-s.t. Σ_m x_t^m = 1, ∀t      [Simplex constraint]
-     x_t^m ≥ 0, ∀t,m         [Non-negativity]
-     CVaR_ε(b_g - W_{t_g}) ≤ 0, ∀g  [Goal constraints]
+max f(X)
+s.t. Σ_m x_t^m = 1, ∀t                        [Simplex constraint]
+     x_t^m ≥ 0, ∀t,m                           [Non-negativity]
+     ℙ(W_t^m(X) ≥ b_t^m) ≥ 1-ε_t^m, ∀ intermediate goals
+     ℙ(W_T^m(X) ≥ b^m) ≥ 1-ε^m, ∀ terminal goals
+     ℙ(W_t^m(X) ≥ D_t^m) ≥ 1-δ, ∀ withdrawals  [Withdrawal feasibility]
+```
+
+**Objective functions** $f(X)$:
+
+| Objective | Formula | Type | Use Case |
+|-----------|---------|------|----------|
+| `"risky"` | $\mathbb{E}\left[\sum_m W_T^m\right]$ | LP | Maximum wealth accumulation |
+| `"balanced"` | $-\sum_{t,m}(\Delta x_{t}^m)^2$ | QP | Stable allocations (minimize turnover) |
+| `"conservative"` | $\mathbb{E}[W_T] - \lambda \cdot \text{Std}(W_T)$ | QP | Risk-averse mean-variance |
+| `"risky_turnover"` | $\mathbb{E}[W_T] - \lambda \cdot \sum_{t,m}(\Delta x_{t}^m)^2$ | QP | Wealth + stability tradeoff |
+
+where $\Delta x_t^m = x_t^m - x_{t-1}^m$ is the allocation change (turnover).
+
+The probabilistic constraints are reformulated via CVaR:
+```
+CVaR_ε(b_g - W_{t_g}) ≤ 0, ∀g  [Goals via CVaR]
+CVaR_δ(D_t^m - W_t^m) ≤ 0, ∀ withdrawals  [Withdrawal feasibility via CVaR]
 ```
 
 **Solution method**: Binary search with warm-start (O(log T) iterations vs O(T) linear).
@@ -372,6 +405,63 @@ for obj in objectives:
     optimizer = CVaROptimizer(n_accounts=3, objective=obj)
     results[obj] = model.optimize(goals, optimizer, T_max=120, seed=42)
 ```
+
+### Example 4: Scheduled Withdrawals
+
+```python
+from datetime import date
+from src.withdrawal import WithdrawalModel, WithdrawalSchedule, WithdrawalEvent, StochasticWithdrawal
+
+# Define withdrawal schedule
+withdrawals = WithdrawalModel(
+    scheduled=WithdrawalSchedule([
+        # Bicycle purchase in June 2025
+        WithdrawalEvent(
+            account="Conservative Fund",
+            amount=400_000,
+            date=date(2025, 6, 1),
+            description="Bicycle purchase"
+        ),
+        # Vacation in December 2026
+        WithdrawalEvent(
+            account="Aggressive Fund",
+            amount=2_000_000,
+            date=date(2026, 12, 1),
+            description="Family vacation"
+        ),
+    ]),
+    stochastic=[
+        # Emergency fund with uncertainty
+        StochasticWithdrawal(
+            account="Conservative Fund",
+            base_amount=500_000,
+            sigma=100_000,
+            date=date(2025, 9, 1),
+            floor=300_000,
+            cap=800_000
+        )
+    ]
+)
+
+# Simulate with withdrawals
+result = model.simulate(
+    T=36,
+    n_sims=500,
+    seed=42,
+    withdrawals=withdrawals
+)
+
+# Optimize with withdrawal constraints
+result = model.optimize(
+    goals=goals,
+    optimizer=optimizer,
+    T_max=120,
+    n_sims=500,
+    withdrawals=withdrawals
+)
+```
+
+**Withdrawal constraints**: The optimizer ensures $\mathbb{P}(W_t^m \geq D_t^m) \geq 1-\delta$ (default $\delta=0.05$, i.e., 95% confidence that wealth covers withdrawals).
 
 ---
 
