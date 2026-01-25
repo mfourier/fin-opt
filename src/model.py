@@ -1271,7 +1271,6 @@ class FinancialModel:
         # Extract start date
         start_date = start if start is not None else sim_result.start
         
-        # ✅ CAMBIO CLAVE: Pasar accounts en lugar de lista de strings
         return check_goals(
             sim_result,
             goals,
