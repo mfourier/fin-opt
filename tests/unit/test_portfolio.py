@@ -278,14 +278,14 @@ class TestPortfolioSimulate:
             decimal=6
         )
 
-    def test_simulate_w0_override(self, portfolio, simulation_inputs):
-        """Test simulate with W0_override parameter."""
+    def test_simulate_initial_wealth_override(self, portfolio, simulation_inputs):
+        """Test simulate with initial_wealth parameter."""
         A = simulation_inputs["A"]
         R = simulation_inputs["R"]
         X = simulation_inputs["X"]
 
         W0_override = np.array([5_000_000, 2_000_000])
-        result = portfolio.simulate(A=A, R=R, X=X, W0_override=W0_override)
+        result = portfolio.simulate(A=A, R=R, X=X, initial_wealth=W0_override)
 
         # Initial wealth should match override
         np.testing.assert_array_almost_equal(
@@ -482,7 +482,7 @@ class TestPortfolioWealthDynamics:
         W0_override = np.array([1000.0, 0.0])
         
         # 3. Simulate
-        result = portfolio.simulate(A=A, R=R, X=X, D=D, W0_override=W0_override)
+        result = portfolio.simulate(A=A, R=R, X=X, D=D, initial_wealth=W0_override)
         W = result["wealth"] # (n_sims, T+1, M)
         
         # 4. Verify Account A path
