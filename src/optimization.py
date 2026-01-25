@@ -12,9 +12,10 @@ Mathematical Framework
 Bilevel optimization problem:
 
     min T ∈ ℕ  s.t.  ∃X* ∈ arg max f(X)
-                          X ∈ 𝒳_T
-                          ℙ(W_t^m(X) ≥ b_t^m) ≥ 1-ε_t^m  ∀ intermediate goals
-                          ℙ(W_T^m(X) ≥ b^m) ≥ 1-ε^m      ∀ terminal goals
+                            X ∈ 𝒳_T
+                            ℙ(W_t^m(X) ≥ b_t^m) ≥ 1-ε_t^m  ∀ intermediate goals
+                            ℙ(W_T^m(X) ≥ b^m) ≥ 1-ε^m      ∀ terminal goals
+                            ℙ(W_t^m(X) ≥ D_t^m) ≥ 1-δ      ∀ withdrawals
 
 Outer problem: Binary/linear search over horizon T (GoalSeeker)
 Inner problem: Convex program via affine wealth representation (CVaROptimizer)
@@ -126,7 +127,7 @@ class OptimizationResult:
     --------
     >>> from finopt.src.portfolio import Account
     >>> accounts = [Account.from_annual("Emergency", 0.04, 0.05)]
-    >>> result = optimizer.solve(T=24, A=A, R=R, W0=W0, goals=goals, 
+    >>> result = optimizer.solve(T=24, A=A, R=R, initial_wealth=initial_wealth, goals=goals, 
     ...                          accounts=accounts, start_date=date(2025,1,1))
     >>> print(result.summary())
     OptimizationResult(
@@ -286,7 +287,7 @@ class AllocationOptimizer(ABC):
     Notes
     -----
     Subclasses must implement:
-    - solve(T, A, R, W0, goal_set, X_init, **kwargs) → OptimizationResult
+    - solve(T, A, R, initial_wealth, goal_set, X_init, **kwargs) → OptimizationResult
     
     Provided utilities:
     - _validate_inputs(...) → GoalSet
@@ -321,7 +322,7 @@ class AllocationOptimizer(ABC):
         T: int,
         A: np.ndarray,
         R: np.ndarray,
-        W0: np.ndarray,
+        initial_wealth: np.ndarray,
         goal_set: GoalSet,
         X_init: Optional[np.ndarray] = None,
         **solver_kwargs
@@ -339,7 +340,7 @@ class AllocationOptimizer(ABC):
             Contribution scenarios
         R : np.ndarray, shape (n_sims, T, M)
             Return scenarios
-        W0 : np.ndarray, shape (M,)
+        initial_wealth : np.ndarray, shape (M,)
             Initial wealth vector
         goal_set : GoalSet
             Pre-validated goal collection with resolved accounts and metadata.
@@ -361,7 +362,7 @@ class AllocationOptimizer(ABC):
         X: np.ndarray,
         A: np.ndarray,
         R: np.ndarray,
-        W0: np.ndarray,
+        initial_wealth: np.ndarray,
         portfolio: Portfolio,
         goal_set: GoalSet,
         D: Optional[np.ndarray] = None,
@@ -380,7 +381,7 @@ class AllocationOptimizer(ABC):
             Contribution scenarios
         R : np.ndarray, shape (n_sims, T, M)
             Return scenarios
-        W0 : np.ndarray, shape (M,)
+        initial_wealth : np.ndarray, shape (M,)
         portfolio : Portfolio
             Portfolio instance
         goal_set : GoalSet
@@ -411,7 +412,7 @@ class AllocationOptimizer(ABC):
 
         result = portfolio.simulate(
             A=A, R=R, X=X_normalized, D=D,
-            W0_override=W0
+            initial_wealth=initial_wealth
         )
         W = result["wealth"]  # (n_sims, T+1, M)
 
@@ -601,12 +602,13 @@ class CVaROptimizer(AllocationOptimizer):
                  satisfying Σ_m X[t,m] = 1 (simplex) and X[t,m] >= 0
     
     Wealth dynamics (affine in X):
-        W[:,t,m] = W0[m] * F[:,0,t,m] + Σ_{s<t} A[:,s] * X[s,m] * F[:,s,t,m]
+        W[:,t,m] = initial_wealth[m] * F[:,0,t,m] + Σ_{s<t} (A[i,s] * X[s,m] - D[i,s,m]) * F[:,s,t,m]
         
         where:
         - F[i,s,t,m] = ∏_{τ=s+1}^t (1 + R[i,τ,m]) is the accumulation factor
         - A[i,s] is the contribution at time s in scenario i
-        - W0[m] is the initial wealth in account m
+        - D[i,s,m] is the withdrawal from account m at time s in scenario i
+        - initial_wealth[m] is the initial wealth in account m
     
     CVaR constraints (per goal):
         γ_g + (1/(ε_g * N)) * Σ_i z^i_g <= 0
@@ -701,7 +703,7 @@ class CVaROptimizer(AllocationOptimizer):
         T: int,
         A: np.ndarray,
         R: np.ndarray,
-        W0: np.ndarray,
+        initial_wealth: np.ndarray,
         goal_set: GoalSet,
         X_init: Optional[np.ndarray] = None,
         D: Optional[np.ndarray] = None,
@@ -721,7 +723,7 @@ class CVaROptimizer(AllocationOptimizer):
         R : ndarray, shape (n_sims, T, M)
             Monthly returns per scenario and account
             R[i,t,m] = return of account m at month t in scenario i
-        W0 : ndarray, shape (M,)
+        initial_wealth : ndarray, shape (M,)
             Initial wealth per account
         goal_set : GoalSet
             Pre-validated goal collection (REQUIRED).
@@ -805,8 +807,8 @@ class CVaROptimizer(AllocationOptimizer):
             raise ValueError(f"A must have shape ({n_sims}, {T}), got {A.shape}")
         if R.shape != (n_sims, T, M):
             raise ValueError(f"R must have shape ({n_sims}, {T}, {M}), got {R.shape}")
-        if W0.shape != (M,):
-            raise ValueError(f"W0 must have shape ({M},), got {W0.shape}")
+        if initial_wealth.shape != (M,):
+            raise ValueError(f"initial_wealth must have shape ({M},), got {initial_wealth.shape}")
         
         if goal_set.M != M:
             raise ValueError(
@@ -839,7 +841,7 @@ class CVaROptimizer(AllocationOptimizer):
                 raise ValueError("D must be non-negative (withdrawals cannot be negative)")
 
         # Extract solver options
-        solver_name = solver_kwargs.get('solver', 'ECOS')
+        solver_name = solver_kwargs.get('solver', 'CLARABEL')
         verbose = solver_kwargs.get('verbose', False)
         max_iters = solver_kwargs.get('max_iters', 10000)
         abstol = solver_kwargs.get('abstol', 1e-7)
@@ -866,14 +868,14 @@ class CVaROptimizer(AllocationOptimizer):
             Build affine expression for wealth including withdrawals.
 
             Mathematical formulation (with withdrawals D):
-                W[i,t,m] = W0[m] * F[i,0,t,m]
+                W[i,t,m] = initial_wealth[m] * F[i,0,t,m]
                          + Σ_{s=0}^{t-1} (A[i,s] * X[s,m] - D[i,s,m]) * F[i,s,t,m]
 
             Matrix form:
                 W[:,t,m] = b_{t,m} + Φ_{t,m} @ X[:t,m] - withdrawal_term
 
                 where:
-                - b[i] = W0[m] * F[i,0,t,m]  (initial wealth compounded)
+                - b[i] = initial_wealth[m] * F[i,0,t,m]  (initial wealth compounded)
                 - Φ[i,s] = A[i,s] * F[i,s,t,m]  (contribution coefficients)
                 - withdrawal_term = Σ_s D[i,s,m] * F[i,s,t,m]  (constant)
 
@@ -894,7 +896,7 @@ class CVaROptimizer(AllocationOptimizer):
                 across all scenarios (affine function of X)
             """
             # Constant term: initial wealth compounded to time t
-            b = W0[m] * F[:, 0, t, m]  # shape: (n_sims,)
+            b = initial_wealth[m] * F[:, 0, t, m]  # shape: (n_sims,)
 
             if t == 0:
                 return b  # No contributions/withdrawals before t=0
@@ -1078,7 +1080,18 @@ class CVaROptimizer(AllocationOptimizer):
         elif solver_name.upper() == 'SCS':
             prob.solve(solver=cp.SCS, verbose=verbose, **solver_options)
         elif solver_name.upper() == 'CLARABEL':
-            prob.solve(solver=cp.CLARABEL, verbose=verbose, **solver_options)
+            # Clarabel options mapping
+            clarabel_opts = solver_options.copy()
+            
+            # Map standard options to Clarabel specific ones
+            if 'max_iters' in clarabel_opts:
+                clarabel_opts['max_iter'] = clarabel_opts.pop('max_iters')
+            if 'abstol' in clarabel_opts:
+                clarabel_opts['tol_gap_abs'] = clarabel_opts.pop('abstol')
+            if 'reltol' in clarabel_opts:
+                clarabel_opts['tol_gap_rel'] = clarabel_opts.pop('reltol')
+                
+            prob.solve(solver=cp.CLARABEL, verbose=verbose, **clarabel_opts)
         else:
             # Let CVXPY auto-select solver
             prob.solve(verbose=verbose, **solver_options)
@@ -1159,7 +1172,7 @@ class CVaROptimizer(AllocationOptimizer):
             # Compute wealth using NumPy for validation
             def compute_wealth_numpy(X, t, m):
                 """Compute W[:,t,m] using NumPy (for diagnostic validation)"""
-                W = W0[m] * F[:, 0, t, m]
+                W = initial_wealth[m] * F[:, 0, t, m]
                 for s in range(t):
                     contrib = A[:, s] * X[s, m] * F[:, s, t, m]
                     if D_expanded is not None:
@@ -1238,7 +1251,7 @@ class CVaROptimizer(AllocationOptimizer):
 
         # Exact feasibility check using base class validation
         feasible = self._check_feasibility(
-            X_star, A, R, W0,
+            X_star, A, R, initial_wealth,
             portfolio,
             goal_set,
             D=D_expanded,
@@ -1278,10 +1291,15 @@ class CVaROptimizer(AllocationOptimizer):
 
 class GoalSeeker:
     """
-    Bilevel optimizer: find minimum horizon T* for goal feasibility.
-    
-    Outer problem: min T ∈ ℕ
-    Inner problem: AllocationOptimizer.solve(T) → feasible X*
+    Mathematical Framework
+    ----------------------
+    Bilevel optimization problem:
+
+        min T ∈ ℕ  s.t.  ∃X* ∈ arg max f(X)
+                              X ∈ 𝒳_T
+                              ℙ(W_t^m(X) ≥ b_t^m) ≥ 1-ε_t^m  ∀ intermediate goals
+                              ℙ(W_T^m(X) ≥ b^m) ≥ 1-ε^m      ∀ terminal goals
+                              ℙ(W_t^m(X) ≥ D_t^m) ≥ 1-δ      ∀ withdrawals
     
     Supports linear and binary search strategies with warm start.
     
@@ -1310,7 +1328,7 @@ class GoalSeeker:
     >>> def R_gen(T, n, s):
     ...     return model.returns.generate(T, n_sims=n, seed=s)
     >>> 
-    >>> result = seeker.seek(goals, A_gen, R_gen, W0, accounts,
+    >>> result = seeker.seek(goals, A_gen, R_gen, initial_wealth, accounts,
     ...                     start_date=date(2025, 1, 1),
     ...                     n_sims=500, seed=42, search_method="binary")
     >>> print(f"Optimal horizon: T*={result.T} months")
@@ -1337,20 +1355,20 @@ class GoalSeeker:
     def seek(
         self,
         goals: List[Union[IntermediateGoal, TerminalGoal]],
-        A_generator: Callable[[int, int, Optional[int]], np.ndarray],
-        R_generator: Callable[[int, int, Optional[int]], np.ndarray],
-        W0: np.ndarray,
+        A_generator: Callable,
+        R_generator: Callable,
+        initial_wealth: np.ndarray,
         accounts: List[Account],
         start_date: date,
         n_sims: int = 500,
         seed: Optional[int] = None,
-        search_method: str = "binary",
-        D_generator: Optional[Callable[[int, int, Optional[int]], np.ndarray]] = None,
+        search_method: Literal["linear", "binary"] = "binary",
+        D_generator: Optional[Callable] = None,
         withdrawal_epsilon: float = 0.05,
         **solver_kwargs
     ) -> OptimizationResult:
         """
-        Find minimum horizon T* for goal feasibility via intelligent search.
+        Find minimum horizon T* that satisfies all goal constraints.
 
         Parameters
         ----------
@@ -1360,7 +1378,7 @@ class GoalSeeker:
             Function (T, n_sims, seed) → A array of shape (n_sims, T)
         R_generator : callable
             Function (T, n_sims, seed) → R array of shape (n_sims, T, M)
-        W0 : np.ndarray, shape (M,)
+        initial_wealth : np.ndarray, shape (M,)
             Initial wealth vector
         accounts : List[Account]
             Portfolio accounts
@@ -1454,7 +1472,7 @@ class GoalSeeker:
         if search_method == "linear":
             return self._linear_search(
                 T_start, goal_set, A_generator, R_generator,
-                W0, n_sims, seed,
+                initial_wealth, n_sims, seed,
                 D_generator=D_generator,
                 withdrawal_epsilon=withdrawal_epsilon,
                 **solver_kwargs
@@ -1462,7 +1480,7 @@ class GoalSeeker:
         elif search_method == "binary":
             return self._binary_search(
                 T_start, goal_set, A_generator, R_generator,
-                W0, n_sims, seed,
+                initial_wealth, n_sims, seed,
                 D_generator=D_generator,
                 withdrawal_epsilon=withdrawal_epsilon,
                 **solver_kwargs
@@ -1476,7 +1494,7 @@ class GoalSeeker:
         goal_set: GoalSet,
         A_generator: Callable,
         R_generator: Callable,
-        W0: np.ndarray,
+        initial_wealth: np.ndarray,
         n_sims: int,
         seed: Optional[int],
         D_generator: Optional[Callable] = None,
@@ -1502,7 +1520,7 @@ class GoalSeeker:
                 D = D_generator(T, n_sims, seed)
 
             result = self.optimizer.solve(
-                T=T, A=A, R=R, W0=W0,
+                T=T, A=A, R=R, initial_wealth=initial_wealth,
                 goal_set=goal_set,
                 X_init=X_prev,
                 D=D,
@@ -1534,7 +1552,7 @@ class GoalSeeker:
         goal_set: GoalSet,
         A_generator: Callable,
         R_generator: Callable,
-        W0: np.ndarray,
+        initial_wealth: np.ndarray,
         n_sims: int,
         seed: Optional[int],
         D_generator: Optional[Callable] = None,
@@ -1591,7 +1609,7 @@ class GoalSeeker:
                 ])
 
             result = self.optimizer.solve(
-                T=mid, A=A, R=R, W0=W0,
+                T=mid, A=A, R=R, initial_wealth=initial_wealth,
                 goal_set=goal_set,
                 X_init=X_init,
                 D=D,
@@ -1631,7 +1649,7 @@ class GoalSeeker:
             D = D_generator(left, n_sims, seed)
 
         result = self.optimizer.solve(
-            T=left, A=A, R=R, W0=W0,
+            T=left, A=A, R=R, initial_wealth=initial_wealth,
             goal_set=goal_set,
             X_init=None,
             D=D,

@@ -12,8 +12,8 @@ Key Mathematical Framework
 - Total monthly contribution: A_t (from income.py)
 - Allocation policy: X = {x_t^m} where x_t^m ≥ 0, Σ_m x_t^m = 1
 - Account contribution: A_t^m = x_t^m * A_t
-- Wealth evolution: W_{t+1}^m = (W_t^m + A_t^m)(1 + R_t^m)
-- Affine representation: W_t^m = W_0^m * F_{0,t}^m + Σ_{s=0}^{t-1} A_s * x_s^m * F_{s,t}^m
+- Wealth evolution: W_{t+1}^m = (W_t^m + A_t^m - D_t^m)(1 + R_t^m)
+- Affine representation: W_t^m = W_0^m * F_{0,t}^m + Σ_{s=0}^{t-1} (A_s * x_s^m - D_s^m) * F_{s,t}^m
 
 Key components
 --------------
@@ -26,7 +26,7 @@ Key components
     Executor for wealth dynamics. Receives pre-generated contributions A and returns R,
     applies allocation policy X, and computes wealth trajectories W.
     Supports both recursive and affine (closed-form) computation methods.
-    Supports W0 override for optimization scenarios with varying initial conditions.
+    Supports flexible initialization via initial_wealth override (formerly W0_override).
 
 Design principles
 -----------------
@@ -77,7 +77,7 @@ Example
 >>>
 >>> # 6. Optimization scenario: override initial wealth
 >>> W0_scenario = np.array([5_000_000, 2_000_000])
->>> result_opt = portfolio.simulate(A=A_sims, R=R_sims, X=X, W0_override=W0_scenario)
+>>> result_opt = portfolio.simulate(A=A_sims, R=R_sims, X=X, initial_wealth=W0_scenario)
 >>>
 >>> # 7. Visualize
 >>> portfolio.plot(result=result, X=X, save_path="portfolio_analysis.png")
@@ -426,9 +426,9 @@ class Portfolio:
     
     Methods
     -------
-    simulate(A, R, X, method="recursive", W0_override=None) -> dict
+    simulate(A, R, X, method="recursive", initial_wealth=None) -> dict
         Execute wealth dynamics for given contributions, returns, and allocations.
-        Supports batch processing of Monte Carlo samples and W0 override.
+        Supports batch processing of Monte Carlo samples and initial_wealth override.
     compute_accumulation_factors(R) -> np.ndarray
         Compute F_{s,t}^m = ∏_{r=s}^{t-1} (1 + R_r^m) for affine wealth representation.
     plot(result, X, **kwargs)
@@ -441,7 +441,7 @@ class Portfolio:
     - Portfolio only executes dynamics, never generates stochastic processes
     - Supports both recursive and affine (closed-form) wealth computation
     - Vectorized: processes full batches (n_sims, T, M) without Python loops
-    - W0_override enables optimization scenarios without creating dummy accounts
+    - initial_wealth override enables optimization for varying initial conditions
     
     Examples
     --------
@@ -466,7 +466,7 @@ class Portfolio:
     >>> 
     >>> # Execute with overridden W0 (optimization scenario)
     >>> W0_custom = np.array([3_000_000, 1_500_000])
-    >>> result_opt = portfolio.simulate(A=A, R=R, X=X, W0_override=W0_custom)
+    >>> result_opt = portfolio.simulate(A=A, R=R, X=X, initial_wealth=W0_custom)
     >>>
     >>> # Visualize
     >>> portfolio.plot(result, X)
@@ -508,7 +508,7 @@ class Portfolio:
         X: np.ndarray,  # Allocations: (T, M)
         D: Optional[np.ndarray] = None,  # Withdrawals: (T, M) or (n_sims, T, M)
         method: Literal["recursive", "affine"] = "recursive",
-        W0_override: Optional[np.ndarray] = None
+        initial_wealth: Optional[np.ndarray] = None
     ) -> dict:
         """
         Execute wealth dynamics W_{t+1}^m = (W_t^m + A_t^m - D_t^m)(1 + R_t^m).
@@ -536,7 +536,7 @@ class Portfolio:
             Computation method:
             - "recursive": iterative W_{t+1} = (W_t + A_t)(1+R_t) [faster]
             - "affine": closed-form W_t = W_0 F_{0,t} + Σ_s A_s x_s F_{s,t}
-        W0_override : np.ndarray, shape (M,), optional
+        initial_wealth : np.ndarray, shape (M,), optional
             Override initial wealth vector. If None, uses self.initial_wealth_vector.
             Useful for optimization scenarios where W0 varies without creating
             temporary Account objects.
@@ -553,7 +553,7 @@ class Portfolio:
         ------
         ValueError
             If shapes are incompatible or allocation policy violates constraints.
-            If W0_override has incorrect shape.
+            If initial_wealth has incorrect shape.
         
         Notes
         -----
@@ -580,7 +580,7 @@ class Portfolio:
         
         # Override initial wealth (optimization scenario)
         >>> W0_scenario = np.array([5_000_000, 2_000_000])
-        >>> result_opt = portfolio.simulate(A, R, X, W0_override=W0_scenario)
+        >>> result_opt = portfolio.simulate(A, R, X, initial_wealth=W0_scenario)
         >>> np.allclose(result_opt["wealth"][:, 0, :], W0_scenario)
         True
         
@@ -602,14 +602,14 @@ class Portfolio:
         if X.shape != (T, M):
             raise ValueError(f"X shape {X.shape} != expected ({T}, {M})")
         
-        # Validate W0_override if provided
-        if W0_override is not None:
-            if W0_override.shape != (self.M,):
+        # Validate initial_wealth if provided
+        if initial_wealth is not None:
+            if initial_wealth.shape != (self.M,):
                 raise ValueError(
-                    f"W0_override shape {W0_override.shape} != expected ({self.M},)"
+                    f"initial_wealth shape {initial_wealth.shape} != expected ({self.M},)"
                 )
-            if np.any(W0_override < 0):
-                raise ValueError("W0_override must be non-negative")
+            if np.any(initial_wealth < 0):
+                raise ValueError("initial_wealth must be non-negative")
         
         # Validate allocation policy constraints
         if np.any(X < 0):
@@ -656,9 +656,9 @@ class Portfolio:
 
         # Dispatch to computation method
         if method == "recursive":
-            W = self._simulate_recursive(A_expanded, R, X, D_expanded, W0_override)
+            W = self._simulate_recursive(A_expanded, R, X, D_expanded, initial_wealth)
         elif method == "affine":
-            W = self._simulate_affine(A_expanded, R, X, D_expanded, W0_override)
+            W = self._simulate_affine(A_expanded, R, X, D_expanded, initial_wealth)
         else:
             raise ValueError(f"method must be 'recursive' or 'affine', got {method}")
         
@@ -676,7 +676,7 @@ class Portfolio:
         R: np.ndarray,  # (n_sims, T, M)
         X: np.ndarray,  # (T, M)
         D: Optional[np.ndarray] = None,  # (n_sims, T, M) or None
-        W0_override: Optional[np.ndarray] = None
+        initial_wealth: Optional[np.ndarray] = None
     ) -> np.ndarray:
         """
         Recursive wealth dynamics: W_{t+1}^m = (W_t^m + A_t^m - D_t^m)(1 + R_t^m).
@@ -685,7 +685,7 @@ class Portfolio:
         
         Parameters
         ----------
-        W0_override : np.ndarray, shape (M,), optional
+        initial_wealth : np.ndarray, shape (M,), optional
             Override initial wealth. If None, uses self.initial_wealth_vector.
         
         Returns
@@ -693,7 +693,7 @@ class Portfolio:
         W : np.ndarray, shape (n_sims, T+1, M)
         """
         n_sims, T, M = R.shape
-        W0 = W0_override if W0_override is not None else self.initial_wealth_vector
+        W0 = initial_wealth if initial_wealth is not None else self.initial_wealth_vector
         
         # Initialize wealth
         W = np.zeros((n_sims, T + 1, M))
@@ -721,7 +721,7 @@ class Portfolio:
         R: np.ndarray,  # (n_sims, T, M)
         X: np.ndarray,  # (T, M)
         D: Optional[np.ndarray] = None,  # (n_sims, T, M) or None
-        W0_override: Optional[np.ndarray] = None
+        initial_wealth: Optional[np.ndarray] = None
     ) -> np.ndarray:
         """
         Affine wealth representation: W_t^m = W_0^m F_{0,t}^m + Σ_s (A_s x_s^m - D_s^m) F_{s,t}^m.
@@ -730,7 +730,7 @@ class Portfolio:
         
         Parameters
         ----------
-        W0_override : np.ndarray, shape (M,), optional
+        initial_wealth : np.ndarray, shape (M,), optional
             Override initial wealth. If None, uses self.initial_wealth_vector.
         
         Returns
@@ -738,7 +738,7 @@ class Portfolio:
         W : np.ndarray, shape (n_sims, T+1, M)
         """
         n_sims, T, M = R.shape
-        W0 = W0_override if W0_override is not None else self.initial_wealth_vector
+        W0 = initial_wealth if initial_wealth is not None else self.initial_wealth_vector
 
         # Compute accumulation factors: (n_sims, T+1, T+1, M)
         F = self.compute_accumulation_factors(R)

@@ -1114,14 +1114,14 @@ class FinancialModel:
                 )
 
         # Extract initial wealth
-        W0 = self.portfolio.initial_wealth_vector
+        initial_wealth = self.portfolio.initial_wealth_vector
 
         # Execute bilevel optimization
         return seeker.seek(
             goals=goals,
             A_generator=A_generator,
             R_generator=R_generator,
-            W0=W0,
+            initial_wealth=initial_wealth,
             accounts=self.portfolio.accounts,
             start_date=start_date,
             n_sims=n_sims,

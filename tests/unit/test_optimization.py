@@ -150,9 +150,9 @@ class TestCVaROptimizerSolve:
         np.random.seed(42)
         A = np.full((n_sims, T), 500_000.0)
         R = np.random.randn(n_sims, T, M) * 0.02 + 0.005
-        W0 = np.array([0, 0])
+        initial_wealth = np.array([0, 0])
 
-        return {"A": A, "R": R, "W0": W0, "T": T, "n_sims": n_sims, "M": M}
+        return {"A": A, "R": R, "initial_wealth": initial_wealth, "T": T, "n_sims": n_sims, "M": M}
 
     def test_solve_returns_result(self, optimizer, simulation_data, terminal_goals, accounts, start_date):
         """Test solve returns OptimizationResult."""
@@ -162,7 +162,7 @@ class TestCVaROptimizerSolve:
             T=simulation_data["T"],
             A=simulation_data["A"],
             R=simulation_data["R"],
-            W0=simulation_data["W0"],
+            initial_wealth=simulation_data["initial_wealth"],
             goal_set=goal_set,
         )
 
@@ -177,7 +177,7 @@ class TestCVaROptimizerSolve:
             T=simulation_data["T"],
             A=simulation_data["A"],
             R=simulation_data["R"],
-            W0=simulation_data["W0"],
+            initial_wealth=simulation_data["initial_wealth"],
             goal_set=goal_set,
         )
 
@@ -197,7 +197,7 @@ class TestCVaROptimizerSolve:
             T=simulation_data["T"],
             A=simulation_data["A"],
             R=simulation_data["R"],
-            W0=simulation_data["W0"],
+            initial_wealth=simulation_data["initial_wealth"],
             goal_set=goal_set,
         )
 
@@ -212,7 +212,7 @@ class TestCVaROptimizerSolve:
             T=simulation_data["T"],
             A=simulation_data["A"],
             R=simulation_data["R"],
-            W0=simulation_data["W0"],
+            initial_wealth=simulation_data["initial_wealth"],
             goal_set=goal_set,
         )
 
@@ -264,7 +264,7 @@ class TestOptimizationIntegration:
         np.random.seed(42)
         A = np.full((n_sims, T), 500_000.0)
         R = np.random.randn(n_sims, T, M) * 0.02 + 0.005
-        W0 = np.array([0, 0])
+        initial_wealth = np.array([0, 0])
 
         goals = [TerminalGoal(account="Aggressive", threshold=3_000_000, confidence=0.60)]
         goal_set = GoalSet(goals, accounts, start_date)
@@ -275,7 +275,7 @@ class TestOptimizationIntegration:
             T=T,
             A=A,
             R=R,
-            W0=W0,
+            initial_wealth=initial_wealth,
             goal_set=goal_set,
         )
 
@@ -295,7 +295,7 @@ class TestOptimizationIntegration:
         np.random.seed(42)
         A = np.full((n_sims, T), 500_000.0)
         R = np.random.randn(n_sims, T, M) * 0.02 + 0.005
-        W0 = np.array([0, 0])
+        initial_wealth = np.array([0, 0])
 
         goals = [
             IntermediateGoal(month=6, account="Conservative", threshold=1_000_000, confidence=0.60),
@@ -309,7 +309,7 @@ class TestOptimizationIntegration:
             T=T,
             A=A,
             R=R,
-            W0=W0,
+            initial_wealth=initial_wealth,
             goal_set=goal_set,
         )
 
