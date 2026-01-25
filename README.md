@@ -183,7 +183,8 @@ model.plot("wealth", result=result, show_trajectories=True)
 | Notebook | Description |
 |----------|-------------|
 | [FinOpt-Workflow.ipynb](notebooks/FinOpt-Workflow.ipynb) | Complete workflow: income, simulation, optimization, visualization |
-| [recursive_affine_verification.ipynb](notebooks/recursive_affine_verification.ipynb) | Mathematical verification of affine wealth representation |
+| [01-profile-builder.ipynb](notebooks/01-profile-builder.ipynb) | Profile builder: income, portfolio, return|
+| [02-scenario-optimizer.ipynb](notebooks/02-scenario-optimizer.ipynb) | Scenario builder: goals, withdrawal, optimization|
 
 ---
 
@@ -222,7 +223,7 @@ model.plot("wealth", result=result, show_trajectories=True)
 | `returns.py` | Stochastic shocks | `ReturnModel` (correlated lognormal) |
 | `portfolio.py` | Wealth dynamics | `Account`, `Portfolio` (affine executor) |
 | `goals.py` | Objective specification | `IntermediateGoal`, `TerminalGoal`, `GoalSet` |
-| `optimization.py` | Convex solvers | `SAAOptimizer`, `CVaROptimizer`, `GoalSeeker` |
+| `optimization.py` | Convex solvers | `CVaROptimizer`, `GoalSeeker` |
 | `model.py` | Orchestration | `FinancialModel` (facade), `SimulationResult` |
 
 ---
@@ -250,21 +251,25 @@ where $F_{s,t}^m = \prod_{\tau=s}^{t-1}(1 + R_\tau^m)$ are accumulation factors.
 ### CVaR Reformulation
 
 Original chance constraint (non-convex):
+
 $$
 \mathbb{P}(W_t^m \geq b) \geq 1 - \varepsilon
 $$
 
 CVaR reformulation (convex):
+
 $$
 \text{CVaR}_\varepsilon(b - W_t^m) \leq 0
 $$
 
 where:
+
 $$
 \text{CVaR}_\varepsilon(L) = \min_{\gamma} \left\{ \gamma + \frac{1}{\varepsilon N}\sum_{i=1}^N [L_i - \gamma]_+ \right\}
 $$
 
 **Epigraphic form** (LP-compatible):
+
 $$
 \begin{align}
 \gamma + \frac{1}{\varepsilon N}\sum_{i=1}^N z_i &\leq 0 \\
@@ -478,9 +483,6 @@ pytest tests/unit/test_portfolio.py -v -k "affine"
 
 ## Roadmap
 
-- [ ] **Transaction costs**: Convex penalties for rebalancing (L1/L2 norms)
-- [ ] **Tax modeling**: Capital gains for Chilean tax regime
-- [ ] **Multi-period rebalancing**: Dynamic policies vs pre-commitment
 - [ ] **Robust optimization**: Uncertainty sets for (μ, σ) parameters
 - [ ] **Historical backtesting**: Real fund return data
 
