@@ -1,0 +1,71 @@
+{
+  "schema_version": "0.2.0",
+  "name": "House Purchase 2026",
+  "description": "Planning for apartment down payment with emergency fund maintenance",
+  "start_date": "2025-11-01",
+  "model_path": "../profiles/my_profile.json",
+  "intermediate_goals": [
+    {
+      "account": "Vivienda",
+      "threshold": 3100000,
+      "confidence": 0.5,
+      "month": 12
+    },
+    {
+      "account": "Clooney",
+      "threshold": 3000000,
+      "confidence": 0.5,
+      "month": 10
+    }
+  ],
+  "terminal_goals": [
+    {
+      "account": "Clooney",
+      "threshold": 5000000,
+      "confidence": 0.5
+    },
+    {
+      "account": "VOO",
+      "threshold": 8000000,
+      "confidence": 0.5
+    }
+  ],
+  "withdrawals": {
+    "scheduled": [
+      {
+        "account": "Vivienda",
+        "amount": 2500000,
+        "date": "2026-12-01",
+        "description": "Pie departamento"
+      },
+      {
+        "account": "Clooney",
+        "amount": 800000,
+        "date": "2026-06-01",
+        "description": "Vacaciones invierno"
+      }
+    ],
+    "stochastic": [
+      {
+        "account": "Clooney",
+        "base_amount": 300000,
+        "sigma": 100000,
+        "floor": 100000,
+        "date": "2026-09-01",
+        "cap": 600000,
+        "seed": 42
+      }
+    ]
+  },
+  "simulation": {
+    "n_sims": 500,
+    "seed": 42,
+    "cache_enabled": true,
+    "verbose": true
+  },
+  "optimization": {
+    "T_max": 120,
+    "solver": "ECOS",
+    "objective": "balanced"
+  }
+}

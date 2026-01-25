@@ -31,7 +31,7 @@ Example
 """
 
 from __future__ import annotations
-from typing import Optional, Literal, List
+from typing import Optional, Literal, List, Union
 import datetime
 from pathlib import Path
 
@@ -265,9 +265,8 @@ class VariableIncomeConfig(BaseModel):
         if v is not None:
             if len(v) != 12:
                 raise ValueError(f"Seasonality must have 12 factors, got {len(v)}")
-            total = sum(v)
-            if not (11.9 <= total <= 12.1):  # Allow small floating point error
-                raise ValueError(f"Seasonality factors must sum to 12, got {total:.2f}")
+            if any(v_ < 0 for v_ in v):
+                raise ValueError("Seasonality factors must be non-negative")
         return v
 
 
@@ -284,16 +283,12 @@ class IncomeConfig(BaseModel):
         default=None,
         description="Variable income configuration"
     )
-    contribution_rate_fixed: float = Field(
+    contribution_rate_fixed: Union[float, List[float]] = Field(
         default=0.3,
-        ge=0,
-        le=1,
         description="Fraction of fixed income contributed to portfolio"
     )
-    contribution_rate_variable: float = Field(
+    contribution_rate_variable: Union[float, List[float]] = Field(
         default=1.0,
-        ge=0,
-        le=1,
         description="Fraction of variable income contributed to portfolio"
     )
 
@@ -348,6 +343,11 @@ class AccountConfig(BaseModel):
         default=0,
         ge=0,
         description="Initial account balance"
+    )
+    display_name: Optional[str] = Field(
+        default=None,
+        max_length=100,
+        description="Descriptive name for plots and reports"
     )
 
 

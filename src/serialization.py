@@ -43,7 +43,7 @@ Example
 """
 
 from __future__ import annotations
-from typing import Dict, Any, List, Union, Optional, TYPE_CHECKING
+from typing import Dict, Any, List, Union, Optional, Literal, TYPE_CHECKING
 from pathlib import Path
 from datetime import date
 import json
@@ -184,7 +184,11 @@ def income_to_dict(income_model: IncomeModel) -> Dict[str, Any]:
             "annual_growth": income_model.fixed.annual_growth,
         }
         if income_model.fixed.salary_raises:
-            fixed_data["salary_raises"] = income_model.fixed.salary_raises
+            # Convert date keys to strings for JSON serializability
+            fixed_data["salary_raises"] = {
+                d.isoformat() if isinstance(d, date) else str(d): v
+                for d, v in income_model.fixed.salary_raises.items()
+            }
         result["fixed"] = fixed_data
 
     # Variable income
@@ -208,8 +212,17 @@ def income_to_dict(income_model: IncomeModel) -> Dict[str, Any]:
     # Contribution rates
     contrib = income_model.monthly_contribution or {}
     if isinstance(contrib, dict):
-        result["contribution_rate_fixed"] = contrib.get("fixed", 0.3)
-        result["contribution_rate_variable"] = contrib.get("variable", 1.0)
+        fixed_rate = contrib.get("fixed", 0.3)
+        var_rate = contrib.get("variable", 1.0)
+        
+        # Convert numpy arrays to lists for JSON serializability
+        if isinstance(fixed_rate, np.ndarray):
+            fixed_rate = fixed_rate.tolist()
+        if isinstance(var_rate, np.ndarray):
+            var_rate = var_rate.tolist()
+            
+        result["contribution_rate_fixed"] = fixed_rate
+        result["contribution_rate_variable"] = var_rate
     else:
         result["contribution_rate_fixed"] = 0.3
         result["contribution_rate_variable"] = 1.0
@@ -239,10 +252,18 @@ def income_from_dict(data: Dict[str, Any]) -> IncomeModel:
     # Build fixed income
     fixed = None
     if config.fixed is not None:
+        # Convert date strings back to date objects
+        salary_raises = None
+        if config.fixed.salary_raises:
+            salary_raises = {
+                date.fromisoformat(k): v
+                for k, v in config.fixed.salary_raises.items()
+            }
+
         fixed = FixedIncome(
             base=config.fixed.base,
             annual_growth=config.fixed.annual_growth,
-            salary_raises=config.fixed.salary_raises,
+            salary_raises=salary_raises,
         )
 
     # Build variable income
@@ -264,10 +285,16 @@ def income_from_dict(data: Dict[str, Any]) -> IncomeModel:
 
     # Build income model
     # IncomeModel expects 12-element arrays for monthly contributions
-    # Convert scalar rates to uniform arrays
+    # Handle both scalar and per-month list inputs
+    
+    def _to_rate_array(rate):
+        if isinstance(rate, list):
+            return np.array(rate, dtype=float)
+        return np.full(12, float(rate), dtype=float)
+
     monthly_contribution = {
-        "fixed": np.full(12, config.contribution_rate_fixed, dtype=float),
-        "variable": np.full(12, config.contribution_rate_variable, dtype=float),
+        "fixed": _to_rate_array(config.contribution_rate_fixed),
+        "variable": _to_rate_array(config.contribution_rate_variable),
     }
 
     return IncomeModel(
