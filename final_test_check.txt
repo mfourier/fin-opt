@@ -1,0 +1,54 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.5, pytest-8.3.4, pluggy-1.5.0 -- /home/mlioi/anaconda3/bin/python
+cachedir: .pytest_cache
+rootdir: /home/mlioi/fin-opt
+configfile: pyproject.toml
+plugins: anyio-4.7.0, xdist-3.8.0, cov-7.0.0
+collecting ... collected 3 items
+
+tests/unit/test_error_handling_improvements.py::TestErrorHandlingImprovements::test_returns_T_validation PASSED [ 33%]
+tests/unit/test_error_handling_improvements.py::TestErrorHandlingImprovements::test_income_growth_validation FAILED [ 66%]
+tests/unit/test_error_handling_improvements.py::TestErrorHandlingImprovements::test_portfolio_allocation_validation PASSED [100%]
+ERROR: Coverage failure: total of 18 is less than fail-under=40
+
+
+=================================== FAILURES ===================================
+_________ TestErrorHandlingImprovements.test_income_growth_validation __________
+
+self = <tests.unit.test_error_handling_improvements.TestErrorHandlingImprovements object at 0x7f5034373b10>
+
+    def test_income_growth_validation(self):
+        """src/income.py: annual_growth <= -1 should raise ConfigurationError/ValidationError"""
+        # User asked for validation. exceptions.py has ConfigurationError for this specific case:
+        # "Invalid annual_growth values (must be > -1)"
+        # But user request said "Validar annual_growth > -1".
+        # Let's check if we should use ConfigurationError or ValidationError.
+        # implementation_plan said ValidationError. simple check.
+    
+>       with pytest.raises((ValidationError, ConfigurationError), match="annual_growth"):
+E       Failed: DID NOT RAISE (<class 'src.exceptions.ValidationError'>, <class 'src.exceptions.ConfigurationError'>)
+
+tests/unit/test_error_handling_improvements.py:39: Failed
+================================ tests coverage ================================
+_______________ coverage: platform linux, python 3.13.5-final-0 ________________
+
+Name                   Stmts   Miss  Cover   Missing
+----------------------------------------------------
+src/config.py             74     11    85%   184-187, 259-265
+src/exceptions.py         16      0   100%
+src/goals.py             208    169    19%   131-149, 172-182, 187, 245-251, 256, 348-384, 389-417, 421-432, 439-444, 467, 485-489, 554-615, 638-657, 661, 744-798, 847-870, 917-956
+src/income.py            422    356    16%   235-298, 317-319, 416-428, 527-601, 719-720, 806-867, 953-1026, 1171-1359, 1481-1560, 1618-1660, 1695-1701, 1727-1773, 1797-1824, 1833-1864
+src/model.py             422    366    13%   260-270, 274-326, 377-386, 417-444, 485-497, 606-621, 727-824, 848-860, 875, 899-909, 1066-1120, 1183-1189, 1253-1275, 1435-1528, 1532-1552, 1560, 1564, 1568, 1572, 1576, 1590-1604, 1689-1986, 2015-2069
+src/optimization.py      471    425    10%   157-174, 180-203, 227-232, 241-248, 253, 304-313, 399-464, 492-505, 515, 529-534, 548-557, 571-577, 677-694, 784-1262, 1325-1335, 1401-1471, 1490-1526, 1560-1647
+src/portfolio.py         267    216    19%   186, 188, 190, 301, 324, 354-356, 385, 477, 484, 502, 601, 603, 607-612, 617-668, 695-716, 740-771, 844-872, 950-1255
+src/returns.py           374    319    15%   108, 117, 148, 150, 154, 161-162, 181, 200, 219-229, 284-303, 372-512, 594-752, 768-911, 919, 924, 932, 937-976
+src/serialization.py      99     81    18%   101-109, 126-131, 158-197, 214-253, 287-299, 321-351, 380-407, 434-450
+src/utils.py             152    116    24%   56, 76, 87-92, 97-103, 111-118, 127-134, 142-150, 162-170, 179-187, 196-201, 209-216, 221-226, 239-259, 297-300, 343-346, 355-357, 376-381, 419-447
+src/withdrawal.py        182    135    26%   151-152, 176-178, 272-319, 343-360, 383-388, 395, 418, 445-453, 523-540, 556-562, 596-608, 729-798, 820-845, 871-891, 908-927
+----------------------------------------------------
+TOTAL                   2687   2194    18%
+Coverage HTML written to dir htmlcov
+FAIL Required test coverage of 40% not reached. Total coverage: 18.35%
+=========================== short test summary info ============================
+FAILED tests/unit/test_error_handling_improvements.py::TestErrorHandlingImprovements::test_income_growth_validation - Failed: DID NOT RAISE (<class 'src.exceptions.ValidationError'>, <class 'src.exceptions.ConfigurationError'>)
+========================= 1 failed, 2 passed in 0.37s ==========================

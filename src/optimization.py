@@ -66,6 +66,8 @@ from .portfolio import Portfolio
 if TYPE_CHECKING:
     from .model import SimulationResult
     from .portfolio import Account
+from .goals import GoalSet, TerminalGoal, IntermediateGoal
+from .exceptions import InfeasibleError
 
 __all__ = [
     "OptimizationResult",
@@ -1521,7 +1523,7 @@ class GoalSeeker:
             if result.X is not None:
                 X_prev = np.vstack([result.X, result.X[-1:, :]])
 
-        raise ValueError(
+        raise InfeasibleError(
             f"No feasible solution found in T ∈ [{T_start}, {self.T_max}]. "
             f"Try increasing T_max or relaxing goal constraints."
         )
@@ -1642,7 +1644,7 @@ class GoalSeeker:
                 print(f"=== Optimal: T*={left} ===\n")
             return result
 
-        raise ValueError(
+        raise InfeasibleError(
             f"Binary search failed: T={left} infeasible. "
             f"Monotonicity assumption may be violated."
         )
