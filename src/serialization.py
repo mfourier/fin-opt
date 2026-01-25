@@ -12,6 +12,9 @@ Supports serialization of:
 - Portfolio return correlations
 - Optimization results
 - Full FinancialModel configurations
+- Goals (IntermediateGoal, TerminalGoal)
+- Withdrawals (WithdrawalModel)
+- Complete scenarios (model + goals + withdrawals + parameters)
 
 Design Principles
 -----------------
@@ -56,6 +59,11 @@ from .config import (
     WithdrawalEventConfig,
     StochasticWithdrawalConfig,
     WithdrawalConfig,
+    IntermediateGoalConfig,
+    TerminalGoalConfig,
+    ScenarioConfig,
+    SimulationConfig,
+    OptimizationConfig,
 )
 
 if TYPE_CHECKING:
@@ -64,18 +72,23 @@ if TYPE_CHECKING:
     from .income import IncomeModel, FixedIncome, VariableIncome
     from .optimization import OptimizationResult
     from .withdrawal import WithdrawalEvent, StochasticWithdrawal, WithdrawalModel, WithdrawalSchedule
+    from .goals import IntermediateGoal, TerminalGoal
 
 __all__ = [
     "save_model",
     "load_model",
     "save_optimization_result",
     "load_optimization_result",
+    "save_scenario",
+    "load_scenario",
     "account_to_dict",
     "account_from_dict",
     "income_to_dict",
     "income_from_dict",
     "withdrawal_to_dict",
     "withdrawal_from_dict",
+    "goals_to_dict",
+    "goals_from_dict",
     "SCHEMA_VERSION",
 ]
 
@@ -421,6 +434,391 @@ def withdrawal_from_dict(data: Dict[str, Any]) -> WithdrawalModel:
         scheduled=scheduled,
         stochastic=stochastic if stochastic else None,
     )
+
+
+# ---------------------------------------------------------------------------
+# Goal Serialization
+# ---------------------------------------------------------------------------
+
+def goals_to_dict(
+    goals: List[Union[IntermediateGoal, TerminalGoal]]
+) -> Dict[str, Any]:
+    """
+    Convert a list of goals to dictionary representation.
+
+    Parameters
+    ----------
+    goals : List[Union[IntermediateGoal, TerminalGoal]]
+        List of goal objects to serialize
+
+    Returns
+    -------
+    dict
+        Dictionary with 'intermediate' and 'terminal' goal lists
+
+    Examples
+    --------
+    >>> from finopt.goals import IntermediateGoal, TerminalGoal
+    >>> goals = [
+    ...     IntermediateGoal(account="Savings", threshold=1_000_000, confidence=0.9, month=6),
+    ...     TerminalGoal(account="Investment", threshold=5_000_000, confidence=0.8)
+    ... ]
+    >>> goals_to_dict(goals)
+    {'intermediate': [...], 'terminal': [...]}
+    """
+    from .goals import IntermediateGoal, TerminalGoal
+
+    result: Dict[str, Any] = {
+        "intermediate": [],
+        "terminal": [],
+    }
+
+    for goal in goals:
+        if isinstance(goal, IntermediateGoal):
+            goal_dict: Dict[str, Any] = {
+                "account": goal.account,
+                "threshold": goal.threshold,
+                "confidence": goal.confidence,
+            }
+            if goal.month is not None:
+                goal_dict["month"] = goal.month
+            elif goal.date is not None:
+                goal_dict["date"] = goal.date.isoformat()
+            result["intermediate"].append(goal_dict)
+
+        elif isinstance(goal, TerminalGoal):
+            result["terminal"].append({
+                "account": goal.account,
+                "threshold": goal.threshold,
+                "confidence": goal.confidence,
+            })
+
+    return result
+
+
+def goals_from_dict(
+    data: Dict[str, Any]
+) -> List[Union[IntermediateGoal, TerminalGoal]]:
+    """
+    Create a list of goals from dictionary representation.
+
+    Parameters
+    ----------
+    data : dict
+        Dictionary with 'intermediate' and 'terminal' goal lists
+
+    Returns
+    -------
+    List[Union[IntermediateGoal, TerminalGoal]]
+        Reconstructed goal objects
+
+    Examples
+    --------
+    >>> data = {
+    ...     "intermediate": [{"account": "Savings", "threshold": 1000000, "confidence": 0.9, "month": 6}],
+    ...     "terminal": [{"account": "Investment", "threshold": 5000000, "confidence": 0.8}]
+    ... }
+    >>> goals = goals_from_dict(data)
+    >>> len(goals)
+    2
+    """
+    from .goals import IntermediateGoal, TerminalGoal
+
+    goals: List[Union[IntermediateGoal, TerminalGoal]] = []
+
+    # Process intermediate goals
+    for goal_data in data.get("intermediate", []):
+        # Validate with Pydantic
+        config_data = {
+            "account": goal_data["account"],
+            "threshold": goal_data["threshold"],
+            "confidence": goal_data["confidence"],
+        }
+        if "month" in goal_data:
+            config_data["month"] = goal_data["month"]
+        elif "date" in goal_data:
+            config_data["goal_date"] = date.fromisoformat(goal_data["date"])
+
+        config = IntermediateGoalConfig.model_validate(config_data)
+
+        # Build IntermediateGoal
+        goal_kwargs: Dict[str, Any] = {
+            "account": config.account,
+            "threshold": config.threshold,
+            "confidence": config.confidence,
+        }
+        if config.month is not None:
+            goal_kwargs["month"] = config.month
+        elif config.goal_date is not None:
+            goal_kwargs["date"] = config.goal_date
+
+        goals.append(IntermediateGoal(**goal_kwargs))
+
+    # Process terminal goals
+    for goal_data in data.get("terminal", []):
+        config = TerminalGoalConfig.model_validate(goal_data)
+        goals.append(TerminalGoal(
+            account=config.account,
+            threshold=config.threshold,
+            confidence=config.confidence,
+        ))
+
+    return goals
+
+
+# ---------------------------------------------------------------------------
+# Scenario Serialization
+# ---------------------------------------------------------------------------
+
+def save_scenario(
+    scenario_name: str,
+    goals: List[Union[IntermediateGoal, TerminalGoal]],
+    path: Path,
+    model: Optional[FinancialModel] = None,
+    model_path: Optional[str] = None,
+    withdrawals: Optional[WithdrawalModel] = None,
+    start_date: Optional[date] = None,
+    description: str = "",
+    n_sims: int = 500,
+    seed: Optional[int] = None,
+    T_max: int = 240,
+    solver: str = "ECOS",
+    objective: str = "balanced",
+) -> None:
+    """
+    Save a complete optimization scenario to JSON file.
+
+    A scenario captures all parameters needed to reproduce an optimization:
+    model configuration (or reference), goals, withdrawals, and parameters.
+
+    Parameters
+    ----------
+    scenario_name : str
+        Human-readable scenario name
+    goals : List[Union[IntermediateGoal, TerminalGoal]]
+        Financial goals for the scenario
+    path : Path
+        Output file path (should have .json extension)
+    model : FinancialModel, optional
+        If provided, embeds full model configuration in scenario.
+        Mutually exclusive with model_path.
+    model_path : str, optional
+        Path to external model JSON file (for referencing without embedding).
+        Mutually exclusive with model.
+    withdrawals : WithdrawalModel, optional
+        Scheduled and stochastic withdrawals
+    start_date : date, optional
+        Simulation start date. If None, uses today.
+    description : str
+        Optional scenario description
+    n_sims : int
+        Number of Monte Carlo simulations
+    seed : int, optional
+        Random seed for reproducibility
+    T_max : int
+        Maximum optimization horizon (months)
+    solver : str
+        CVXPY solver backend
+    objective : str
+        Optimization objective function
+
+    Examples
+    --------
+    >>> from pathlib import Path
+    >>> from finopt.goals import TerminalGoal
+    >>> goals = [TerminalGoal(account="Savings", threshold=10_000_000, confidence=0.8)]
+    >>> save_scenario(
+    ...     scenario_name="Retirement Plan",
+    ...     goals=goals,
+    ...     path=Path("scenarios/retirement.json"),
+    ...     model_path="profiles/my_profile.json",
+    ...     start_date=date(2025, 1, 1)
+    ... )
+    """
+    from .goals import IntermediateGoal, TerminalGoal
+
+    if model is not None and model_path is not None:
+        raise ValueError("Specify either model or model_path, not both")
+
+    if start_date is None:
+        start_date = date.today()
+
+    # Build scenario config
+    config: Dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "name": scenario_name,
+        "description": description,
+        "start_date": start_date.isoformat(),
+    }
+
+    # Model: embed or reference
+    if model is not None:
+        config["model"] = {
+            "income": income_to_dict(model.income),
+            "accounts": [account_to_dict(acc) for acc in model.accounts],
+        }
+        if model.returns is not None:
+            config["model"]["correlation"] = model.returns.default_correlation.tolist()
+    elif model_path is not None:
+        config["model_path"] = model_path
+
+    # Goals
+    goals_dict = goals_to_dict(goals)
+    config["intermediate_goals"] = goals_dict["intermediate"]
+    config["terminal_goals"] = goals_dict["terminal"]
+
+    # Withdrawals
+    if withdrawals is not None:
+        config["withdrawals"] = withdrawal_to_dict(withdrawals)
+
+    # Simulation parameters
+    config["simulation"] = {
+        "n_sims": n_sims,
+        "seed": seed,
+        "cache_enabled": True,
+        "verbose": True,
+    }
+
+    # Optimization parameters
+    config["optimization"] = {
+        "T_max": T_max,
+        "solver": solver,
+        "objective": objective,
+    }
+
+    # Write to file
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w") as f:
+        json.dump(config, f, indent=2)
+
+
+def load_scenario(
+    path: Path,
+    load_model_from_path: bool = True,
+) -> Dict[str, Any]:
+    """
+    Load a scenario from JSON file.
+
+    Returns a dictionary with all scenario components. If the scenario
+    references an external model file and load_model_from_path=True,
+    the model is loaded and included.
+
+    Parameters
+    ----------
+    path : Path
+        Input file path
+    load_model_from_path : bool, default True
+        If scenario has model_path, load the model from that file
+
+    Returns
+    -------
+    dict
+        Dictionary containing:
+        - name: str
+        - description: str
+        - start_date: date
+        - model: FinancialModel (if embedded or loaded from path)
+        - model_path: str (if referenced)
+        - goals: List[Union[IntermediateGoal, TerminalGoal]]
+        - withdrawals: WithdrawalModel (if present)
+        - simulation: SimulationConfig
+        - optimization: OptimizationConfig
+
+    Examples
+    --------
+    >>> from pathlib import Path
+    >>> scenario = load_scenario(Path("scenarios/retirement.json"))
+    >>> scenario["name"]
+    'Retirement Plan'
+    >>> len(scenario["goals"])
+    2
+    >>> scenario["model"]  # FinancialModel instance
+    FinancialModel(M=2, ...)
+    """
+    with open(path, "r") as f:
+        config = json.load(f)
+
+    # Check schema version
+    schema_version = config.get("schema_version", "0.0.0")
+    if schema_version != SCHEMA_VERSION:
+        warnings.warn(
+            f"Scenario schema version {schema_version} differs from current "
+            f"version {SCHEMA_VERSION}. May encounter compatibility issues.",
+            UserWarning,
+        )
+
+    result: Dict[str, Any] = {
+        "name": config["name"],
+        "description": config.get("description", ""),
+        "start_date": date.fromisoformat(config["start_date"]),
+    }
+
+    # Load model (embedded or from path)
+    if "model" in config:
+        # Embedded model configuration
+        from .model import FinancialModel
+
+        income = income_from_dict(config["model"]["income"])
+        accounts = [account_from_dict(acc) for acc in config["model"]["accounts"]]
+        correlation = None
+        if "correlation" in config["model"]:
+            correlation = np.array(config["model"]["correlation"])
+
+        model = FinancialModel(income=income, accounts=accounts)
+        if correlation is not None and model.returns is not None:
+            model.returns.correlation = correlation
+
+        result["model"] = model
+
+    elif "model_path" in config:
+        result["model_path"] = config["model_path"]
+        if load_model_from_path:
+            # Resolve path relative to scenario file
+            model_file = path.parent / config["model_path"]
+            if model_file.exists():
+                result["model"] = load_model(model_file)
+            else:
+                # Try absolute path
+                model_file = Path(config["model_path"])
+                if model_file.exists():
+                    result["model"] = load_model(model_file)
+                else:
+                    warnings.warn(
+                        f"Model file not found: {config['model_path']}. "
+                        f"Tried: {path.parent / config['model_path']} and {config['model_path']}"
+                    )
+
+    # Load goals
+    goals_data = {
+        "intermediate": config.get("intermediate_goals", []),
+        "terminal": config.get("terminal_goals", []),
+    }
+    result["goals"] = goals_from_dict(goals_data)
+
+    # Load withdrawals
+    if "withdrawals" in config:
+        result["withdrawals"] = withdrawal_from_dict(config["withdrawals"])
+    else:
+        result["withdrawals"] = None
+
+    # Load simulation config
+    sim_config = config.get("simulation", {})
+    result["simulation"] = SimulationConfig(
+        n_sims=sim_config.get("n_sims", 500),
+        seed=sim_config.get("seed"),
+        cache_enabled=sim_config.get("cache_enabled", True),
+        verbose=sim_config.get("verbose", True),
+    )
+
+    # Load optimization config
+    opt_config = config.get("optimization", {})
+    result["optimization"] = OptimizationConfig(
+        T_max=opt_config.get("T_max", 240),
+        solver=opt_config.get("solver", "ECOS"),
+        objective=opt_config.get("objective", "balanced"),
+    )
+
+    return result
 
 
 # ---------------------------------------------------------------------------

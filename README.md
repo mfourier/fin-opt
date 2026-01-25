@@ -53,20 +53,6 @@ The key insight: Using **CVaR reformulation** (Rockafellar & Uryasev, 2000), non
 - **Stochastic income**: Seasonality, noise, growth, floor/cap constraints
 - **Correlated returns**: Multi-asset portfolios with lognormal shocks
 - **Flexible objectives**: Terminal wealth, low turnover, risk-adjusted, balanced
-- **Unified visualization**: 8 plotting modes with auto-simulation
-
-### Project Status
-
-| Component | Status |
-|-----------|--------|
-| Core simulation engine | Stable |
-| CVaR optimization | Stable |
-| SAA optimizer (scipy) | Stable |
-| Withdrawal modeling | Stable |
-| CLI interface | Stable |
-| Serialization/persistence | Stable |
-| Transaction costs | Planned |
-| Tax modeling | Planned |
 
 ---
 

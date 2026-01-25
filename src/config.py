@@ -46,6 +46,9 @@ __all__ = [
     "WithdrawalEventConfig",
     "StochasticWithdrawalConfig",
     "WithdrawalConfig",
+    "IntermediateGoalConfig",
+    "TerminalGoalConfig",
+    "ScenarioConfig",
     "AppSettings",
 ]
 
@@ -544,6 +547,229 @@ class WithdrawalConfig(BaseModel):
         default_factory=list,
         description="Stochastic withdrawals with uncertainty"
     )
+
+
+# ---------------------------------------------------------------------------
+# Goal Configuration
+# ---------------------------------------------------------------------------
+
+class IntermediateGoalConfig(BaseModel):
+    """
+    Configuration for an intermediate financial goal at fixed calendar time.
+
+    Represents checkpoint constraint:
+        ℙ(W_{t_fixed}^m ≥ threshold) ≥ confidence
+
+    Attributes
+    ----------
+    account : str
+        Target account name (must match an account in the portfolio).
+    threshold : float
+        Minimum required wealth at the target time.
+    confidence : float
+        Minimum satisfaction probability (e.g., 0.90 for 90%).
+    month : int, optional
+        Target month as offset from start_date (1-indexed).
+        Mutually exclusive with goal_date.
+    goal_date : datetime.date, optional
+        Target date (will be converted to month offset).
+        Mutually exclusive with month.
+
+    Examples
+    --------
+    >>> from datetime import date
+    >>> goal = IntermediateGoalConfig(
+    ...     account="Emergency",
+    ...     threshold=5_000_000,
+    ...     confidence=0.90,
+    ...     month=6
+    ... )
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    account: str = Field(
+        min_length=1,
+        max_length=50,
+        description="Target account name"
+    )
+    threshold: float = Field(
+        gt=0,
+        description="Minimum required wealth"
+    )
+    confidence: float = Field(
+        gt=0,
+        lt=1,
+        description="Minimum satisfaction probability (e.g., 0.90)"
+    )
+    month: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Target month offset (1-indexed). Mutually exclusive with goal_date."
+    )
+    goal_date: Optional[datetime.date] = Field(
+        default=None,
+        description="Target date. Mutually exclusive with month."
+    )
+
+    @field_validator("goal_date")
+    @classmethod
+    def validate_month_date_exclusive(cls, v, info):
+        """Ensure month and goal_date are mutually exclusive."""
+        month = info.data.get("month")
+        if v is not None and month is not None:
+            raise ValueError("Specify either month or goal_date, not both")
+        if v is None and month is None:
+            raise ValueError("Must specify either month or goal_date")
+        return v
+
+
+class TerminalGoalConfig(BaseModel):
+    """
+    Configuration for a terminal financial goal at end of horizon.
+
+    Represents end-of-planning constraint:
+        ℙ(W_T^m ≥ threshold) ≥ confidence
+
+    Attributes
+    ----------
+    account : str
+        Target account name (must match an account in the portfolio).
+    threshold : float
+        Minimum required terminal wealth.
+    confidence : float
+        Minimum satisfaction probability (e.g., 0.90 for 90%).
+
+    Examples
+    --------
+    >>> goal = TerminalGoalConfig(
+    ...     account="Retirement",
+    ...     threshold=20_000_000,
+    ...     confidence=0.90
+    ... )
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    account: str = Field(
+        min_length=1,
+        max_length=50,
+        description="Target account name"
+    )
+    threshold: float = Field(
+        gt=0,
+        description="Minimum required terminal wealth"
+    )
+    confidence: float = Field(
+        gt=0,
+        lt=1,
+        description="Minimum satisfaction probability (e.g., 0.90)"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Scenario Configuration
+# ---------------------------------------------------------------------------
+
+class ScenarioConfig(BaseModel):
+    """
+    Configuration for a complete optimization scenario.
+
+    A scenario combines a financial model (profile) with goals and withdrawals
+    for optimization. This enables saving and loading complete "what-if"
+    scenarios for comparison and reproducibility.
+
+    Attributes
+    ----------
+    name : str
+        Human-readable scenario name (e.g., "Conservative", "With House Purchase").
+    description : str
+        Optional description of the scenario purpose.
+    model_path : str, optional
+        Path to the FinancialModel JSON file (profile).
+        If None, the scenario must be used with an in-memory model.
+    start_date : datetime.date
+        Simulation start date for goal/withdrawal resolution.
+    intermediate_goals : List[IntermediateGoalConfig]
+        List of intermediate checkpoint goals.
+    terminal_goals : List[TerminalGoalConfig]
+        List of terminal (end-of-horizon) goals.
+    withdrawals : WithdrawalConfig, optional
+        Scheduled and stochastic withdrawals.
+    simulation : SimulationConfig
+        Monte Carlo simulation parameters (n_sims, seed, etc.).
+    optimization : OptimizationConfig
+        Optimization parameters (T_max, solver, objective, etc.).
+
+    Examples
+    --------
+    >>> from datetime import date
+    >>> scenario = ScenarioConfig(
+    ...     name="House Purchase Scenario",
+    ...     description="Planning for apartment down payment in 2026",
+    ...     start_date=date(2025, 1, 1),
+    ...     intermediate_goals=[
+    ...         IntermediateGoalConfig(
+    ...             account="Savings", threshold=3_000_000,
+    ...             confidence=0.90, month=12
+    ...         )
+    ...     ],
+    ...     terminal_goals=[
+    ...         TerminalGoalConfig(
+    ...             account="Investment", threshold=10_000_000,
+    ...             confidence=0.80
+    ...         )
+    ...     ]
+    ... )
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    name: str = Field(
+        min_length=1,
+        max_length=100,
+        description="Scenario name"
+    )
+    description: str = Field(
+        default="",
+        max_length=500,
+        description="Scenario description"
+    )
+    model_path: Optional[str] = Field(
+        default=None,
+        description="Path to FinancialModel JSON file (profile)"
+    )
+    start_date: datetime.date = Field(
+        description="Simulation start date"
+    )
+    intermediate_goals: List[IntermediateGoalConfig] = Field(
+        default_factory=list,
+        description="Intermediate checkpoint goals"
+    )
+    terminal_goals: List[TerminalGoalConfig] = Field(
+        default_factory=list,
+        description="Terminal (end-of-horizon) goals"
+    )
+    withdrawals: Optional[WithdrawalConfig] = Field(
+        default=None,
+        description="Withdrawal schedule (scheduled + stochastic)"
+    )
+    simulation: SimulationConfig = Field(
+        default_factory=SimulationConfig,
+        description="Simulation parameters"
+    )
+    optimization: OptimizationConfig = Field(
+        default_factory=OptimizationConfig,
+        description="Optimization parameters"
+    )
+
+    @field_validator("intermediate_goals", "terminal_goals")
+    @classmethod
+    def validate_goals_not_empty(cls, v, info):
+        """Warn if no goals specified (valid but unusual)."""
+        # Both can be empty, but at least one should have goals
+        # This is just a soft validation - we allow empty for flexibility
+        return v
 
 
 # ---------------------------------------------------------------------------

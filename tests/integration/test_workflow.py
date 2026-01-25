@@ -137,7 +137,7 @@ class TestOptimizationIntegration:
                 T=T,
                 A=A,
                 R=R,
-                W0=W0,
+                initial_wealth=W0,
                 goal_set=goal_set,
             )
 
