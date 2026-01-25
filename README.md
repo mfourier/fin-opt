@@ -64,7 +64,6 @@ The key insight: Using **CVaR reformulation** (Rockafellar & Uryasev, 2000), non
 
 ### Allocation Analysis with Investment Gains
 ![Allocation Analysis](docs/images/allocation_analysis.png)
-*Capital invested vs wealth decomposition: $23.3M contributions → $27.9M final wealth (+19.7%)*
 
 ---
 
