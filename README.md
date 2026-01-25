@@ -265,7 +265,7 @@ $$
 where:
 
 $$
-\text{CVaR}_\varepsilon(L) = \min_{\gamma} \left\{ \gamma + \frac{1}{\varepsilon N}\sum_{i=1}^N [L_i - \gamma]_+ \right\}
+\text{CVaR}_\varepsilon(L) = \min_{\gamma} { \gamma + \frac{1}{\varepsilon N}\sum_{i=1}^N [L_i - \gamma]_+ }
 $$
 
 **Epigraphic form** (LP-compatible):
