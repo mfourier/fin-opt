@@ -60,6 +60,7 @@ import pandas as pd
 from matplotlib.ticker import FuncFormatter
 
 from .exceptions import ValidationError
+from .types import MonthlyContributionDict, PlotColorsDict
 # Reuse common utilities
 from .utils import (
     check_non_negative,
@@ -714,7 +715,7 @@ class IncomeModel:
     variable: Optional[VariableIncome] = None
     name_fixed: str = field(default="fixed", init=True)
     name_variable: str = field(default="variable", init=True)
-    monthly_contribution: Optional[dict] = None
+    monthly_contribution: Optional[MonthlyContributionDict] = None
 
     def __post_init__(self) -> None:
         """Validate that at least one income stream is provided."""
@@ -1047,7 +1048,7 @@ class IncomeModel:
         trajectory_alpha: float = 0.07,
         confidence: float = 0.9,
         n_simulations: int = 500,
-        colors: dict | None = None,
+        colors: Optional[PlotColorsDict] = None,
     ):
         """
         Plot projected monthly income streams (fixed, variable, total) with optional Monte Carlo trajectories and confidence bands.
@@ -1372,7 +1373,7 @@ class IncomeModel:
         ylabel: str = "Total Contribution (CLP)",
         save_path: Optional[str] = None,
         return_fig_ax: bool = False,
-        colors: dict | None = None,
+        colors: Optional[PlotColorsDict] = None,
         show_trajectories: bool = True,
         show_confidence_band: bool = False,
         trajectory_alpha: float = 0.08,
@@ -1582,7 +1583,7 @@ class IncomeModel:
         trajectory_alpha: float = 0.08,
         confidence: float = 0.9,
         n_simulations: int = 500,
-        colors: dict | None = None,
+        colors: Optional[PlotColorsDict] = None,
     ):
         """
         Unified plot wrapper to call either `plot_income` or `plot_contributions`.

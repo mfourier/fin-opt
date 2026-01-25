@@ -71,6 +71,9 @@ from .config import (
     IncomeConfig,
     FixedIncomeConfig,
     VariableIncomeConfig,
+    WithdrawalEventConfig,
+    StochasticWithdrawalConfig,
+    WithdrawalConfig,
 )
 from .serialization import (
     save_model,
@@ -81,10 +84,51 @@ from .serialization import (
     account_from_dict,
     income_to_dict,
     income_from_dict,
+    withdrawal_to_dict,
+    withdrawal_from_dict,
+    SCHEMA_VERSION,
 )
 
 # Utilities
 from . import utils
+
+# Type definitions
+from .types import (
+    ReturnStrategyDict,
+    AnnualParamsDict,
+    MonthlyContributionDict,
+    SimulationResultDict,
+    GoalMetricsDict,
+    DiagnosticsDict,
+    PlotColorsDict,
+)
+
+# Constants
+from .constants import (
+    DEFAULT_N_SIMS,
+    DEFAULT_N_SIMS_OPTIMIZATION,
+    DEFAULT_N_SIMS_PLOTTING,
+    DEFAULT_SEED,
+    DEFAULT_T_MAX,
+    DEFAULT_T_MIN,
+    DEFAULT_SOLVER,
+    DEFAULT_OBJECTIVE,
+    DEFAULT_TOLERANCE,
+    DEFAULT_MAX_ITERS,
+    DEFAULT_WITHDRAWAL_EPSILON,
+    DEFAULT_FIGSIZE,
+    DEFAULT_FIGSIZE_WIDE,
+    DEFAULT_FIGSIZE_TALL,
+    DEFAULT_ALPHA_TRAJECTORIES,
+    DEFAULT_ALPHA_BANDS,
+    DEFAULT_LINEWIDTH,
+    DEFAULT_LINEWIDTH_THICK,
+    DEFAULT_FIXED_CONTRIBUTION_RATE,
+    DEFAULT_VARIABLE_CONTRIBUTION_RATE,
+    MONTHS_PER_YEAR,
+    DEFAULT_CONFIDENCE_LEVELS,
+    DEFAULT_GOAL_CONFIDENCE,
+)
 
 # Exceptions
 from .exceptions import (
@@ -136,6 +180,9 @@ __all__ = [
     "IncomeConfig",
     "FixedIncomeConfig",
     "VariableIncomeConfig",
+    "WithdrawalEventConfig",
+    "StochasticWithdrawalConfig",
+    "WithdrawalConfig",
     # Serialization
     "save_model",
     "load_model",
@@ -145,6 +192,9 @@ __all__ = [
     "account_from_dict",
     "income_to_dict",
     "income_from_dict",
+    "withdrawal_to_dict",
+    "withdrawal_from_dict",
+    "SCHEMA_VERSION",
     # Optimization (lazy loaded)
     "CVaROptimizer",
     "SAAOptimizer",
@@ -152,6 +202,38 @@ __all__ = [
     "OptimizationResult",
     # Utilities
     "utils",
+    # Types
+    "ReturnStrategyDict",
+    "AnnualParamsDict",
+    "MonthlyContributionDict",
+    "SimulationResultDict",
+    "GoalMetricsDict",
+    "DiagnosticsDict",
+    "PlotColorsDict",
+    # Constants
+    "DEFAULT_N_SIMS",
+    "DEFAULT_N_SIMS_OPTIMIZATION",
+    "DEFAULT_N_SIMS_PLOTTING",
+    "DEFAULT_SEED",
+    "DEFAULT_T_MAX",
+    "DEFAULT_T_MIN",
+    "DEFAULT_SOLVER",
+    "DEFAULT_OBJECTIVE",
+    "DEFAULT_TOLERANCE",
+    "DEFAULT_MAX_ITERS",
+    "DEFAULT_WITHDRAWAL_EPSILON",
+    "DEFAULT_FIGSIZE",
+    "DEFAULT_FIGSIZE_WIDE",
+    "DEFAULT_FIGSIZE_TALL",
+    "DEFAULT_ALPHA_TRAJECTORIES",
+    "DEFAULT_ALPHA_BANDS",
+    "DEFAULT_LINEWIDTH",
+    "DEFAULT_LINEWIDTH_THICK",
+    "DEFAULT_FIXED_CONTRIBUTION_RATE",
+    "DEFAULT_VARIABLE_CONTRIBUTION_RATE",
+    "MONTHS_PER_YEAR",
+    "DEFAULT_CONFIDENCE_LEVELS",
+    "DEFAULT_GOAL_CONFIDENCE",
     # Exceptions
     "FinOptError",
     "ConfigurationError",

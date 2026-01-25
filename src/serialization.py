@@ -53,6 +53,9 @@ from .config import (
     IncomeConfig,
     FixedIncomeConfig,
     VariableIncomeConfig,
+    WithdrawalEventConfig,
+    StochasticWithdrawalConfig,
+    WithdrawalConfig,
 )
 
 if TYPE_CHECKING:
@@ -60,6 +63,7 @@ if TYPE_CHECKING:
     from .portfolio import Account
     from .income import IncomeModel, FixedIncome, VariableIncome
     from .optimization import OptimizationResult
+    from .withdrawal import WithdrawalEvent, StochasticWithdrawal, WithdrawalModel, WithdrawalSchedule
 
 __all__ = [
     "save_model",
@@ -70,6 +74,9 @@ __all__ = [
     "account_from_dict",
     "income_to_dict",
     "income_from_dict",
+    "withdrawal_to_dict",
+    "withdrawal_from_dict",
+    "SCHEMA_VERSION",
 ]
 
 
@@ -77,7 +84,7 @@ __all__ = [
 # Schema Version
 # ---------------------------------------------------------------------------
 
-SCHEMA_VERSION = "0.1.0"
+SCHEMA_VERSION = "0.2.0"
 
 
 # ---------------------------------------------------------------------------
@@ -254,6 +261,165 @@ def income_from_dict(data: Dict[str, Any]) -> IncomeModel:
         fixed=fixed,
         variable=variable,
         monthly_contribution=monthly_contribution,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Withdrawal Serialization
+# ---------------------------------------------------------------------------
+
+def withdrawal_to_dict(withdrawal_model: WithdrawalModel) -> Dict[str, Any]:
+    """
+    Convert WithdrawalModel to dictionary representation.
+
+    Parameters
+    ----------
+    withdrawal_model : WithdrawalModel
+        Withdrawal model instance to serialize
+
+    Returns
+    -------
+    dict
+        Dictionary with withdrawal configuration containing:
+        - scheduled: list of WithdrawalEvent dicts
+        - stochastic: list of StochasticWithdrawal dicts
+
+    Examples
+    --------
+    >>> from finopt.withdrawal import WithdrawalModel, WithdrawalSchedule, WithdrawalEvent
+    >>> from datetime import date
+    >>> schedule = WithdrawalSchedule([WithdrawalEvent("Account1", 100000, date(2025, 6, 1))])
+    >>> model = WithdrawalModel(scheduled=schedule)
+    >>> withdrawal_to_dict(model)
+    {'scheduled': [{'account': 'Account1', 'amount': 100000.0, 'date': '2025-06-01'}], 'stochastic': []}
+    """
+    result: Dict[str, Any] = {
+        "scheduled": [],
+        "stochastic": [],
+    }
+
+    # Serialize scheduled withdrawals
+    if withdrawal_model.scheduled is not None:
+        for event in withdrawal_model.scheduled.events:
+            event_dict = {
+                "account": event.account,
+                "amount": event.amount,
+                "date": event.date.isoformat(),
+            }
+            if event.description:
+                event_dict["description"] = event.description
+            result["scheduled"].append(event_dict)
+
+    # Serialize stochastic withdrawals
+    if withdrawal_model.stochastic:
+        for sw in withdrawal_model.stochastic:
+            sw_dict: Dict[str, Any] = {
+                "account": sw.account,
+                "base_amount": sw.base_amount,
+                "sigma": sw.sigma,
+                "floor": sw.floor,
+            }
+            # Include either month or date (mutually exclusive)
+            if sw.month is not None:
+                sw_dict["month"] = sw.month
+            elif sw.date is not None:
+                sw_dict["date"] = sw.date.isoformat()
+
+            if sw.cap is not None:
+                sw_dict["cap"] = sw.cap
+            if sw.seed is not None:
+                sw_dict["seed"] = sw.seed
+            result["stochastic"].append(sw_dict)
+
+    return result
+
+
+def withdrawal_from_dict(data: Dict[str, Any]) -> WithdrawalModel:
+    """
+    Create WithdrawalModel from dictionary representation.
+
+    Parameters
+    ----------
+    data : dict
+        Dictionary with withdrawal configuration
+
+    Returns
+    -------
+    WithdrawalModel
+        Reconstructed withdrawal model instance
+
+    Examples
+    --------
+    >>> data = {
+    ...     "scheduled": [{"account": "Account1", "amount": 100000, "date": "2025-06-01"}],
+    ...     "stochastic": []
+    ... }
+    >>> model = withdrawal_from_dict(data)
+    >>> len(model.scheduled.events)
+    1
+    """
+    from .withdrawal import WithdrawalModel, WithdrawalSchedule, WithdrawalEvent, StochasticWithdrawal
+
+    # Validate using Pydantic config
+    # Convert date strings to date objects for validation
+    config_data: Dict[str, Any] = {"scheduled": [], "stochastic": []}
+
+    for event_data in data.get("scheduled", []):
+        config_data["scheduled"].append({
+            "account": event_data["account"],
+            "amount": event_data["amount"],
+            "withdrawal_date": date.fromisoformat(event_data["date"]),
+            "description": event_data.get("description", ""),
+        })
+
+    for sw_data in data.get("stochastic", []):
+        sw_config: Dict[str, Any] = {
+            "account": sw_data["account"],
+            "base_amount": sw_data["base_amount"],
+            "sigma": sw_data["sigma"],
+            "floor": sw_data.get("floor", 0.0),
+        }
+        if "month" in sw_data:
+            sw_config["month"] = sw_data["month"]
+        elif "date" in sw_data:
+            sw_config["withdrawal_date"] = date.fromisoformat(sw_data["date"])
+        if "cap" in sw_data:
+            sw_config["cap"] = sw_data["cap"]
+        if "seed" in sw_data:
+            sw_config["seed"] = sw_data["seed"]
+        config_data["stochastic"].append(sw_config)
+
+    # Validate with Pydantic
+    config = WithdrawalConfig.model_validate(config_data)
+
+    # Build WithdrawalSchedule
+    events = []
+    for event_config in config.scheduled:
+        events.append(WithdrawalEvent(
+            account=event_config.account,
+            amount=event_config.amount,
+            date=event_config.withdrawal_date,
+            description=event_config.description,
+        ))
+    scheduled = WithdrawalSchedule(events=events) if events else None
+
+    # Build StochasticWithdrawal list
+    stochastic = []
+    for sw_config in config.stochastic:
+        stochastic.append(StochasticWithdrawal(
+            account=sw_config.account,
+            base_amount=sw_config.base_amount,
+            sigma=sw_config.sigma,
+            month=sw_config.month,
+            date=sw_config.withdrawal_date,
+            floor=sw_config.floor,
+            cap=sw_config.cap,
+            seed=sw_config.seed,
+        ))
+
+    return WithdrawalModel(
+        scheduled=scheduled,
+        stochastic=stochastic if stochastic else None,
     )
 
 

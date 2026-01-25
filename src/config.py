@@ -32,7 +32,7 @@ Example
 
 from __future__ import annotations
 from typing import Optional, Literal, List
-from datetime import date
+import datetime
 from pathlib import Path
 
 from pydantic import BaseModel, Field, field_validator, ConfigDict
@@ -43,6 +43,9 @@ __all__ = [
     "OptimizationConfig",
     "IncomeConfig",
     "AccountConfig",
+    "WithdrawalEventConfig",
+    "StochasticWithdrawalConfig",
+    "WithdrawalConfig",
     "AppSettings",
 ]
 
@@ -342,6 +345,204 @@ class AccountConfig(BaseModel):
         default=0,
         ge=0,
         description="Initial account balance"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Withdrawal Configuration
+# ---------------------------------------------------------------------------
+
+class WithdrawalEventConfig(BaseModel):
+    """
+    Configuration for a single scheduled withdrawal event.
+
+    Attributes
+    ----------
+    account : str
+        Target account name (must match an account in the portfolio).
+    amount : float
+        Withdrawal amount (must be positive).
+    withdrawal_date : datetime.date
+        Calendar date of the withdrawal.
+    description : str, optional
+        Human-readable description.
+
+    Examples
+    --------
+    >>> from datetime import date
+    >>> event = WithdrawalEventConfig(
+    ...     account="Conservative",
+    ...     amount=500_000,
+    ...     withdrawal_date=date(2025, 6, 1),
+    ...     description="Emergency fund withdrawal"
+    ... )
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    account: str = Field(
+        min_length=1,
+        max_length=50,
+        description="Target account name"
+    )
+    amount: float = Field(
+        gt=0,
+        description="Withdrawal amount (must be positive)"
+    )
+    withdrawal_date: datetime.date = Field(
+        description="Calendar date of the withdrawal"
+    )
+    description: str = Field(
+        default="",
+        max_length=200,
+        description="Human-readable description"
+    )
+
+
+class StochasticWithdrawalConfig(BaseModel):
+    """
+    Configuration for a stochastic withdrawal with uncertainty.
+
+    Models withdrawals that have a base expected amount but may vary across
+    scenarios (e.g., variable medical expenses, emergency costs).
+
+    Attributes
+    ----------
+    account : str
+        Target account name.
+    base_amount : float
+        Expected withdrawal amount (mean of distribution).
+    sigma : float
+        Standard deviation of withdrawal amount.
+    month : int, optional
+        Month offset from start_date (1-indexed). Mutually exclusive with withdrawal_date.
+    withdrawal_date : datetime.date, optional
+        Calendar date of withdrawal. Mutually exclusive with month.
+    floor : float
+        Minimum withdrawal amount (default: 0.0).
+    cap : float, optional
+        Maximum withdrawal amount (None = no cap).
+    seed : int, optional
+        Random seed for reproducibility.
+
+    Examples
+    --------
+    >>> from datetime import date
+    >>> withdrawal = StochasticWithdrawalConfig(
+    ...     account="Conservative",
+    ...     base_amount=300_000,
+    ...     sigma=50_000,
+    ...     withdrawal_date=date(2025, 9, 1),
+    ...     floor=200_000,
+    ...     cap=500_000
+    ... )
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    account: str = Field(
+        min_length=1,
+        max_length=50,
+        description="Target account name"
+    )
+    base_amount: float = Field(
+        ge=0,
+        description="Expected withdrawal amount"
+    )
+    sigma: float = Field(
+        ge=0,
+        description="Standard deviation of withdrawal amount"
+    )
+    month: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Month offset (1-indexed). Mutually exclusive with withdrawal_date."
+    )
+    withdrawal_date: Optional[datetime.date] = Field(
+        default=None,
+        description="Calendar date. Mutually exclusive with month."
+    )
+    floor: float = Field(
+        default=0.0,
+        ge=0,
+        description="Minimum withdrawal amount"
+    )
+    cap: Optional[float] = Field(
+        default=None,
+        ge=0,
+        description="Maximum withdrawal amount (None = no cap)"
+    )
+    seed: Optional[int] = Field(
+        default=None,
+        description="Random seed for reproducibility"
+    )
+
+    @field_validator("cap")
+    @classmethod
+    def validate_cap(cls, v, info):
+        """Ensure cap >= floor if both specified."""
+        floor = info.data.get("floor", 0.0)
+        if v is not None and v < floor:
+            raise ValueError(f"cap ({v}) must be >= floor ({floor})")
+        return v
+
+    @field_validator("withdrawal_date")
+    @classmethod
+    def validate_month_date_exclusive(cls, v, info):
+        """Ensure month and withdrawal_date are mutually exclusive."""
+        month = info.data.get("month")
+        if v is not None and month is not None:
+            raise ValueError("Specify either month or withdrawal_date, not both")
+        if v is None and month is None:
+            raise ValueError("Must specify either month or withdrawal_date")
+        return v
+
+
+class WithdrawalConfig(BaseModel):
+    """
+    Combined configuration for all withdrawal types.
+
+    Groups scheduled events and stochastic withdrawals for serialization
+    and model configuration.
+
+    Attributes
+    ----------
+    scheduled : List[WithdrawalEventConfig]
+        List of deterministic scheduled withdrawals.
+    stochastic : List[StochasticWithdrawalConfig]
+        List of stochastic withdrawals with uncertainty.
+
+    Examples
+    --------
+    >>> from datetime import date
+    >>> config = WithdrawalConfig(
+    ...     scheduled=[
+    ...         WithdrawalEventConfig(
+    ...             account="Conservative",
+    ...             amount=500_000,
+    ...             withdrawal_date=date(2025, 6, 1)
+    ...         )
+    ...     ],
+    ...     stochastic=[
+    ...         StochasticWithdrawalConfig(
+    ...             account="Aggressive",
+    ...             base_amount=1_000_000,
+    ...             sigma=200_000,
+    ...             withdrawal_date=date(2026, 1, 1)
+    ...         )
+    ...     ]
+    ... )
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    scheduled: List[WithdrawalEventConfig] = Field(
+        default_factory=list,
+        description="Scheduled deterministic withdrawals"
+    )
+    stochastic: List[StochasticWithdrawalConfig] = Field(
+        default_factory=list,
+        description="Stochastic withdrawals with uncertainty"
     )
 
 
