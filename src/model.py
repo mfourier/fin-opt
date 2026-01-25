@@ -1137,14 +1137,15 @@ class FinancialModel:
         opt_result: OptimizationResult,
         n_sims: int = 500,
         seed: Optional[int] = None,
-        start: Optional[date] = None
+        start: Optional[date] = None,
+        withdrawals: Optional[WithdrawalModel] = None
     ) -> SimulationResult:
         """
         Simulate wealth using optimal policy from optimization.
-        
+
         Convenience wrapper that extracts X* and T from OptimizationResult
         and runs full Monte Carlo simulation for analysis/validation.
-        
+
         Parameters
         ----------
         opt_result : OptimizationResult
@@ -1156,18 +1157,21 @@ class FinancialModel:
             Random seed (independent from optimization seed).
         start : date, optional
             Calendar start date. If None, uses today.
-        
+        withdrawals : WithdrawalModel, optional
+            Withdrawal schedule to include in simulation. Should match
+            the withdrawals used during optimization for consistent results.
+
         Returns
         -------
         SimulationResult
             Full simulation output with X=opt_result.X.
-        
+
         Notes
         -----
         - Uses same T as optimization
         - Generates fresh scenarios (independent from optimization)
         - Useful for out-of-sample goal validation
-        
+
         Examples
         --------
         >>> opt_result = model.optimize(goals, optimizer, T_max=120, n_sims=500, seed=42)
@@ -1181,13 +1185,14 @@ class FinancialModel:
             raise TypeError(
                 f"opt_result must be OptimizationResult, got {type(opt_result)}"
             )
-        
+
         return self.simulate(
             T=opt_result.T,
             X=opt_result.X,
             n_sims=n_sims,
             seed=seed,
-            start=start if start is not None else date.today()
+            start=start if start is not None else date.today(),
+            withdrawals=withdrawals
         )
 
     def verify_goals(

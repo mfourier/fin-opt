@@ -436,7 +436,9 @@ class AllocationOptimizer(ABC):
             if violation_rate > goal.epsilon:
                 return False
 
-        # Check withdrawal feasibility constraints
+        # Check withdrawal feasibility constraints (Option 1: Conservative)
+        # Constraint: P(W_{t-1} >= D_{t-1}) >= 1 - epsilon
+        # Check wealth BEFORE withdrawal, not after
         if D is not None:
             # Expand D if deterministic
             if D.ndim == 2:
@@ -446,10 +448,12 @@ class AllocationOptimizer(ABC):
 
             for t in range(1, T + 1):
                 for m in range(M):
+                    # D_{t-1} = withdrawal during period t-1
                     D_tm = D_expanded[:, t - 1, m]
                     if np.any(D_tm > 0):
-                        W_t_m = W[:, t, m]
-                        violations = W_t_m < D_tm
+                        # W_{t-1} = wealth at START of period t-1 (before withdrawal)
+                        W_pre = W[:, t - 1, m]
+                        violations = W_pre < D_tm
                         violation_rate = violations.mean()
 
                         if violation_rate > withdrawal_epsilon:
@@ -764,8 +768,10 @@ class CVaROptimizer(AllocationOptimizer):
         constraint is violated within numerical precision (< 1e-6), the solution
         is projected back to the simplex via normalization.
 
-        Withdrawal feasibility constraints ensure sufficient wealth before each
-        withdrawal via CVaR reformulation: CVaR_eps(D_t^m - W_t^m) <= 0.
+        Withdrawal feasibility constraints (Option 1 - Conservative):
+        Ensures sufficient wealth BEFORE each withdrawal, without relying on
+        contributions: P(W_t >= D_t) >= 1 - epsilon.
+        CVaR reformulation: CVaR_eps(D_t - W_t) <= 0.
         Since D is a PARAMETER (not decision variable), convexity is preserved.
 
         Solver selection:
@@ -969,25 +975,27 @@ class CVaROptimizer(AllocationOptimizer):
                 gamma[goal] + cp.sum(z[goal]) / (goal.epsilon * n_sims) <= 0
             )
 
-        # 4. CVaR constraints for withdrawal feasibility
-        # Constraint: P(W_t^m >= D_t^m) >= 1 - withdrawal_epsilon
-        # CVaR form: CVaR_eps(D_t^m - W_t^m) <= 0
+        # 4. CVaR constraints for withdrawal feasibility (Option 1 - Conservative)
+        # For withdrawal D_t during period t, check wealth BEFORE withdrawal:
+        # Constraint: P(W_t >= D_t) >= 1 - withdrawal_epsilon
+        # CVaR form: CVaR_eps(D_t - W_t) <= 0
         gamma_withdrawal = {}
         z_withdrawal = {}
 
         if D_expanded is not None:
             for t in range(1, T + 1):
                 for m in range(M):
-                    # Withdrawal at month t-1 (0-indexed in D_expanded)
+                    # Withdrawal during period t-1 (0-indexed in D_expanded)
                     D_tm = D_expanded[:, t - 1, m]
 
                     # Only add constraint if there's a withdrawal at this (t, m)
                     if np.any(D_tm > 0):
-                        # Wealth at time t, account m (after contributions, before returns)
-                        W_t_m = build_wealth_affine(t, m)
+                        # Wealth at START of period t-1 (BEFORE withdrawal D_{t-1})
+                        # Option 1 (Conservative): P(W_{t-1} >= D_{t-1}) >= 1 - epsilon
+                        W_pre_withdrawal = build_wealth_affine(t - 1, m)
 
-                        # Shortfall: D_t^m - W_t^m (positive = cannot meet withdrawal)
-                        shortfall = D_tm - W_t_m
+                        # Shortfall: D_{t-1} - W_{t-1} (positive = cannot meet withdrawal)
+                        shortfall = D_tm - W_pre_withdrawal
 
                         # CVaR auxiliary variables for withdrawal
                         gamma_withdrawal[(t, m)] = cp.Variable(
@@ -1212,19 +1220,19 @@ class CVaROptimizer(AllocationOptimizer):
                     z_val = z_withdrawal[(t, m)].value
                     cvar_val = gamma_val + z_val.sum() / (withdrawal_epsilon * n_sims)
 
-                    # Compute wealth and withdrawal at this point
+                    # Compute wealth BEFORE withdrawal (at start of period t-1)
                     D_tm = D_expanded[:, t - 1, m]
-                    W_t_m_vals = compute_wealth_numpy(X_star, t, m)
-                    violations = W_t_m_vals < D_tm
+                    W_pre_vals = compute_wealth_numpy(X_star, t - 1, m)
+                    violations = W_pre_vals < D_tm
                     violation_rate = violations.mean()
 
                     status = "✓" if cvar_val <= 1e-4 else "⚠️"
                     acc_name = goal_set.accounts[m].display_name
-                    print(f"  {status} Month {t}, Account {m} ({acc_name}):")
-                    print(f"    Mean withdrawal: {D_tm.mean():>12,.0f}")
-                    print(f"    Mean wealth:     {W_t_m_vals.mean():>12,.0f}")
-                    print(f"    Violation rate:  {violation_rate:.2%} (max: {withdrawal_epsilon:.2%})")
-                    print(f"    CVaR value:      {cvar_val:>12,.2f} (target: ≤ 0)")
+                    print(f"  {status} Period {t-1}, Account {m} ({acc_name}):")
+                    print(f"    Withdrawal D_{t-1}: {D_tm.mean():>12,.0f}")
+                    print(f"    Wealth W_{t-1}:     {W_pre_vals.mean():>12,.0f}")
+                    print(f"    Violation rate:    {violation_rate:.2%} (max: {withdrawal_epsilon:.2%})")
+                    print(f"    CVaR value:        {cvar_val:>12,.2f} (target: ≤ 0)")
 
         # Exact feasibility check using base class validation
         feasible = self._check_feasibility(
