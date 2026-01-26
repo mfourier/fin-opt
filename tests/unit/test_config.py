@@ -155,16 +155,22 @@ class TestIncomeConfig:
         with pytest.raises(ValueError, match="12 factors"):
             VariableIncomeConfig(base=200_000, seasonality=[1.0, 1.0, 1.0])
 
-    def test_variable_income_seasonality_sum(self):
-        """Test seasonality factors must sum to ~12."""
-        # Valid - sums to 12
-        seasonality = [1.0] * 12
+    def test_variable_income_seasonality_values(self):
+        """Test seasonality factors must be non-negative (no sum constraint)."""
+        # Valid - any non-negative values work (seasonality is a multiplier)
+        seasonality = [0.5] * 12  # Sums to 6, but that's fine
         config = VariableIncomeConfig(base=200_000, seasonality=seasonality)
-        assert sum(config.seasonality) == pytest.approx(12.0)
+        assert len(config.seasonality) == 12
+        assert all(s >= 0 for s in config.seasonality)
 
-        # Invalid - sums to 6
-        with pytest.raises(ValueError, match="sum to 12"):
-            VariableIncomeConfig(base=200_000, seasonality=[0.5] * 12)
+        # Valid - zeros are allowed
+        seasonality_with_zeros = [0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 1.0, 1.0, 1.0]
+        config2 = VariableIncomeConfig(base=200_000, seasonality=seasonality_with_zeros)
+        assert len(config2.seasonality) == 12
+
+        # Invalid - negative values should raise error
+        with pytest.raises(ValueError, match="non-negative|negative|>= 0"):
+            VariableIncomeConfig(base=200_000, seasonality=[-1.0] + [1.0] * 11)
 
     def test_income_config_combined(self):
         """Test combined IncomeConfig."""

@@ -23,7 +23,7 @@ Design principles
 """
 
 from __future__ import annotations
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Union, Tuple
 
 import numpy as np
 import pandas as pd
@@ -100,31 +100,37 @@ class ReturnModel:
     """
     
     def __init__(
-        self, 
+        self,
         accounts: List[Account],
-        default_correlation: Optional[np.ndarray] = None
+        default_correlation: Optional[Union[np.ndarray, Dict[Tuple[str, ...], float]]] = None
     ):
         if not accounts:
             raise ValueError("accounts list cannot be empty")
-        
+
         M = len(accounts)
-        
-        # Default: uncorrelated accounts
+        self.accounts = accounts
+        self.M = M
+
+        # Process correlation: None, dict, or ndarray
         if default_correlation is None:
-            default_correlation = np.eye(M)
-        
-        if default_correlation.shape != (M, M):
+            correlation_matrix = np.eye(M)
+        elif isinstance(default_correlation, dict):
+            # Convert dict of groups to matrix
+            correlation_matrix = self._build_correlation_from_groups(default_correlation)
+        else:
+            # Assume ndarray
+            correlation_matrix = default_correlation
+
+        if correlation_matrix.shape != (M, M):
             raise ValueError(
-                f"default_correlation shape {default_correlation.shape} "
+                f"correlation shape {correlation_matrix.shape} "
                 f"does not match number of accounts {M}"
             )
-        
+
         # Validate correlation matrix
-        self._validate_correlation(default_correlation)
-        
-        self.accounts = accounts
-        self.default_correlation = default_correlation
-        self.M = M
+        self._validate_correlation(correlation_matrix)
+
+        self.default_correlation = correlation_matrix
         
         # Convert arithmetic parameters to log-normal parameters (precompute)
         self._mu_log = np.zeros(M)
@@ -148,14 +154,70 @@ class ReturnModel:
             raise ValueError("correlation matrix must be symmetric")
         if not np.allclose(np.diag(rho), 1.0):
             raise ValueError("correlation matrix diagonal must be 1.0")
-        
+
         eigvals = np.linalg.eigvalsh(rho)
         if np.any(eigvals < -1e-10):
             raise ValueError(
                 f"correlation matrix must be positive semi-definite "
                 f"(min eigenvalue: {eigvals.min():.6f})"
             )
-    
+
+    def _build_correlation_from_groups(
+        self,
+        groups: Dict[Tuple[str, ...], float]
+    ) -> np.ndarray:
+        """
+        Construye matriz de correlación desde grupos de cuentas.
+
+        Parameters
+        ----------
+        groups : Dict[Tuple[str, ...], float]
+            Correlaciones por grupo. Cada tupla puede tener 2+ cuentas.
+            - Tupla de 2: par simple, ej. {("A", "B"): 0.5}
+            - Tupla de 3+: todas las combinaciones, ej. {("A", "B", "C"): 0.6}
+              equivale a A↔B=0.6, A↔C=0.6, B↔C=0.6
+            - Grupos no especificados → 0.0
+            - Diagonal siempre = 1.0
+
+        Returns
+        -------
+        np.ndarray, shape (M, M)
+            Matriz de correlación válida.
+
+        Examples
+        --------
+        >>> groups = {("A", "B", "C"): 0.6, ("C", "D"): 0.4}
+        >>> # Resulta en: A↔B=0.6, A↔C=0.6, B↔C=0.6, C↔D=0.4
+        """
+        from itertools import combinations
+
+        name_to_idx = {acc.name: i for i, acc in enumerate(self.accounts)}
+
+        # Inicializar con identidad (diagonal=1, resto=0)
+        rho = np.eye(self.M)
+
+        for account_group, corr in groups.items():
+            # Validar que sea tupla con al menos 2 elementos
+            if len(account_group) < 2:
+                raise ValueError(f"Group must have at least 2 accounts, got {account_group}")
+
+            # Validar rango de correlación
+            if not -1.0 <= corr <= 1.0:
+                raise ValueError(f"Correlation must be in [-1, 1], got {corr} for {account_group}")
+
+            # Validar todos los nombres del grupo
+            for name in account_group:
+                if name not in name_to_idx:
+                    raise ValueError(f"Unknown account: '{name}'. Valid: {list(name_to_idx.keys())}")
+
+            # Generar todos los pares del grupo y asignar correlación
+            for name_a, name_b in combinations(account_group, 2):
+                i, j = name_to_idx[name_a], name_to_idx[name_b]
+                rho[i, j] = corr
+                rho[j, i] = corr
+
+        return rho
+
     def _build_covariance(self, correlation: np.ndarray) -> np.ndarray:
         """Build log-space covariance: Σ = D @ ρ @ D."""
         D = np.diag(self._sigma_log)
