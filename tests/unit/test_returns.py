@@ -323,5 +323,173 @@ class TestReturnModelEdgeCases:
         assert np.all(R > -1.0)
 
 
+# ============================================================================
+# RETURNMODEL CORRELATION FROM GROUPS TESTS
+# ============================================================================
+
+class TestCorrelationFromGroups:
+    """Tests for dict-based correlation groups in ReturnModel.__init__."""
+
+    @pytest.fixture
+    def accounts(self):
+        """Create test accounts."""
+        return [
+            Account.from_annual("Conservative", 0.04, 0.05),
+            Account.from_annual("Aggressive", 0.14, 0.15),
+        ]
+
+    def test_basic_pair(self, accounts):
+        """Two accounts with single pair."""
+        model = ReturnModel(accounts, default_correlation={
+            ("Conservative", "Aggressive"): 0.5
+        })
+        rho = model.default_correlation
+
+        assert rho.shape == (2, 2)
+        assert rho[0, 0] == 1.0
+        assert rho[1, 1] == 1.0
+        assert rho[0, 1] == 0.5
+        assert rho[1, 0] == 0.5  # Symmetric
+
+    def test_group_of_three(self):
+        """Group of 3 accounts sets all pairwise correlations."""
+        accounts = [
+            Account.from_annual("A", 0.08, 0.10),
+            Account.from_annual("B", 0.10, 0.15),
+            Account.from_annual("C", 0.12, 0.20),
+        ]
+        model = ReturnModel(accounts, default_correlation={
+            ("A", "B", "C"): 0.6  # Sets A↔B, A↔C, B↔C = 0.6
+        })
+
+        expected = np.array([
+            [1.0, 0.6, 0.6],
+            [0.6, 1.0, 0.6],
+            [0.6, 0.6, 1.0]
+        ])
+        np.testing.assert_array_almost_equal(model.default_correlation, expected)
+
+    def test_mixed_groups_and_pairs(self):
+        """Combination of groups and individual pairs."""
+        accounts = [
+            Account.from_annual("A", 0.08, 0.10),
+            Account.from_annual("B", 0.10, 0.15),
+            Account.from_annual("C", 0.12, 0.20),
+            Account.from_annual("D", 0.06, 0.08),
+        ]
+        model = ReturnModel(accounts, default_correlation={
+            ("A", "B", "C"): 0.6,  # A↔B, A↔C, B↔C = 0.6
+            ("C", "D"): 0.4,       # C↔D = 0.4
+            # A↔D, B↔D not specified → 0.0
+        })
+
+        expected = np.array([
+            [1.0, 0.6, 0.6, 0.0],
+            [0.6, 1.0, 0.6, 0.0],
+            [0.6, 0.6, 1.0, 0.4],
+            [0.0, 0.0, 0.4, 1.0]
+        ])
+        np.testing.assert_array_almost_equal(model.default_correlation, expected)
+
+    def test_empty_dict_gives_identity(self, accounts):
+        """Empty dict returns identity matrix."""
+        model = ReturnModel(accounts, default_correlation={})
+        np.testing.assert_array_equal(model.default_correlation, np.eye(2))
+
+    def test_order_in_tuple_does_not_matter(self, accounts):
+        """(A,B) and (B,A) produce same result."""
+        model1 = ReturnModel(accounts, default_correlation={
+            ("Conservative", "Aggressive"): 0.7
+        })
+        model2 = ReturnModel(accounts, default_correlation={
+            ("Aggressive", "Conservative"): 0.7
+        })
+        np.testing.assert_array_equal(
+            model1.default_correlation,
+            model2.default_correlation
+        )
+
+    def test_invalid_account_name_raises(self, accounts):
+        """Unknown account name raises ValueError."""
+        with pytest.raises(ValueError, match="Unknown account"):
+            ReturnModel(accounts, default_correlation={
+                ("Conservative", "Unknown"): 0.5
+            })
+
+    def test_correlation_out_of_range_raises(self, accounts):
+        """Correlation outside [-1, 1] raises ValueError."""
+        with pytest.raises(ValueError, match="must be in"):
+            ReturnModel(accounts, default_correlation={
+                ("Conservative", "Aggressive"): 1.5
+            })
+
+    def test_group_with_single_account_raises(self):
+        """Group with only 1 account raises ValueError."""
+        accounts = [
+            Account.from_annual("A", 0.08, 0.10),
+            Account.from_annual("B", 0.10, 0.15),
+        ]
+        with pytest.raises(ValueError, match="at least 2"):
+            ReturnModel(accounts, default_correlation={
+                ("A",): 0.5  # Invalid: only 1 account
+            })
+
+    def test_non_psd_matrix_raises(self):
+        """Correlation values that produce non-PSD matrix raise error."""
+        accounts = [
+            Account.from_annual("A", 0.08, 0.10),
+            Account.from_annual("B", 0.10, 0.15),
+            Account.from_annual("C", 0.12, 0.20),
+        ]
+        with pytest.raises(ValueError, match="positive semi-definite"):
+            ReturnModel(accounts, default_correlation={
+                ("A", "B"): 0.9,
+                ("B", "C"): 0.9,
+                ("A", "C"): -0.9,
+            })
+
+    def test_backward_compatible_with_ndarray(self, accounts):
+        """Existing ndarray API still works."""
+        corr = np.array([[1.0, 0.3], [0.3, 1.0]])
+        model = ReturnModel(accounts, default_correlation=corr)
+        np.testing.assert_array_equal(model.default_correlation, corr)
+
+    def test_large_group_scalability(self):
+        """Large group (5 accounts) with single correlation."""
+        accounts = [Account.from_annual(f"Acc{i}", 0.08 + i*0.01, 0.10 + i*0.02)
+                    for i in range(5)]
+        model = ReturnModel(accounts, default_correlation={
+            ("Acc0", "Acc1", "Acc2", "Acc3", "Acc4"): 0.5
+        })
+
+        # All off-diagonal correlations should be 0.5
+        rho = model.default_correlation
+        for i in range(5):
+            for j in range(5):
+                if i == j:
+                    assert rho[i, j] == 1.0
+                else:
+                    assert rho[i, j] == 0.5
+
+    def test_generates_correlated_returns(self):
+        """Dict correlation produces actually correlated returns."""
+        accounts = [
+            Account.from_annual("A", 0.08, 0.10),
+            Account.from_annual("B", 0.08, 0.10),
+        ]
+        model = ReturnModel(accounts, default_correlation={
+            ("A", "B"): 0.8
+        })
+
+        R = model.generate(T=100, n_sims=1000, seed=42)
+
+        # Compute empirical correlation
+        R_flat = R.reshape(-1, 2)
+        empirical_corr = np.corrcoef(R_flat[:, 0], R_flat[:, 1])[0, 1]
+
+        # Should be significantly positive (close to 0.8)
+        assert empirical_corr > 0.6
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

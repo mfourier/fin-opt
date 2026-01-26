@@ -793,7 +793,7 @@ def load_scenario(
 
         model = FinancialModel(income=income, accounts=accounts)
         if correlation is not None and model.returns is not None:
-            model.returns.correlation = correlation
+            model.returns.default_correlation = correlation
 
         result["model"] = model
 
@@ -937,7 +937,7 @@ def load_model(path: Path) -> FinancialModel:
 
     # Set correlation if provided
     if correlation is not None and model.returns is not None:
-        model.returns.correlation = correlation
+        model.returns.default_correlation = correlation
 
     return model
 
