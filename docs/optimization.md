@@ -81,10 +81,12 @@ $$
 
 **Example:**
 ```python
+from datetime import date
+
 goals = [
-    IntermediateGoal(month=12, account="Emergency", 
+    IntermediateGoal(date=date(2026, 1, 1), account="Emergency",
                      threshold=5_500_000, confidence=0.90),
-    TerminalGoal(account="Housing", 
+    TerminalGoal(account="Housing",
                  threshold=20_000_000, confidence=0.90)
 ]
 ```

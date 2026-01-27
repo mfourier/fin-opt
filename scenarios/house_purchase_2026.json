@@ -9,13 +9,13 @@
       "account": "Vivienda",
       "threshold": 3100000,
       "confidence": 0.5,
-      "month": 12
+      "date": "2026-09-01"
     },
     {
       "account": "Clooney",
       "threshold": 3000000,
       "confidence": 0.5,
-      "month": 10
+      "date": "2026-09-01"
     }
   ],
   "terminal_goals": [

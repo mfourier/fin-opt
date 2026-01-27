@@ -568,12 +568,8 @@ class IntermediateGoalConfig(BaseModel):
         Minimum required wealth at the target time.
     confidence : float
         Minimum satisfaction probability (e.g., 0.90 for 90%).
-    month : int, optional
-        Target month as offset from start_date (1-indexed).
-        Mutually exclusive with goal_date.
-    goal_date : datetime.date, optional
-        Target date (will be converted to month offset).
-        Mutually exclusive with month.
+    goal_date : datetime.date
+        Target date for the goal.
 
     Examples
     --------
@@ -582,7 +578,7 @@ class IntermediateGoalConfig(BaseModel):
     ...     account="Emergency",
     ...     threshold=5_000_000,
     ...     confidence=0.90,
-    ...     month=6
+    ...     goal_date=date(2025, 7, 1)
     ... )
     """
 
@@ -602,26 +598,9 @@ class IntermediateGoalConfig(BaseModel):
         lt=1,
         description="Minimum satisfaction probability (e.g., 0.90)"
     )
-    month: Optional[int] = Field(
-        default=None,
-        ge=1,
-        description="Target month offset (1-indexed). Mutually exclusive with goal_date."
+    goal_date: datetime.date = Field(
+        description="Target date for the goal"
     )
-    goal_date: Optional[datetime.date] = Field(
-        default=None,
-        description="Target date. Mutually exclusive with month."
-    )
-
-    @field_validator("goal_date")
-    @classmethod
-    def validate_month_date_exclusive(cls, v, info):
-        """Ensure month and goal_date are mutually exclusive."""
-        month = info.data.get("month")
-        if v is not None and month is not None:
-            raise ValueError("Specify either month or goal_date, not both")
-        if v is None and month is None:
-            raise ValueError("Must specify either month or goal_date")
-        return v
 
 
 class TerminalGoalConfig(BaseModel):

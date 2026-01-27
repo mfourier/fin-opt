@@ -39,7 +39,7 @@ Example
 ... ]
 >>> 
 >>> goals = [
-...     IntermediateGoal(month=6, account="Emergency", 
+...     IntermediateGoal(date=date(2025, 7, 1), account="Emergency",
 ...                     threshold=5_500_000, confidence=0.90),
 ...     TerminalGoal(account="Emergency", threshold=20_000_000, confidence=0.90),
 ...     TerminalGoal(account="Housing", threshold=7_000_000, confidence=0.90)
@@ -78,13 +78,13 @@ __all__ = [
 class IntermediateGoal:
     """
     Intermediate financial goal at fixed calendar time.
-    
+
     Represents checkpoint constraint evaluated at fixed month t_fixed:
         ℙ(W_{t_fixed}^m ≥ threshold) ≥ confidence
-    
+
     The target month is independent of the optimization horizon T.
     Used for liquidity requirements, planned expenses, or milestone tracking.
-    
+
     Parameters
     ----------
     account : int or str
@@ -94,74 +94,52 @@ class IntermediateGoal:
     confidence : float
         Minimum satisfaction probability, must be ∈ (0, 1)
         Example: 0.95 means "95% chance of meeting threshold"
-    month : int, optional
-        Target month as offset from start_date (1-indexed: 1 = end of first month)
-        Mutually exclusive with `date`. If both None, raises ValueError.
-    date : datetime.date, optional
-        Target date (will be converted to month offset via resolve_month)
-        Mutually exclusive with `month`. If both None, raises ValueError.
-    
+    date : datetime.date
+        Target date for the goal. Will be converted to month offset via resolve_month.
+
     Notes
     -----
-    - Exactly one of `month` or `date` must be provided
     - Month resolution: date → months since start_date (rounded up to end-of-month)
     - Epsilon tolerance: ε = 1 - confidence
     - Used in optimization as fixed-time constraint W_t ≥ b
-    
+
     Examples
     --------
-    >>> # Month-based specification
-    >>> g1 = IntermediateGoal(month=6, account="Emergency", 
+    >>> from datetime import date
+    >>> g = IntermediateGoal(date=date(2025, 7, 1), account="Emergency",
     ...                      threshold=5_500_000, confidence=0.90)
-    >>> 
-    >>> # Date-based specification
-    >>> g2 = IntermediateGoal(date=date(2025, 7, 1), account="Emergency",
-    ...                      threshold=5_500_000, confidence=0.90)
-    >>> g2.resolve_month(date(2025, 1, 1))
+    >>> g.resolve_month(date(2025, 1, 1))
     6
     """
     account: Union[int, str]
     threshold: float
     confidence: float
-    month: Optional[int] = None
-    date: Optional[date] = None
+    date: date
     
     def __post_init__(self):
         """Validate intermediate goal parameters."""
-        if self.month is None and self.date is None:
-            raise ValueError(
-                "IntermediateGoal requires exactly one of 'month' or 'date'"
-            )
-        if self.month is not None and self.date is not None:
-            raise ValueError(
-                "IntermediateGoal: 'month' and 'date' are mutually exclusive"
-            )
-        
-        if self.month is not None and self.month < 1:
-            raise ValueError(f"month must be ≥ 1, got {self.month}")
-        
         if not (0 < self.confidence < 1):
             raise ValueError(
                 f"confidence must be ∈ (0, 1), got {self.confidence}"
             )
-        
+
         if self.threshold <= 0:
             raise ValueError(f"threshold must be > 0, got {self.threshold}")
     
     def resolve_month(self, start_date: date) -> int:
         """
         Convert date to month offset from start_date.
-        
+
         Parameters
         ----------
         start_date : datetime.date
             Simulation start date for offset calculation
-        
+
         Returns
         -------
         int
             Month offset (1-indexed: 1 = end of first month)
-        
+
         Examples
         --------
         >>> goal = IntermediateGoal(date=date(2025, 7, 1), account=0,
@@ -169,15 +147,12 @@ class IntermediateGoal:
         >>> goal.resolve_month(date(2025, 1, 1))
         6
         """
-        if self.month is not None:
-            return self.month
-        
         # Calculate months between dates
         delta_months = (
             (self.date.year - start_date.year) * 12
             + (self.date.month - start_date.month)
         )
-        
+
         # Round up to end-of-month convention (minimum 1)
         return max(1, delta_months)
     
@@ -188,13 +163,8 @@ class IntermediateGoal:
     
     def __repr__(self) -> str:
         """Readable representation."""
-        if self.month is not None:
-            time_str = f"month={self.month}"
-        else:
-            time_str = f"date={self.date.isoformat()}"
-        
         return (
-            f"IntermediateGoal({time_str}, account={self.account!r}, "
+            f"IntermediateGoal(date={self.date.isoformat()}, account={self.account!r}, "
             f"threshold={self.threshold:,.0f}, confidence={self.confidence:.2%})"
         )
 
@@ -322,14 +292,15 @@ class GoalSet:
     ...     Account.from_annual("Housing", 0.07, 0.12)
     ... ]
     >>> 
+    >>> from datetime import date
     >>> goals = [
-    ...     IntermediateGoal(month=6, account="Emergency", 
+    ...     IntermediateGoal(date=date(2025, 7, 1), account="Emergency",
     ...                     threshold=5_500_000, confidence=0.90),
-    ...     TerminalGoal(account="Emergency", threshold=20_000_000, 
+    ...     TerminalGoal(account="Emergency", threshold=20_000_000,
     ...                 confidence=0.90),
     ...     TerminalGoal(account="Housing", threshold=7_000_000, confidence=0.90)
     ... ]
-    >>> 
+    >>>
     >>> goal_set = GoalSet(goals, accounts, date(2025, 1, 1))
     >>> goal_set.T_min  # From intermediate goal
     6
@@ -719,22 +690,23 @@ def check_goals(
     Raises
     ------
     ValueError
-        If goal.month > result.T (goal beyond simulation horizon)
+        If goal date resolves to month > result.T (goal beyond simulation horizon)
     
     Examples
     --------
+    >>> from datetime import date
     >>> from finopt.src.portfolio import Account
     >>> accounts = [
     ...     Account.from_annual("Emergency", 0.04, 0.05),
     ...     Account.from_annual("Housing", 0.07, 0.12)
     ... ]
-    >>> 
+    >>>
     >>> goals = [
-    ...     IntermediateGoal(month=12, account="Emergency", 
+    ...     IntermediateGoal(date=date(2026, 1, 1), account="Emergency",
     ...                     threshold=2_000_000, confidence=0.95),
     ...     TerminalGoal(account="Housing", threshold=15_000_000, confidence=0.90)
     ... ]
-    >>> 
+    >>>
     >>> result = model.simulate(T=24, X=X, n_sims=500, seed=42)
     >>> status = check_goals(result, goals, accounts, date(2025, 1, 1))
     >>> 
@@ -842,7 +814,7 @@ def goal_progress(
     >>> progress = goal_progress(result, goals, accounts, date(2025, 1, 1))
     >>> 
     >>> for goal, pct in progress.items():
-    ...     print(f"{goal.account} @ {goal.month if hasattr(goal, 'month') else 'T'}: "
+    ...     print(f"{goal.account} @ {goal.date if hasattr(goal, 'date') else 'T'}: "
     ...           f"{pct:.1%} progress")
     """
     goal_set = GoalSet(goals, accounts, start_date)

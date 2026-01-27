@@ -239,13 +239,13 @@ def allocation_policy(months) -> np.ndarray:
 @pytest.fixture
 def intermediate_goal() -> IntermediateGoal:
     """
-    Intermediate goal: Emergency fund by month 6.
+    Intermediate goal: Emergency fund by July 2025.
 
     Target: 3,000,000 CLP
     Confidence: 80%
     """
     return IntermediateGoal(
-        month=6,
+        date=date(2025, 7, 1),
         account="Conservative",
         threshold=3_000_000,
         confidence=0.80,

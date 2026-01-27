@@ -19,36 +19,24 @@ from src.goals import IntermediateGoal, TerminalGoal, GoalSet
 class TestIntermediateGoalInstantiation:
     """Test IntermediateGoal initialization."""
 
-    def test_basic_instantiation_with_month(self):
-        """Test basic IntermediateGoal with month."""
+    def test_basic_instantiation(self):
+        """Test basic IntermediateGoal with date."""
         goal = IntermediateGoal(
-            month=6,
+            date=date(2025, 7, 1),
             account="Conservative",
             threshold=5_000_000,
             confidence=0.80
         )
 
-        assert goal.month == 6
+        assert goal.date == date(2025, 7, 1)
         assert goal.account == "Conservative"
         assert goal.threshold == 5_000_000
         assert goal.confidence == 0.80
 
-    def test_instantiation_with_date(self):
-        """Test IntermediateGoal with date."""
-        goal = IntermediateGoal(
-            date=date(2025, 7, 1),
-            account="Emergency",
-            threshold=3_000_000,
-            confidence=0.90
-        )
-
-        assert goal.date == date(2025, 7, 1)
-        assert goal.month is None
-
     def test_account_by_index(self):
         """Test IntermediateGoal with account index."""
         goal = IntermediateGoal(
-            month=12,
+            date=date(2026, 1, 1),
             account=0,
             threshold=10_000_000,
             confidence=0.85
@@ -59,7 +47,7 @@ class TestIntermediateGoalInstantiation:
     def test_frozen_dataclass(self):
         """Test that IntermediateGoal is immutable."""
         goal = IntermediateGoal(
-            month=6,
+            date=date(2025, 7, 1),
             account="Test",
             threshold=1_000_000,
             confidence=0.80
@@ -75,7 +63,7 @@ class TestIntermediateGoalValidation:
         """Test that confidence < 0 raises ValueError."""
         with pytest.raises(ValueError, match="confidence"):
             IntermediateGoal(
-                month=6,
+                date=date(2025, 7, 1),
                 account="Test",
                 threshold=1_000_000,
                 confidence=-0.1
@@ -85,7 +73,7 @@ class TestIntermediateGoalValidation:
         """Test that confidence > 1 raises ValueError."""
         with pytest.raises(ValueError, match="confidence"):
             IntermediateGoal(
-                month=6,
+                date=date(2025, 7, 1),
                 account="Test",
                 threshold=1_000_000,
                 confidence=1.5
@@ -95,19 +83,9 @@ class TestIntermediateGoalValidation:
         """Test that negative threshold raises ValueError."""
         with pytest.raises(ValueError, match="threshold"):
             IntermediateGoal(
-                month=6,
+                date=date(2025, 7, 1),
                 account="Test",
                 threshold=-1_000_000,
-                confidence=0.80
-            )
-
-    def test_zero_month_raises(self):
-        """Test that month <= 0 raises ValueError."""
-        with pytest.raises(ValueError, match="month"):
-            IntermediateGoal(
-                month=0,
-                account="Test",
-                threshold=1_000_000,
                 confidence=0.80
             )
 
@@ -115,20 +93,8 @@ class TestIntermediateGoalValidation:
 class TestIntermediateGoalResolveMonth:
     """Test IntermediateGoal.resolve_month() method."""
 
-    def test_resolve_month_from_month(self):
-        """Test resolve_month when month is provided."""
-        goal = IntermediateGoal(
-            month=6,
-            account="Test",
-            threshold=1_000_000,
-            confidence=0.80
-        )
-
-        resolved = goal.resolve_month(start_date=date(2025, 1, 1))
-        assert resolved == 6
-
-    def test_resolve_month_from_date(self):
-        """Test resolve_month when date is provided."""
+    def test_resolve_month_same_year(self):
+        """Test resolve_month for date in same year."""
         goal = IntermediateGoal(
             date=date(2025, 7, 1),
             account="Test",
@@ -138,6 +104,30 @@ class TestIntermediateGoalResolveMonth:
 
         resolved = goal.resolve_month(start_date=date(2025, 1, 1))
         assert resolved == 6  # July is 6 months from January
+
+    def test_resolve_month_cross_year(self):
+        """Test resolve_month for date crossing year boundary."""
+        goal = IntermediateGoal(
+            date=date(2026, 3, 1),
+            account="Test",
+            threshold=1_000_000,
+            confidence=0.80
+        )
+
+        resolved = goal.resolve_month(start_date=date(2025, 1, 1))
+        assert resolved == 14  # 12 months + 2 more
+
+    def test_resolve_month_minimum_one(self):
+        """Test resolve_month returns minimum 1."""
+        goal = IntermediateGoal(
+            date=date(2025, 1, 1),
+            account="Test",
+            threshold=1_000_000,
+            confidence=0.80
+        )
+
+        resolved = goal.resolve_month(start_date=date(2025, 1, 1))
+        assert resolved == 1  # Minimum is 1
 
 
 # ============================================================================
@@ -245,7 +235,7 @@ class TestGoalSetInstantiation:
         """Test GoalSet with both goal types."""
         goals = [
             IntermediateGoal(
-                month=6,
+                date=date(2025, 7, 1),
                 account="Conservative",
                 threshold=3_000_000,
                 confidence=0.90
@@ -264,8 +254,8 @@ class TestGoalSetInstantiation:
     def test_multiple_intermediate_goals(self, accounts, start_date):
         """Test GoalSet with multiple intermediate goals."""
         goals = [
-            IntermediateGoal(month=6, account="Conservative", threshold=3_000_000, confidence=0.80),
-            IntermediateGoal(month=12, account="Aggressive", threshold=5_000_000, confidence=0.85),
+            IntermediateGoal(date=date(2025, 7, 1), account="Conservative", threshold=3_000_000, confidence=0.80),
+            IntermediateGoal(date=date(2026, 1, 1), account="Aggressive", threshold=5_000_000, confidence=0.85),
         ]
         goal_set = GoalSet(goals, accounts, start_date)
 
@@ -345,21 +335,21 @@ class TestGoalSetTMin:
     def test_T_min_single_intermediate(self, accounts, start_date):
         """Test T_min equals intermediate goal month."""
         goals = [
-            IntermediateGoal(month=6, account="Conservative", threshold=3_000_000, confidence=0.80)
+            IntermediateGoal(date=date(2025, 7, 1), account="Conservative", threshold=3_000_000, confidence=0.80)
         ]
         goal_set = GoalSet(goals, accounts, start_date)
 
-        assert goal_set.T_min == 6
+        assert goal_set.T_min == 6  # July 1 is 6 months from Jan 1
 
     def test_T_min_multiple_intermediate_returns_max(self, accounts, start_date):
         """Test T_min returns maximum month."""
         goals = [
-            IntermediateGoal(month=6, account="Conservative", threshold=3_000_000, confidence=0.80),
-            IntermediateGoal(month=12, account="Aggressive", threshold=5_000_000, confidence=0.85),
+            IntermediateGoal(date=date(2025, 7, 1), account="Conservative", threshold=3_000_000, confidence=0.80),
+            IntermediateGoal(date=date(2026, 1, 1), account="Aggressive", threshold=5_000_000, confidence=0.85),
         ]
         goal_set = GoalSet(goals, accounts, start_date)
 
-        assert goal_set.T_min == 12
+        assert goal_set.T_min == 12  # Jan 2026 is 12 months from Jan 2025
 
 
 class TestGoalSetIteration:
@@ -381,7 +371,7 @@ class TestGoalSetIteration:
     def test_len(self, accounts, start_date):
         """Test len() returns total goal count."""
         goals = [
-            IntermediateGoal(month=6, account="Conservative", threshold=3_000_000, confidence=0.80),
+            IntermediateGoal(date=date(2025, 7, 1), account="Conservative", threshold=3_000_000, confidence=0.80),
             TerminalGoal(account="Aggressive", threshold=30_000_000, confidence=0.80),
         ]
         goal_set = GoalSet(goals, accounts, start_date)
@@ -391,7 +381,7 @@ class TestGoalSetIteration:
     def test_goal_access(self, accounts, start_date):
         """Test accessing goals from GoalSet."""
         goals = [
-            IntermediateGoal(month=6, account="Conservative", threshold=3_000_000, confidence=0.80),
+            IntermediateGoal(date=date(2025, 7, 1), account="Conservative", threshold=3_000_000, confidence=0.80),
             TerminalGoal(account="Aggressive", threshold=30_000_000, confidence=0.80),
         ]
         goal_set = GoalSet(goals, accounts, start_date)

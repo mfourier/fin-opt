@@ -77,9 +77,9 @@ Executes wealth evolution given contributions `A`, returns `R`, and allocation p
 
 Domain-level abstractions for financial goals as chance constraints.
 
-- **`IntermediateGoal`**: Fixed calendar checkpoint (e.g., emergency fund by month 6)
+- **`IntermediateGoal`**: Fixed calendar checkpoint (e.g., emergency fund by July 2025)
   - ℙ(W_{t_fixed}^m ≥ b) ≥ 1-ε
-  - Params: `account`, `threshold`, `confidence`, `month` OR `date` (mutually exclusive)
+  - Params: `account`, `threshold`, `confidence`, `date`
 - **`TerminalGoal`**: End-of-horizon target (e.g., retirement wealth at optimized horizon T*)
   - ℙ(W_T^m ≥ b) ≥ 1-ε
   - Params: `account`, `threshold`, `confidence`
@@ -358,7 +358,7 @@ Both goals and withdrawals use **1-indexed API months** that map to 0-indexed ar
 This ensures a withdrawal "on June 1" is reflected when checking a goal "by July 1".
 
 **Parameter resolution**:
-- `month`: integer offset (1-indexed) OR `date`: datetime.date (auto-resolved)
+- `date`: datetime.date (auto-resolved to month offset via `resolve_month()`)
 - `account`: integer index OR string name (resolved via `GoalSet`)
 - `confidence`: 1-ε (e.g., 0.80 means 80% probability of success)
 

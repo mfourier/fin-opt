@@ -82,7 +82,7 @@ class TestFullWorkflow:
 
         goals = [
             IntermediateGoal(
-                month=6,
+                date=date(2025, 7, 1),
                 account="Emergency",
                 threshold=3_000_000,
                 confidence=0.80,
