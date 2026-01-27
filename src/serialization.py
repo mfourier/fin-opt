@@ -485,9 +485,11 @@ def goals_to_dict(
 
     Examples
     --------
+    >>> from datetime import date
     >>> from finopt.goals import IntermediateGoal, TerminalGoal
     >>> goals = [
-    ...     IntermediateGoal(account="Savings", threshold=1_000_000, confidence=0.9, month=6),
+    ...     IntermediateGoal(account="Savings", threshold=1_000_000, confidence=0.9,
+    ...                      date=date(2025, 7, 1)),
     ...     TerminalGoal(account="Investment", threshold=5_000_000, confidence=0.8)
     ... ]
     >>> goals_to_dict(goals)
@@ -506,11 +508,8 @@ def goals_to_dict(
                 "account": goal.account,
                 "threshold": goal.threshold,
                 "confidence": goal.confidence,
+                "date": goal.date.isoformat(),
             }
-            if goal.month is not None:
-                goal_dict["month"] = goal.month
-            elif goal.date is not None:
-                goal_dict["date"] = goal.date.isoformat()
             result["intermediate"].append(goal_dict)
 
         elif isinstance(goal, TerminalGoal):
@@ -524,7 +523,8 @@ def goals_to_dict(
 
 
 def goals_from_dict(
-    data: Dict[str, Any]
+    data: Dict[str, Any],
+    start_date: Optional[date] = None
 ) -> List[Union[IntermediateGoal, TerminalGoal]]:
     """
     Create a list of goals from dictionary representation.
@@ -533,16 +533,26 @@ def goals_from_dict(
     ----------
     data : dict
         Dictionary with 'intermediate' and 'terminal' goal lists
+    start_date : date, optional
+        Start date for backward compatibility with 'month' format.
+        If data contains 'month' instead of 'date', this is used to
+        convert month offset to calendar date. Defaults to today if None.
 
     Returns
     -------
     List[Union[IntermediateGoal, TerminalGoal]]
         Reconstructed goal objects
 
+    Notes
+    -----
+    Backward compatibility: If an intermediate goal has 'month' instead of 'date',
+    it will be converted to a date using start_date + month offset.
+
     Examples
     --------
     >>> data = {
-    ...     "intermediate": [{"account": "Savings", "threshold": 1000000, "confidence": 0.9, "month": 6}],
+    ...     "intermediate": [{"account": "Savings", "threshold": 1000000,
+    ...                       "confidence": 0.9, "date": "2025-07-01"}],
     ...     "terminal": [{"account": "Investment", "threshold": 5000000, "confidence": 0.8}]
     ... }
     >>> goals = goals_from_dict(data)
@@ -555,31 +565,45 @@ def goals_from_dict(
 
     # Process intermediate goals
     for goal_data in data.get("intermediate", []):
+        # Handle backward compatibility: convert month to date
+        if "date" in goal_data:
+            goal_date = date.fromisoformat(goal_data["date"])
+        elif "month" in goal_data:
+            # Backward compatibility: convert month offset to date
+            base_date = start_date if start_date else date.today()
+            month_offset = goal_data["month"]
+            # Calculate target date: start_date + month_offset months
+            year = base_date.year + (base_date.month + month_offset - 1) // 12
+            month = (base_date.month + month_offset - 1) % 12 + 1
+            goal_date = date(year, month, 1)
+            warnings.warn(
+                f"IntermediateGoal with 'month={month_offset}' is deprecated. "
+                f"Converted to date={goal_date.isoformat()}. "
+                f"Please update your configuration to use 'date' format.",
+                DeprecationWarning
+            )
+        else:
+            raise ValueError(
+                f"IntermediateGoal must have 'date' field, got: {goal_data.keys()}"
+            )
+
         # Validate with Pydantic
         config_data = {
             "account": goal_data["account"],
             "threshold": goal_data["threshold"],
             "confidence": goal_data["confidence"],
+            "goal_date": goal_date,
         }
-        if "month" in goal_data:
-            config_data["month"] = goal_data["month"]
-        elif "date" in goal_data:
-            config_data["goal_date"] = date.fromisoformat(goal_data["date"])
 
         config = IntermediateGoalConfig.model_validate(config_data)
 
         # Build IntermediateGoal
-        goal_kwargs: Dict[str, Any] = {
-            "account": config.account,
-            "threshold": config.threshold,
-            "confidence": config.confidence,
-        }
-        if config.month is not None:
-            goal_kwargs["month"] = config.month
-        elif config.goal_date is not None:
-            goal_kwargs["date"] = config.goal_date
-
-        goals.append(IntermediateGoal(**goal_kwargs))
+        goals.append(IntermediateGoal(
+            account=config.account,
+            threshold=config.threshold,
+            confidence=config.confidence,
+            date=config.goal_date,
+        ))
 
     # Process terminal goals
     for goal_data in data.get("terminal", []):
@@ -983,11 +1007,11 @@ def save_optimization_result(
     # Goal information
     config["goals"] = [
         {
-            "type": "terminal" if hasattr(g, "account") else "intermediate",
+            "type": "terminal" if not hasattr(g, "date") else "intermediate",
             "threshold": g.threshold,
             "confidence": g.confidence,
             "account": g.account if hasattr(g, "account") else None,
-            "month": g.month if hasattr(g, "month") else None,
+            "date": g.date.isoformat() if hasattr(g, "date") else None,
         }
         for g in result.goals
     ]

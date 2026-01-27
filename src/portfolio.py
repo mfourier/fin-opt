@@ -86,6 +86,7 @@ Example
 from __future__ import annotations
 from typing import List, Literal, Optional, Dict
 from dataclasses import dataclass
+from datetime import date
 
 import numpy as np
 from matplotlib.ticker import FuncFormatter
@@ -1061,9 +1062,12 @@ class Portfolio:
                     )
                 
                 elif goal_type == 'IntermediateGoal':
+                    # Resolve month from date
+                    resolved_month = goal.resolve_month(start if start else date.today())
+
                     # Marker at specific month
-                    goal_time = time_axis[goal.month] if goal.month < len(time_axis) else time_axis[-1]
-                    
+                    goal_time = time_axis[resolved_month] if resolved_month < len(time_axis) else time_axis[-1]
+
                     # Horizontal line up to goal month
                     if start is not None:
                         ax_accounts.plot(
@@ -1079,14 +1083,14 @@ class Portfolio:
                         ax_accounts.axhline(
                             goal.threshold,
                             xmin=0,
-                            xmax=goal.month / T,
+                            xmax=resolved_month / T,
                             color=goal_color,
                             linestyle=':',
                             linewidth=2,
                             alpha=0.7,
                             zorder=10
                         )
-                    
+
                     # Marker at goal month
                     ax_accounts.scatter(
                         goal_time, goal.threshold,
@@ -1098,11 +1102,11 @@ class Portfolio:
                         zorder=15,
                         alpha=0.9
                     )
-                    
+
                     # Annotation
                     ax_accounts.text(
                         goal_time, goal.threshold,
-                        f" t={goal.month}\n ${goal.threshold:,.0f}".replace(",", "."),
+                        f" t={resolved_month}\n ${goal.threshold:,.0f}".replace(",", "."),
                         color=goal_color,
                         fontsize=7,
                         verticalalignment='bottom',

@@ -298,7 +298,7 @@ class TestOptimizationIntegration:
         initial_wealth = np.array([0, 0])
 
         goals = [
-            IntermediateGoal(month=6, account="Conservative", threshold=1_000_000, confidence=0.60),
+            IntermediateGoal(date=date(2025, 7, 1), account="Conservative", threshold=1_000_000, confidence=0.60),
             TerminalGoal(account="Aggressive", threshold=3_000_000, confidence=0.60),
         ]
         goal_set = GoalSet(goals, accounts, start_date)

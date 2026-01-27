@@ -323,19 +323,20 @@ CVaR_δ(D_t^m - W_t^m) ≤ 0, ∀ withdrawals  [Withdrawal feasibility via CVaR]
 ### Example 1: Multiple Goals with Different Horizons
 
 ```python
+from datetime import date
 from src.goals import IntermediateGoal, TerminalGoal
 
 goals = [
-    # Emergency fund by month 6
+    # Emergency fund by July 2025
     IntermediateGoal(
-        month=6,
+        date=date(2025, 7, 1),
         account="Savings Account",
         threshold=3_000_000,
         confidence=0.95  # High confidence for safety net
     ),
-    # House down payment by month 18
+    # House down payment by July 2026
     IntermediateGoal(
-        month=18,
+        date=date(2026, 7, 1),
         account="Conservative Fund",
         threshold=10_000_000,
         confidence=0.80
