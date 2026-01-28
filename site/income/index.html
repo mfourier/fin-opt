@@ -1,0 +1,1742 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Intelligent financial planning through stochastic simulation and convex optimization.">
+      
+      
+        <meta name="author" content="mlioi">
+      
+      
+        <link rel="canonical" href="https://mlioi.github.io/fin-opt/income/">
+      
+      
+        <link rel="prev" href="../framework/">
+      
+      
+        <link rel="next" href="../portfolio/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
+    
+    
+      
+        <title>Income Model - FinOpt</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="cyan">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#income-philosophy-role-in-finopt" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="FinOpt" class="md-header__button md-logo" aria-label="FinOpt" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            FinOpt
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Income Model
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="cyan"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="cyan"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../framework/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Framework
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    <li class="md-tabs__item md-tabs__item--active">
+      <a href="./" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Income Model
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../portfolio/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Portfolio Dynamics
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../returns/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Stochastic Returns
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../goals/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Goals Framework
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../optimization/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Optimization
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../model/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Integration Model
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="FinOpt" class="md-nav__button md-logo" aria-label="FinOpt" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    FinOpt
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../framework/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Framework
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Income Model
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Income Model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#why-a-dedicated-income-module" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why a dedicated income module?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#design-principles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Design principles
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-three-core-surfaces" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The three core surfaces
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The three core surfaces">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-fixedincome" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1) FixedIncome
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-variableincome" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2) VariableIncome
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-incomemodel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3) IncomeModel
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3) IncomeModel">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#core-projection-methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core projection methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#statistical-methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Statistical methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#visualization-methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Visualization methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#serialization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Serialization
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-incomepy-powers-the-rest-of-finopt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How income.py powers the rest of FinOpt
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recommended-usage-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommended usage patterns
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Recommended usage patterns">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#a-baseline-projection-deterministic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A) Baseline projection (deterministic)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#b-from-income-to-contributions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        B) From income to contributions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#c-fixed-income-with-salary-raises" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        C) Fixed income with salary raises
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#d-variable-income-with-seasonality-noise" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        D) Variable income with seasonality + noise
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#e-statistical-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        E) Statistical summary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#f-visualization-with-monte-carlo-trajectories" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        F) Visualization with Monte Carlo trajectories
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-design-decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key design decisions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Key design decisions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-monthly-fractions-are-12-element-arrays-not-scalars" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Monthly fractions are 12-element arrays, not scalars
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-salary-raises-are-date-based-not-month-offset-based" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Salary raises are date-based, not month-offset-based
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-flexible-output-formats-via-output-parameter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Flexible output formats via output parameter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-reproducibility-via-explicit-seed-parameter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Reproducibility via explicit seed parameter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-monte-carlo-trajectories-as-primary-visualization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Monte Carlo trajectories as primary visualization
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-dual-axis-activation-is-automatic-by-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Dual-axis activation is automatic by default
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementation-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation notes
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../portfolio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Portfolio Dynamics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../returns/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stochastic Returns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../goals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Goals Framework
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../optimization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Optimization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Integration Model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#why-a-dedicated-income-module" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why a dedicated income module?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#design-principles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Design principles
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-three-core-surfaces" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The three core surfaces
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The three core surfaces">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-fixedincome" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1) FixedIncome
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-variableincome" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2) VariableIncome
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-incomemodel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3) IncomeModel
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3) IncomeModel">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#core-projection-methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core projection methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#statistical-methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Statistical methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#visualization-methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Visualization methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#serialization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Serialization
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-incomepy-powers-the-rest-of-finopt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How income.py powers the rest of FinOpt
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recommended-usage-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommended usage patterns
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Recommended usage patterns">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#a-baseline-projection-deterministic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A) Baseline projection (deterministic)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#b-from-income-to-contributions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        B) From income to contributions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#c-fixed-income-with-salary-raises" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        C) Fixed income with salary raises
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#d-variable-income-with-seasonality-noise" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        D) Variable income with seasonality + noise
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#e-statistical-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        E) Statistical summary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#f-visualization-with-monte-carlo-trajectories" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        F) Visualization with Monte Carlo trajectories
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-design-decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key design decisions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Key design decisions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-monthly-fractions-are-12-element-arrays-not-scalars" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Monthly fractions are 12-element arrays, not scalars
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-salary-raises-are-date-based-not-month-offset-based" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Salary raises are date-based, not month-offset-based
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-flexible-output-formats-via-output-parameter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Flexible output formats via output parameter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-reproducibility-via-explicit-seed-parameter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Reproducibility via explicit seed parameter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-monte-carlo-trajectories-as-primary-visualization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Monte Carlo trajectories as primary visualization
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-dual-axis-activation-is-automatic-by-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Dual-axis activation is automatic by default
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementation-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation notes
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="income-philosophy-role-in-finopt"><code>income</code> – Philosophy &amp; Role in FinOpt</h1>
+<blockquote>
+<p><strong>Purpose:</strong> Model <strong>where the money comes from</strong> (and how it evolves) so the rest of FinOpt can decide <strong>how to allocate and invest it</strong>.<br />
+In FinOpt's pipeline, <code>income.py</code> is the <strong>entry point of cash flows</strong>: it turns assumptions about salary and variable earnings into a clean, reproducible <strong>monthly series</strong> that downstream modules consume for contributions and simulations.</p>
+</blockquote>
+<hr />
+<h2 id="why-a-dedicated-income-module">Why a dedicated income module?</h2>
+<p>Financial planning hinges on <strong>cash availability per period</strong>. Any optimizer or simulator that ignores timing or volatility of income will produce plans that are hard to execute. <code>income.py</code> separates <strong>cash generation</strong> (what you earn) from <strong>capital dynamics</strong> (what you invest), giving you:</p>
+<ul>
+<li><strong>Clarity:</strong> Incomes are modeled explicitly (fixed vs. variable).  </li>
+<li><strong>Composability:</strong> Outputs plug directly into <code>simulation.py</code> and <code>investment.py</code>.  </li>
+<li><strong>Reproducibility:</strong> Deterministic by default; any randomness is controlled by an explicit seed.  </li>
+<li><strong>Extensibility:</strong> Easy to add expenses, taxes, or more streams without touching portfolio code.</li>
+</ul>
+<hr />
+<h2 id="design-principles">Design principles</h2>
+<ol>
+<li><strong>Deterministic baseline, controlled randomness</strong></li>
+<li>Everything is deterministic unless you explicitly add noise to <code>VariableIncome</code> via <code>sigma</code> and <code>seed</code>.</li>
+<li><strong>Calendar-first outputs</strong></li>
+<li>Returns <strong>pandas Series/DataFrames</strong> indexed by the <strong>first day of each month</strong> (friendly for reporting and plotting).</li>
+<li><strong>Minimal but expressive</strong></li>
+<li>Two stream types cover common cases:<ul>
+<li><code>FixedIncome</code>: predictable salary with optional <strong>annual growth</strong> and <strong>scheduled raises</strong>.</li>
+<li><code>VariableIncome</code>: irregular stream with <strong>seasonality</strong> and <strong>Gaussian noise</strong>.</li>
+</ul>
+</li>
+<li><strong>Single responsibility</strong></li>
+<li><code>income.py</code> does <strong>not</strong> simulate returns or portfolios. It only <strong>projects income</strong> and derives <strong>contribution series</strong> from it.</li>
+</ol>
+<hr />
+<h2 id="the-three-core-surfaces">The three core surfaces</h2>
+<h3 id="1-fixedincome">1) <code>FixedIncome</code></h3>
+<p>A deterministic monthly base with <strong>compounded annual growth</strong> and optional <strong>salary raises</strong>:</p>
+<p><strong>Parameters:</strong>
+- <code>base</code>: monthly base income at t=0
+- <code>annual_growth</code>: nominal annual rate (converted internally to monthly compounding)
+- <code>salary_raises</code>: <code>Optional[Dict[date, float]]</code> – absolute raise amounts at specific dates
+- <code>name</code>: identifier for labeling outputs</p>
+<p><strong>Method signature:</strong>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">project</span><span class="p">(</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="bp">self</span><span class="p">,</span> 
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">months</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> 
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="o">*</span><span class="p">,</span> 
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">start</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">date</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">output</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;array&quot;</span><span class="p">,</span> <span class="s2">&quot;series&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;array&quot;</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span> <span class="o">|</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span>
+</span></code></pre></div>
+- <code>start</code>: required when <code>salary_raises</code> is specified; used for calendar alignment
+- <code>output</code>: <code>"array"</code> returns <code>np.ndarray</code>, <code>"series"</code> returns <code>pd.Series</code> with calendar index</p>
+<p><strong>Key behaviors:</strong>
+- Monthly projection uses the equivalent monthly rate: <code>m = (1 + annual_growth)^(1/12) - 1</code>
+- Salary raises are applied permanently from the month containing the specified date
+- Growth compounds on the updated base after each raise
+- Requires <code>start</code> date in <code>.project()</code> when <code>salary_raises</code> is specified
+- Guarantees <strong>non-negativity</strong> and well-formed arrays</p>
+<p><strong>Interpretation:</strong> models a salary with contractual raises and inflation adjustments; simple and transparent.</p>
+<hr />
+<h3 id="2-variableincome">2) <code>VariableIncome</code></h3>
+<p>A variable stream with optional <strong>seasonality</strong>, <strong>noise</strong>, <strong>floor/cap</strong>, and <strong>annual growth</strong>:</p>
+<p><strong>Parameters:</strong>
+- <code>base</code>: baseline monthly income before transformations
+- <code>seasonality</code>: 12 multiplicative factors (Jan–Dec), must have length 12
+- <code>sigma</code>: standard deviation of noise as <strong>a fraction of the month mean</strong>
+- <code>floor</code> / <code>cap</code>: guardrails applied after noise (e.g., minimum expected side income)
+- <code>annual_growth</code>: nominal annual rate applied before seasonality
+- <code>seed</code>: RNG seed for reproducible noise (can be overridden in <code>.project()</code>)
+- <code>name</code>: identifier for labeling outputs</p>
+<p><strong>Method signature:</strong>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">project</span><span class="p">(</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="bp">self</span><span class="p">,</span> 
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    <span class="n">months</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> 
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="o">*</span><span class="p">,</span> 
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="n">start</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">date</span> <span class="o">|</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> 
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="n">seed</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="n">output</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;array&quot;</span><span class="p">,</span> <span class="s2">&quot;series&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;array&quot;</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span> <span class="o">|</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span>
+</span></code></pre></div>
+- <code>start</code>: can be <code>date</code> or <code>int</code> (month 1-12); determines seasonality rotation
+- <code>seed</code> in <code>project()</code> overrides instance-level seed if provided
+- <code>output</code>: <code>"array"</code> returns <code>np.ndarray</code>, <code>"series"</code> returns <code>pd.Series</code> with calendar index</p>
+<p><strong>Interpretation:</strong> models tutoring, bonuses, or freelancing income whose level changes across the year and fluctuates each month.</p>
+<hr />
+<h3 id="3-incomemodel">3) <code>IncomeModel</code></h3>
+<p>A façade that <strong>combines streams</strong> and produces projections, contributions, metrics, and visualizations.</p>
+<h4 id="core-projection-methods">Core projection methods</h4>
+<p><strong><code>project(months, start=None, output="series", seed=None)</code></strong>
+- Returns total income (optionally as DataFrame with [fixed, variable, total] columns)
+- Aligned to calendar via <code>start</code> date
+- <code>output</code>: <code>"series"</code> returns total as Series, <code>"dataframe"</code> returns breakdown with components
+- <code>seed</code>: controls reproducibility of variable income (overrides instance seed)
+- Example:
+  <div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Total income as Series (default)</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">total</span> <span class="o">=</span> <span class="n">income</span><span class="o">.</span><span class="n">project</span><span class="p">(</span><span class="n">months</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">9</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># Breakdown as DataFrame</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">df</span> <span class="o">=</span> <span class="n">income</span><span class="o">.</span><span class="n">project</span><span class="p">(</span><span class="n">months</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">9</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">output</span><span class="o">=</span><span class="s2">&quot;dataframe&quot;</span><span class="p">)</span>
+</span></code></pre></div></p>
+<p><strong><code>contributions(months, start=None, seed=None, output="series")</code></strong>
+- Computes monthly contributions using <strong>12-month fractional arrays</strong> that rotate based on <code>start</code>:
+  $$
+  \text{contrib}<em>t = \alpha^{\text{fixed}}</em>{(t+\text{offset})\bmod 12} \cdot y^{\text{fixed}}<em>t + \alpha^{\text{variable}}</em>{(t+\text{offset})\bmod 12} \cdot y^{\text{variable}}_t
+  $$
+  where <code>offset = normalize_start_month(start)</code>.</p>
+<ul>
+<li><code>output</code>: <code>"array"</code> returns <code>np.ndarray</code>, <code>"series"</code> returns <code>pd.Series</code> with calendar index</li>
+<li>
+<p><code>seed</code>: controls reproducibility of variable income (overrides instance seed)</p>
+</li>
+<li>
+<p><strong>Default fractions</strong> (if <code>monthly_contribution</code> is <code>None</code>):</p>
+</li>
+<li>Fixed: 30% each month</li>
+<li>
+<p>Variable: 100% each month</p>
+</li>
+<li>
+<p><strong>Custom fractions</strong> via attribute:
+  <div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">income</span><span class="o">.</span><span class="n">monthly_contribution</span> <span class="o">=</span> <span class="p">{</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>    <span class="s2">&quot;fixed&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mf">0.35</span><span class="p">]</span><span class="o">*</span><span class="mi">12</span><span class="p">,</span>      <span class="c1"># Jan-Dec fractions</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="s2">&quot;variable&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mf">1.0</span><span class="p">]</span><span class="o">*</span><span class="mi">12</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="p">}</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="n">contrib</span> <span class="o">=</span> <span class="n">income</span><span class="o">.</span><span class="n">contributions</span><span class="p">(</span><span class="n">months</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">9</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+</span></code></pre></div></p>
+</li>
+<li>
+<p>Contributions are floored at zero (no negative values)</p>
+</li>
+<li>The 12-month arrays repeat cyclically for horizons &gt; 12 months</li>
+</ul>
+<h4 id="statistical-methods">Statistical methods</h4>
+<p><strong><code>income_metrics(months, start=None, variable_threshold=None)</code></strong>
+- Returns <code>IncomeMetrics</code> dataclass with:
+  <div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nd">@dataclass</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="k">class</span><span class="w"> </span><span class="nc">IncomeMetrics</span><span class="p">:</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>    <span class="n">months</span><span class="p">:</span> <span class="nb">int</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="n">total_fixed</span><span class="p">,</span> <span class="n">total_variable</span><span class="p">,</span> <span class="n">total_income</span><span class="p">:</span> <span class="nb">float</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="n">mean_fixed</span><span class="p">,</span> <span class="n">mean_variable</span><span class="p">,</span> <span class="n">mean_total</span><span class="p">:</span> <span class="nb">float</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    <span class="n">std_variable</span><span class="p">,</span> <span class="n">coefvar_variable</span><span class="p">:</span> <span class="nb">float</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>    <span class="n">fixed_share</span><span class="p">,</span> <span class="n">variable_share</span><span class="p">:</span> <span class="nb">float</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>    <span class="n">min_variable</span><span class="p">,</span> <span class="n">max_variable</span><span class="p">:</span> <span class="nb">float</span>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>    <span class="n">pct_variable_below_threshold</span><span class="p">:</span> <span class="nb">float</span>  <span class="c1"># NaN if threshold not provided</span>
+</span></code></pre></div></p>
+<p><strong><code>summary(months, start=None, variable_threshold=None, round_digits=2)</code></strong>
+- Convenience wrapper that returns <code>income_metrics()</code> as a rounded pandas Series</p>
+<h4 id="visualization-methods">Visualization methods</h4>
+<p><strong><code>plot_income(months, start=None, ...)</code></strong>
+- Plots fixed, variable, and total income streams
+- <strong>Dual-axis support</strong>: automatic when scales differ by <code>dual_axis_ratio</code> (default 3.0)
+- <strong>Monte Carlo trajectories</strong>: shows individual stochastic paths when <code>show_trajectories=True</code> and <code>sigma &gt; 0</code>
+- <strong>Confidence bands</strong>: statistical intervals when <code>show_confidence_band=True</code> and <code>sigma &gt; 0</code>
+- Key parameters:
+  - <code>ax</code>, <code>figsize</code>, <code>title</code>, <code>legend</code>, <code>grid</code>
+  - <code>ylabel_left</code>, <code>ylabel_right</code>: axis labels
+  - <code>dual_axis</code>: <code>"auto"</code> | <code>True</code> | <code>False</code>
+  - <code>show_trajectories=True</code>, <code>trajectory_alpha=0.08</code>
+  - <code>show_confidence_band=False</code>, <code>confidence=0.9</code>, <code>n_simulations=500</code>
+  - <code>colors</code>: <code>{"fixed": "blue", "variable": "orange", "total": "black"}</code>
+  - <code>save_path</code>, <code>return_fig_ax</code>
+- Displays cumulative totals annotation</p>
+<p><strong><code>plot_contributions(months, start=None, ...)</code></strong>
+- Plots total monthly contributions with optional Monte Carlo trajectories and confidence bands
+- Single y-axis (no dual-axis)
+- Key parameters:
+  - <code>ax</code>, <code>figsize</code>, <code>title</code>, <code>legend</code>, <code>grid</code>, <code>ylabel</code>
+  - <code>show_trajectories=True</code>, <code>trajectory_alpha=0.08</code>
+  - <code>show_confidence_band=False</code>, <code>confidence=0.9</code>, <code>n_simulations=500</code>
+  - <code>colors</code>: <code>{"total": "blue", "ci": "orange"}</code>
+  - <code>save_path</code>, <code>return_fig_ax</code>
+- Displays total contributions annotation</p>
+<p><strong><code>plot(mode="income"|"contributions", ...)</code></strong>
+- Unified wrapper that dispatches to <code>plot_income()</code> or <code>plot_contributions()</code>
+- All parameters are forwarded to the appropriate method</p>
+<h4 id="serialization">Serialization</h4>
+<p><strong><code>to_dict()</code> / <code>from_dict(payload)</code></strong>
+- Serialize/deserialize model configuration for persistence
+- Handles <code>salary_raises</code> date conversion (ISO format strings)</p>
+<hr />
+<h2 id="how-incomepy-powers-the-rest-of-finopt">How <code>income.py</code> powers the rest of FinOpt</h2>
+<ul>
+<li>
+<p><strong><code>simulation.py</code></strong><br />
+  Uses <code>IncomeModel.contributions(...)</code> to generate the <strong>contribution series</strong> aligned to the simulation calendar, then combines it with deterministic or Monte Carlo <strong>returns</strong> to simulate wealth.</p>
+</li>
+<li>
+<p><strong><code>investment.py</code></strong><br />
+  Receives the contributions from <code>income.py</code> and applies <strong>capital accumulation</strong>:
+  $$
+  W_{t+1}=(W_t+A_t)(1+R_t).
+  $$
+  Metrics (CAGR, drawdown, volatility) are computed downstream on the resulting wealth path.</p>
+</li>
+<li>
+<p><strong><code>utils.py</code></strong><br />
+  Provides shared helpers used by <code>income.py</code> (e.g., <strong>rate conversions</strong> annual↔monthly, <strong>month index</strong> construction, <strong>validation</strong>).</p>
+</li>
+</ul>
+<hr />
+<h2 id="recommended-usage-patterns">Recommended usage patterns</h2>
+<h3 id="a-baseline-projection-deterministic">A) Baseline projection (deterministic)</h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">date</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">finopt.src.income</span><span class="w"> </span><span class="kn">import</span> <span class="n">FixedIncome</span><span class="p">,</span> <span class="n">VariableIncome</span><span class="p">,</span> <span class="n">IncomeModel</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">income</span> <span class="o">=</span> <span class="n">IncomeModel</span><span class="p">(</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>    <span class="n">fixed</span><span class="o">=</span><span class="n">FixedIncome</span><span class="p">(</span><span class="n">base</span><span class="o">=</span><span class="mf">1_400_000.0</span><span class="p">,</span> <span class="n">annual_growth</span><span class="o">=</span><span class="mf">0.00</span><span class="p">),</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>    <span class="n">variable</span><span class="o">=</span><span class="n">VariableIncome</span><span class="p">(</span><span class="n">base</span><span class="o">=</span><span class="mf">200_000.0</span><span class="p">,</span> <span class="n">sigma</span><span class="o">=</span><span class="mf">0.00</span><span class="p">)</span>  <span class="c1"># no noise</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="p">)</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="c1"># 24-month calendar-aligned totals (and components if needed)</span>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="n">df</span> <span class="o">=</span> <span class="n">income</span><span class="o">.</span><span class="n">project</span><span class="p">(</span><span class="n">months</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">9</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">output</span><span class="o">=</span><span class="s2">&quot;dataframe&quot;</span><span class="p">)</span>
+</span></code></pre></div>
+<h3 id="b-from-income-to-contributions">B) From income to contributions</h3>
+<p><strong>Option 1: Use defaults (30% fixed, 100% variable)</strong>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">contrib</span> <span class="o">=</span> <span class="n">income</span><span class="o">.</span><span class="n">contributions</span><span class="p">(</span><span class="n">months</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">9</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+</span></code></pre></div></p>
+<p><strong>Option 2: Custom monthly fractions</strong>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">income</span><span class="o">.</span><span class="n">monthly_contribution</span> <span class="o">=</span> <span class="p">{</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>    <span class="s2">&quot;fixed&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mf">0.35</span><span class="p">]</span><span class="o">*</span><span class="mi">12</span><span class="p">,</span>      <span class="c1"># 35% each month (Jan-Dec)</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>    <span class="s2">&quot;variable&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mf">1.0</span><span class="p">]</span><span class="o">*</span><span class="mi">12</span>     <span class="c1"># 100% each month</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="p">}</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="n">contrib</span> <span class="o">=</span> <span class="n">income</span><span class="o">.</span><span class="n">contributions</span><span class="p">(</span><span class="n">months</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">9</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+</span></code></pre></div></p>
+<p><strong>Option 3: Seasonal contribution patterns</strong>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Higher contributions in bonus months</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">income</span><span class="o">.</span><span class="n">monthly_contribution</span> <span class="o">=</span> <span class="p">{</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>    <span class="s2">&quot;fixed&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mf">0.30</span><span class="p">]</span><span class="o">*</span><span class="mi">12</span><span class="p">,</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>    <span class="s2">&quot;variable&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>                 <span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">]</span>  <span class="c1"># save 50% of Dec bonus</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="p">}</span>
+</span></code></pre></div></p>
+<h3 id="c-fixed-income-with-salary-raises">C) Fixed income with salary raises</h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="n">fixed</span> <span class="o">=</span> <span class="n">FixedIncome</span><span class="p">(</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>    <span class="n">base</span><span class="o">=</span><span class="mf">1_400_000.0</span><span class="p">,</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>    <span class="n">annual_growth</span><span class="o">=</span><span class="mf">0.03</span><span class="p">,</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>    <span class="n">salary_raises</span><span class="o">=</span><span class="p">{</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>        <span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">7</span><span class="p">,</span> <span class="mi">1</span><span class="p">):</span> <span class="mi">200_000</span><span class="p">,</span>   <span class="c1"># raise in July</span>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>        <span class="n">date</span><span class="p">(</span><span class="mi">2026</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">):</span> <span class="mi">150_000</span>    <span class="c1"># raise in January</span>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>    <span class="p">}</span>
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="p">)</span>
+</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="c1"># Requires start date when projecting</span>
+</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="n">path</span> <span class="o">=</span> <span class="n">fixed</span><span class="o">.</span><span class="n">project</span><span class="p">(</span><span class="n">months</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>  <span class="c1"># returns array by default</span>
+</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="n">series</span> <span class="o">=</span> <span class="n">fixed</span><span class="o">.</span><span class="n">project</span><span class="p">(</span><span class="n">months</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">output</span><span class="o">=</span><span class="s2">&quot;series&quot;</span><span class="p">)</span>  <span class="c1"># with calendar index</span>
+</span></code></pre></div>
+<h3 id="d-variable-income-with-seasonality-noise">D) Variable income with seasonality + noise</h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">seasonality</span> <span class="o">=</span> <span class="p">[</span><span class="mf">1.00</span><span class="p">,</span> <span class="mf">0.95</span><span class="p">,</span> <span class="mf">1.05</span><span class="p">,</span> <span class="mf">1.10</span><span class="p">,</span> <span class="mf">1.15</span><span class="p">,</span> <span class="mf">1.10</span><span class="p">,</span> 
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>               <span class="mf">1.00</span><span class="p">,</span> <span class="mf">0.90</span><span class="p">,</span> <span class="mf">0.95</span><span class="p">,</span> <span class="mf">1.05</span><span class="p">,</span> <span class="mf">1.10</span><span class="p">,</span> <span class="mf">1.20</span><span class="p">]</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="n">income_var</span> <span class="o">=</span> <span class="n">VariableIncome</span><span class="p">(</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>    <span class="n">base</span><span class="o">=</span><span class="mf">200_000.0</span><span class="p">,</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>    <span class="n">seasonality</span><span class="o">=</span><span class="n">seasonality</span><span class="p">,</span>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>    <span class="n">sigma</span><span class="o">=</span><span class="mf">0.15</span><span class="p">,</span>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>    <span class="n">floor</span><span class="o">=</span><span class="mf">50_000.0</span><span class="p">,</span>
+</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>    <span class="n">cap</span><span class="o">=</span><span class="mf">400_000.0</span><span class="p">,</span>
+</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a>    <span class="n">annual_growth</span><span class="o">=</span><span class="mf">0.02</span><span class="p">,</span>
+</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a>    <span class="n">seed</span><span class="o">=</span><span class="mi">123</span>
+</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="p">)</span>
+</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a>
+</span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="c1"># Project as array (default)</span>
+</span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a><span class="n">path</span> <span class="o">=</span> <span class="n">income_var</span><span class="o">.</span><span class="n">project</span><span class="p">(</span><span class="n">months</span><span class="o">=</span><span class="mi">12</span><span class="p">)</span>
+</span><span id="__span-10-16"><a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a>
+</span><span id="__span-10-17"><a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a><span class="c1"># Project as Series with calendar alignment</span>
+</span><span id="__span-10-18"><a id="__codelineno-10-18" name="__codelineno-10-18" href="#__codelineno-10-18"></a><span class="n">series</span> <span class="o">=</span> <span class="n">income_var</span><span class="o">.</span><span class="n">project</span><span class="p">(</span><span class="n">months</span><span class="o">=</span><span class="mi">12</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">output</span><span class="o">=</span><span class="s2">&quot;series&quot;</span><span class="p">)</span>
+</span></code></pre></div>
+<h3 id="e-statistical-summary">E) Statistical summary</h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Detailed metrics as dataclass</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">metrics</span> <span class="o">=</span> <span class="n">income</span><span class="o">.</span><span class="n">income_metrics</span><span class="p">(</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>    <span class="n">months</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span> 
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>    <span class="n">start</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>    <span class="n">variable_threshold</span><span class="o">=</span><span class="mf">150_000.0</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="p">)</span>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="c1"># Compact summary as Series</span>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="n">summary</span> <span class="o">=</span> <span class="n">income</span><span class="o">.</span><span class="n">summary</span><span class="p">(</span><span class="n">months</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">round_digits</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="nb">print</span><span class="p">(</span><span class="n">summary</span><span class="p">)</span>
+</span></code></pre></div>
+<h3 id="f-visualization-with-monte-carlo-trajectories">F) Visualization with Monte Carlo trajectories</h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Income streams with stochastic trajectories (default if sigma &gt; 0)</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">income</span><span class="o">.</span><span class="n">plot_income</span><span class="p">(</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>    <span class="n">months</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span> 
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>    <span class="n">start</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>    <span class="n">show_trajectories</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>    <span class="n">n_simulations</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span>
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>    <span class="n">dual_axis</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span>
+</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a>    <span class="n">save_path</span><span class="o">=</span><span class="s2">&quot;income_projection.png&quot;</span>
+</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="p">)</span>
+</span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a>
+</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a><span class="c1"># Legacy mode: confidence bands only</span>
+</span><span id="__span-12-12"><a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a><span class="n">income</span><span class="o">.</span><span class="n">plot_income</span><span class="p">(</span>
+</span><span id="__span-12-13"><a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a>    <span class="n">months</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span>
+</span><span id="__span-12-14"><a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a>    <span class="n">start</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+</span><span id="__span-12-15"><a id="__codelineno-12-15" name="__codelineno-12-15" href="#__codelineno-12-15"></a>    <span class="n">show_trajectories</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+</span><span id="__span-12-16"><a id="__codelineno-12-16" name="__codelineno-12-16" href="#__codelineno-12-16"></a>    <span class="n">show_confidence_band</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+</span><span id="__span-12-17"><a id="__codelineno-12-17" name="__codelineno-12-17" href="#__codelineno-12-17"></a>    <span class="n">confidence</span><span class="o">=</span><span class="mf">0.95</span>
+</span><span id="__span-12-18"><a id="__codelineno-12-18" name="__codelineno-12-18" href="#__codelineno-12-18"></a><span class="p">)</span>
+</span><span id="__span-12-19"><a id="__codelineno-12-19" name="__codelineno-12-19" href="#__codelineno-12-19"></a>
+</span><span id="__span-12-20"><a id="__codelineno-12-20" name="__codelineno-12-20" href="#__codelineno-12-20"></a><span class="c1"># Hybrid mode: trajectories + bands</span>
+</span><span id="__span-12-21"><a id="__codelineno-12-21" name="__codelineno-12-21" href="#__codelineno-12-21"></a><span class="n">income</span><span class="o">.</span><span class="n">plot_income</span><span class="p">(</span>
+</span><span id="__span-12-22"><a id="__codelineno-12-22" name="__codelineno-12-22" href="#__codelineno-12-22"></a>    <span class="n">months</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span>
+</span><span id="__span-12-23"><a id="__codelineno-12-23" name="__codelineno-12-23" href="#__codelineno-12-23"></a>    <span class="n">start</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+</span><span id="__span-12-24"><a id="__codelineno-12-24" name="__codelineno-12-24" href="#__codelineno-12-24"></a>    <span class="n">show_trajectories</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+</span><span id="__span-12-25"><a id="__codelineno-12-25" name="__codelineno-12-25" href="#__codelineno-12-25"></a>    <span class="n">show_confidence_band</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+</span><span id="__span-12-26"><a id="__codelineno-12-26" name="__codelineno-12-26" href="#__codelineno-12-26"></a>    <span class="n">n_simulations</span><span class="o">=</span><span class="mi">150</span><span class="p">,</span>
+</span><span id="__span-12-27"><a id="__codelineno-12-27" name="__codelineno-12-27" href="#__codelineno-12-27"></a>    <span class="n">trajectory_alpha</span><span class="o">=</span><span class="mf">0.03</span>
+</span><span id="__span-12-28"><a id="__codelineno-12-28" name="__codelineno-12-28" href="#__codelineno-12-28"></a><span class="p">)</span>
+</span><span id="__span-12-29"><a id="__codelineno-12-29" name="__codelineno-12-29" href="#__codelineno-12-29"></a>
+</span><span id="__span-12-30"><a id="__codelineno-12-30" name="__codelineno-12-30" href="#__codelineno-12-30"></a><span class="c1"># Contributions with trajectories</span>
+</span><span id="__span-12-31"><a id="__codelineno-12-31" name="__codelineno-12-31" href="#__codelineno-12-31"></a><span class="n">income</span><span class="o">.</span><span class="n">plot_contributions</span><span class="p">(</span>
+</span><span id="__span-12-32"><a id="__codelineno-12-32" name="__codelineno-12-32" href="#__codelineno-12-32"></a>    <span class="n">months</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span> 
+</span><span id="__span-12-33"><a id="__codelineno-12-33" name="__codelineno-12-33" href="#__codelineno-12-33"></a>    <span class="n">start</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+</span><span id="__span-12-34"><a id="__codelineno-12-34" name="__codelineno-12-34" href="#__codelineno-12-34"></a>    <span class="n">show_trajectories</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+</span><span id="__span-12-35"><a id="__codelineno-12-35" name="__codelineno-12-35" href="#__codelineno-12-35"></a>    <span class="n">title</span><span class="o">=</span><span class="s2">&quot;Monthly Investment Contributions&quot;</span>
+</span><span id="__span-12-36"><a id="__codelineno-12-36" name="__codelineno-12-36" href="#__codelineno-12-36"></a><span class="p">)</span>
+</span><span id="__span-12-37"><a id="__codelineno-12-37" name="__codelineno-12-37" href="#__codelineno-12-37"></a>
+</span><span id="__span-12-38"><a id="__codelineno-12-38" name="__codelineno-12-38" href="#__codelineno-12-38"></a><span class="c1"># Using unified wrapper</span>
+</span><span id="__span-12-39"><a id="__codelineno-12-39" name="__codelineno-12-39" href="#__codelineno-12-39"></a><span class="n">income</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span>
+</span><span id="__span-12-40"><a id="__codelineno-12-40" name="__codelineno-12-40" href="#__codelineno-12-40"></a>    <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;income&quot;</span><span class="p">,</span>  <span class="c1"># or &quot;contributions&quot;</span>
+</span><span id="__span-12-41"><a id="__codelineno-12-41" name="__codelineno-12-41" href="#__codelineno-12-41"></a>    <span class="n">months</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span>
+</span><span id="__span-12-42"><a id="__codelineno-12-42" name="__codelineno-12-42" href="#__codelineno-12-42"></a>    <span class="n">start</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+</span><span id="__span-12-43"><a id="__codelineno-12-43" name="__codelineno-12-43" href="#__codelineno-12-43"></a><span class="p">)</span>
+</span></code></pre></div>
+<hr />
+<h2 id="key-design-decisions">Key design decisions</h2>
+<h3 id="1-monthly-fractions-are-12-element-arrays-not-scalars">1. Monthly fractions are 12-element arrays, not scalars</h3>
+<p>This allows <strong>seasonal contribution strategies</strong>: save more during high-income months, less during lean months. The arrays rotate based on <code>start</code> and repeat cyclically.</p>
+<h3 id="2-salary-raises-are-date-based-not-month-offset-based">2. Salary raises are date-based, not month-offset-based</h3>
+<p>You specify <code>{date(2025, 7, 1): 200_000}</code>, not <code>{6: 200_000}</code>. The conversion to month offsets happens internally relative to the projection <code>start</code> date, making the model calendar-aware.</p>
+<h3 id="3-flexible-output-formats-via-output-parameter">3. Flexible output formats via <code>output</code> parameter</h3>
+<p>All projection methods (<code>FixedIncome.project()</code>, <code>VariableIncome.project()</code>, <code>IncomeModel.project()</code>, <code>IncomeModel.contributions()</code>) support an <code>output</code> parameter to control return type:
+- <code>"array"</code>: returns <code>np.ndarray</code> (default for streams, no calendar overhead)
+- <code>"series"</code>: returns <code>pd.Series</code> with calendar index (default for <code>IncomeModel</code>, user-friendly)
+- <code>"dataframe"</code>: returns <code>pd.DataFrame</code> with component breakdown (only <code>IncomeModel.project()</code>)</p>
+<h3 id="4-reproducibility-via-explicit-seed-parameter">4. Reproducibility via explicit <code>seed</code> parameter</h3>
+<p>Variable income randomness is controlled at two levels:
+- Instance-level: <code>VariableIncome(seed=42)</code> sets default seed
+- Method-level: <code>project(..., seed=123)</code> overrides for specific realizations
+This enables reproducible stochastic projections without mutating the model state.</p>
+<h3 id="5-monte-carlo-trajectories-as-primary-visualization">5. Monte Carlo trajectories as primary visualization</h3>
+<p>When <code>sigma &gt; 0</code>, plotting methods default to showing individual trajectories (<code>show_trajectories=True</code>) instead of confidence bands, providing more intuitive visualization of stochastic dynamics. Confidence bands remain available via <code>show_confidence_band=True</code>.</p>
+<h3 id="6-dual-axis-activation-is-automatic-by-default">6. Dual-axis activation is automatic by default</h3>
+<p>When fixed and variable incomes differ by a factor &gt; <code>dual_axis_ratio</code>, the plot automatically uses separate y-axes to avoid visual compression. Override with <code>dual_axis=True|False</code>.</p>
+<hr />
+<h2 id="implementation-notes">Implementation notes</h2>
+<ul>
+<li><strong>Rate conversion</strong>: <code>annual_to_monthly(g) = (1+g)^(1/12) - 1</code> ensures geometric compounding</li>
+<li><strong>Calendar alignment</strong>: <code>month_index(start, months)</code> generates <code>pd.DatetimeIndex</code> of first-of-month dates</li>
+<li><strong>Seasonality rotation</strong>: <code>normalize_start_month(start)</code> returns 0-indexed month offset (0=Jan, 11=Dec)</li>
+<li><strong>Non-negativity</strong>: all income and contribution values are floored at zero after transformations</li>
+<li><strong>Seed propagation</strong>: <code>seed=None</code> in methods uses instance seed; both <code>None</code> generates non-deterministic noise</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../javascripts/mathjax.js"></script>
+      
+        <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+      
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>

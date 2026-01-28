@@ -1,0 +1,2433 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Intelligent financial planning through stochastic simulation and convex optimization.">
+      
+      
+        <meta name="author" content="mlioi">
+      
+      
+        <link rel="canonical" href="https://mlioi.github.io/fin-opt/optimization/">
+      
+      
+        <link rel="prev" href="../goals/">
+      
+      
+        <link rel="next" href="../model/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
+    
+    
+      
+        <title>Optimization - FinOpt</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="cyan">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#optimization-convex-programming-for-goal-driven-portfolios" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="FinOpt" class="md-header__button md-logo" aria-label="FinOpt" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            FinOpt
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Optimization
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="cyan"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="cyan"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../framework/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Framework
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../income/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Income Model
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../portfolio/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Portfolio Dynamics
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../returns/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Stochastic Returns
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../goals/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Goals Framework
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    <li class="md-tabs__item md-tabs__item--active">
+      <a href="./" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Optimization
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../model/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Integration Model
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="FinOpt" class="md-nav__button md-logo" aria-label="FinOpt" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    FinOpt
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../framework/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Framework
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../income/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Income Model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../portfolio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Portfolio Dynamics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../returns/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stochastic Returns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../goals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Goals Framework
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Optimization
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Optimization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#philosophy-and-role" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Philosophy and Role
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Philosophy and Role">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#separation-of-concerns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Separation of Concerns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#inversion-of-traditional-planning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inversion of Traditional Planning
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mathematical-foundations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mathematical Foundations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Mathematical Foundations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#wealth-evolution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wealth Evolution
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#allocation-simplex" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Allocation Simplex
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#goal-framework" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Goal Framework
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Goal Framework">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#goal-primitives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Goal Primitives
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#goalset-algebra" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GoalSet Algebra
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#bilevel-optimization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bilevel Optimization
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Bilevel Optimization">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#problem-statement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Problem Statement
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#implemented-objectives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implemented Objectives
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cvar-reformulation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CVaR Reformulation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CVaR Reformulation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#epigraphic-formulation-rockafellar-uryasev-2000" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Epigraphic Formulation (Rockafellar &amp; Uryasev 2000)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#convex-program-formulation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Convex Program Formulation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dcp-compliance-disciplined-convex-programming" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DCP Compliance (Disciplined Convex Programming)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementation-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation Architecture
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Implementation Architecture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#class-hierarchy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Class Hierarchy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key-design-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Design Changes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cvaroptimizersolve-algorithm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CVaROptimizer.solve() Algorithm
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#goalseeker-search-strategies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GoalSeeker Search Strategies
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="GoalSeeker Search Strategies">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#linear-search-safe-slower" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Linear Search (Safe, Slower)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#binary-search-faster-assumes-monotonicity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Binary Search (Faster, Assumes Monotonicity)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#solver-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Solver Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Solver Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cvxpy-solvers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CVXPY Solvers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#solver-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Solver Options
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#complexity-analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Complexity Analysis
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#numerical-considerations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Numerical Considerations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Numerical Considerations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#memory-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Memory Management
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#simplex-projection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Simplex Projection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#feasibility-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Feasibility Validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#theoretical-guarantees" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Theoretical Guarantees
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#diagnostics-and-debugging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Diagnostics and Debugging
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Diagnostics and Debugging">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#verbose-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verbose Output
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#common-issues-and-solutions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common Issues and Solutions
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#usage-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Usage Examples
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Usage Examples">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#basic-optimization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Basic Optimization
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#custom-objective-with-turnover-penalty" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Custom Objective with Turnover Penalty
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-optimization-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Post-Optimization Validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        References
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Integration Model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#philosophy-and-role" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Philosophy and Role
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Philosophy and Role">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#separation-of-concerns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Separation of Concerns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#inversion-of-traditional-planning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inversion of Traditional Planning
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mathematical-foundations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mathematical Foundations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Mathematical Foundations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#wealth-evolution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wealth Evolution
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#allocation-simplex" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Allocation Simplex
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#goal-framework" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Goal Framework
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Goal Framework">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#goal-primitives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Goal Primitives
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#goalset-algebra" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GoalSet Algebra
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#bilevel-optimization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bilevel Optimization
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Bilevel Optimization">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#problem-statement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Problem Statement
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#implemented-objectives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implemented Objectives
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cvar-reformulation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CVaR Reformulation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CVaR Reformulation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#epigraphic-formulation-rockafellar-uryasev-2000" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Epigraphic Formulation (Rockafellar &amp; Uryasev 2000)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#convex-program-formulation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Convex Program Formulation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dcp-compliance-disciplined-convex-programming" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DCP Compliance (Disciplined Convex Programming)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementation-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation Architecture
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Implementation Architecture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#class-hierarchy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Class Hierarchy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key-design-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Design Changes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cvaroptimizersolve-algorithm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CVaROptimizer.solve() Algorithm
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#goalseeker-search-strategies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GoalSeeker Search Strategies
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="GoalSeeker Search Strategies">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#linear-search-safe-slower" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Linear Search (Safe, Slower)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#binary-search-faster-assumes-monotonicity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Binary Search (Faster, Assumes Monotonicity)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#solver-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Solver Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Solver Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cvxpy-solvers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CVXPY Solvers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#solver-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Solver Options
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#complexity-analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Complexity Analysis
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#numerical-considerations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Numerical Considerations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Numerical Considerations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#memory-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Memory Management
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#simplex-projection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Simplex Projection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#feasibility-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Feasibility Validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#theoretical-guarantees" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Theoretical Guarantees
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#diagnostics-and-debugging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Diagnostics and Debugging
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Diagnostics and Debugging">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#verbose-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verbose Output
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#common-issues-and-solutions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common Issues and Solutions
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#usage-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Usage Examples
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Usage Examples">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#basic-optimization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Basic Optimization
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#custom-objective-with-turnover-penalty" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Custom Objective with Turnover Penalty
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-optimization-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Post-Optimization Validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        References
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="optimization-convex-programming-for-goal-driven-portfolios"><code>optimization</code> — Convex Programming for Goal-Driven Portfolios</h1>
+<blockquote>
+<p><strong>Core idea:</strong> Transform financial goals into convex optimization problems via CVaR reformulation, searching over horizons to find minimum feasible time and optimal allocations.</p>
+</blockquote>
+<hr />
+<h2 id="philosophy-and-role">Philosophy and Role</h2>
+<h3 id="separation-of-concerns">Separation of Concerns</h3>
+<ul>
+<li><strong><code>income.py</code></strong> → Contribution scenarios <span class="arithmatex">\(A_t\)</span></li>
+<li><strong><code>portfolio.py</code></strong> → Wealth dynamics <span class="arithmatex">\(W_t^m(X)\)</span> via affine representation</li>
+<li><strong><code>optimization.py</code></strong> → Decision synthesis: minimize <span class="arithmatex">\(T\)</span>, optimize allocations <span class="arithmatex">\(X\)</span></li>
+</ul>
+<h3 id="inversion-of-traditional-planning">Inversion of Traditional Planning</h3>
+<p><strong>Traditional:</strong> Given savings <span class="arithmatex">\(X\)</span> and horizon <span class="arithmatex">\(T\)</span>, compute terminal wealth<br />
+<strong>FinOpt:</strong> Given wealth goals, find minimum <span class="arithmatex">\(T^*\)</span> and optimal <span class="arithmatex">\(X^*\)</span></p>
+<p>Requires:
+1. Chance-constrained formulation: <span class="arithmatex">\(\mathbb{P}(W_t^m \geq b) \geq 1-\varepsilon\)</span>
+2. Convex reformulation via CVaR
+3. Bilevel optimization: outer (minimize <span class="arithmatex">\(T\)</span>), inner (convex program)</p>
+<hr />
+<h2 id="mathematical-foundations">Mathematical Foundations</h2>
+<h3 id="wealth-evolution">Wealth Evolution</h3>
+<p>Multiple accounts <span class="arithmatex">\(m \in \{1,\dots,M\}\)</span>:</p>
+<div class="arithmatex">\[
+W_{t+1}^m = \big(W_t^m + A_t x_t^m\big)(1 + R_t^m)
+\]</div>
+<p><strong>Closed-form (affine representation):</strong></p>
+<div class="arithmatex">\[
+\boxed{
+W_t^m(X) = W_0^m F_{0,t}^m + \sum_{s=0}^{t-1} A_s \, x_s^m \, F_{s,t}^m
+}
+\]</div>
+<p>where accumulation factor:</p>
+<div class="arithmatex">\[
+F_{s,t}^m := \prod_{\tau=s+1}^{t} (1 + R_\tau^m)
+\]</div>
+<p><strong>Key consequences:</strong>
+- <strong>Affinity:</strong> <span class="arithmatex">\(W_t^m(X)\)</span> linear in <span class="arithmatex">\(X\)</span> → enables convex programming
+- <strong>Gradient:</strong> <span class="arithmatex">\(\frac{\partial W_t^m}{\partial x_s^m} = A_s F_{s,t}^m\)</span> → analytical derivatives
+- <strong>Efficiency:</strong> <span class="arithmatex">\(O(1)\)</span> wealth evaluation, no recursion</p>
+<h3 id="allocation-simplex">Allocation Simplex</h3>
+<p>Decision variables satisfy budget constraint:</p>
+<div class="arithmatex">\[
+\mathcal{X}_T = \left\{ X \in \mathbb{R}^{T \times M} : x_t^m \geq 0, \; \sum_{m=1}^M x_t^m = 1, \; \forall t \right\}
+\]</div>
+<p>Cartesian product of <span class="arithmatex">\(T\)</span> probability simplices: <span class="arithmatex">\(\mathcal{X}_T = \Delta^{M-1} \times \cdots \times \Delta^{M-1}\)</span>.</p>
+<hr />
+<h2 id="goal-framework">Goal Framework</h2>
+<h3 id="goal-primitives">Goal Primitives</h3>
+<p><strong>IntermediateGoal</strong> (fixed time <span class="arithmatex">\(t\)</span>):
+$$
+\mathbb{P}(W_t^m(X) \geq b_t) \geq 1 - \varepsilon_t
+$$</p>
+<p><strong>TerminalGoal</strong> (variable horizon <span class="arithmatex">\(T\)</span>):
+$$
+\mathbb{P}(W_T^m(X) \geq b) \geq 1 - \varepsilon
+$$</p>
+<p><strong>Example:</strong>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">date</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">goals</span> <span class="o">=</span> <span class="p">[</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">IntermediateGoal</span><span class="p">(</span><span class="n">date</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2026</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">account</span><span class="o">=</span><span class="s2">&quot;Emergency&quot;</span><span class="p">,</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>                     <span class="n">threshold</span><span class="o">=</span><span class="mi">5_500_000</span><span class="p">,</span> <span class="n">confidence</span><span class="o">=</span><span class="mf">0.90</span><span class="p">),</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">TerminalGoal</span><span class="p">(</span><span class="n">account</span><span class="o">=</span><span class="s2">&quot;Housing&quot;</span><span class="p">,</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>                 <span class="n">threshold</span><span class="o">=</span><span class="mi">20_000_000</span><span class="p">,</span> <span class="n">confidence</span><span class="o">=</span><span class="mf">0.90</span><span class="p">)</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="p">]</span>
+</span></code></pre></div></p>
+<h3 id="goalset-algebra">GoalSet Algebra</h3>
+<p>Partition: <span class="arithmatex">\(\mathcal{G} = \mathcal{G}_{\text{int}} \cup \mathcal{G}_{\text{term}}\)</span></p>
+<p><strong>Minimum horizon constraint:</strong>
+$$
+T \geq T_{\min} := \max_{g \in \mathcal{G}_{\text{int}}} t_g
+$$</p>
+<p><strong>Heuristic for terminal-only goals:</strong></p>
+<p>Uses conservative accumulation analysis with account-specific returns:</p>
+<div class="arithmatex">\[
+T_{\text{start}} = \max_{g \in \mathcal{G}_{\text{term}}} \left\lceil \frac{b_g - W_0^m (1+\mu_m)^{T_{\min}}}{A_{\text{avg}} \cdot \alpha \cdot (1+\mu_m - \sigma_m)} \right\rceil
+\]</div>
+<p>where:
+- <span class="arithmatex">\(\mu_m\)</span>, <span class="arithmatex">\(\sigma_m\)</span> from <code>Account.monthly_return</code> and <code>Account.monthly_volatility</code>
+- <span class="arithmatex">\(\alpha\)</span> = safety margin (default 0.75)
+- <span class="arithmatex">\(A_{\text{avg}}\)</span> = average monthly contribution</p>
+<p><strong>Implementation:</strong> <code>GoalSet.estimate_minimum_horizon(monthly_contribution, accounts, safety_margin=0.75)</code></p>
+<hr />
+<h2 id="bilevel-optimization">Bilevel Optimization</h2>
+<h3 id="problem-statement">Problem Statement</h3>
+<div class="arithmatex">\[
+\boxed{
+\min_{T \in \mathbb{N}} \;\; T \quad \text{s.t.} \quad \mathcal{F}_T \neq \emptyset
+}
+\]</div>
+<p>where goal-feasible set:</p>
+<div class="arithmatex">\[
+\mathcal{F}_T := \left\{ X \in \mathcal{X}_T : \begin{aligned}
+&amp; \mathbb{P}\big(W_t^m(X) \geq b_t^m\big) \geq 1-\varepsilon_t^m, \; \forall g \in \mathcal{G}_{\text{int}} \\
+&amp; \mathbb{P}\big(W_T^m(X) \geq b^m\big) \geq 1-\varepsilon^m, \; \forall g \in \mathcal{G}_{\text{term}}
+\end{aligned} \right\}
+\]</div>
+<p><strong>Inner problem</strong> (fixed <span class="arithmatex">\(T\)</span>):
+$$
+\max_{X \in \mathcal{F}_T} f(X)
+$$</p>
+<h3 id="implemented-objectives">Implemented Objectives</h3>
+<p>All objectives exploit affine wealth <span class="arithmatex">\(W_t^m(X) = b + \Phi X\)</span> for convexity. The following objectives are currently implemented in <code>CVaROptimizer</code>:</p>
+<p><strong>1. risky</strong> (linear program - fastest):
+$$
+f(X) = \mathbb{E}\left[\sum_{m=1}^M W_T^m(X)\right]
+$$
+Maximizes expected total terminal wealth. Pure wealth accumulation without risk considerations.</p>
+<p><strong>2. balanced</strong> (turnover minimization):
+$$
+f(X) = -\sum_{t=1}^{T-1} \sum_{m=1}^M (x_{t+1,m} - x_t^m)^2
+$$
+Minimizes portfolio rebalancing via squared L2 penalty on allocation changes. Negative sign converts minimization to maximization problem for solver.</p>
+<p><strong>3. risky_turnover</strong> (wealth with turnover penalty):
+$$
+f(X) = \mathbb{E}\left[\sum_{m=1}^M W_T^m\right] - \lambda \sum_{t=1}^{T-1} \sum_{m=1}^M (x_{t+1,m} - x_t^m)^2
+$$
+Balances wealth accumulation against transaction costs. Parameter <span class="arithmatex">\(\lambda\)</span> controls penalty strength (typical: 0.1-1.0 for normalized allocations, 1000-50000 for monetary scale).</p>
+<p><strong>4. conservative</strong> (mean-standard deviation):
+$$
+f(X) = \mathbb{E}[W_T] - \lambda \cdot \text{Std}(W_T)
+$$
+Risk-averse objective penalizing volatility. Uses standard deviation (not variance) for intuitive scaling. Parameter <span class="arithmatex">\(\lambda\)</span> controls risk aversion (typical: 0.1-1.0).</p>
+<p><strong>Note:</strong> While variance <span class="arithmatex">\(\text{Var}(W_T)\)</span> would be quadratic convex, the code uses standard deviation <span class="arithmatex">\(\text{Std}(W_T)\)</span> which is concave. This maintains the correct optimization direction (maximizing a concave function is convex) but differs from classical mean-variance formulations.</p>
+<hr />
+<h2 id="cvar-reformulation">CVaR Reformulation</h2>
+<h3 id="epigraphic-formulation-rockafellar-uryasev-2000">Epigraphic Formulation (Rockafellar &amp; Uryasev 2000)</h3>
+<p>Transform chance constraint <span class="arithmatex">\(\mathbb{P}(W \geq b) \geq 1-\varepsilon\)</span> into convex constraint:</p>
+<div class="arithmatex">\[
+\text{CVaR}_\varepsilon(b - W) \leq 0
+\]</div>
+<p><strong>Epigraphic representation:</strong>
+$$
+\text{CVaR}<em>\alpha(L) = \min</em>{\gamma, z} \left{ \gamma + \frac{1}{\alpha N} \sum_{i=1}^N z^i \right}
+$$
+subject to:
+$$
+z^i \geq L^i - \gamma, \quad z^i \geq 0, \quad \forall i
+$$</p>
+<p>where <span class="arithmatex">\(L^i = b - W^i\)</span> is shortfall in scenario <span class="arithmatex">\(i\)</span>.</p>
+<h3 id="convex-program-formulation">Convex Program Formulation</h3>
+<p><strong>Decision variables:</strong>
+- <span class="arithmatex">\(X \in \mathbb{R}^{T \times M}\)</span>: allocations
+- <span class="arithmatex">\(\gamma_g \in \mathbb{R}\)</span>: VaR level per goal <span class="arithmatex">\(g\)</span>
+- <span class="arithmatex">\(z_g \in \mathbb{R}_+^N\)</span>: excess shortfall per goal <span class="arithmatex">\(g\)</span></p>
+<p><strong>Constraints:</strong></p>
+<ol>
+<li>
+<p><strong>Simplex:</strong> <span class="arithmatex">\(\sum_m x_t^m = 1, \; x_t^m \geq 0\)</span></p>
+</li>
+<li>
+<p><strong>CVaR (per goal):</strong>
+$$
+\begin{aligned}
+z_g^i &amp;\geq (\text{threshold}<em>g - W</em>{t_g}^{m_g,i}(X)) - \gamma_g \
+\gamma_g &amp;+ \frac{1}{\varepsilon_g N} \sum_{i=1}^N z_g^i \leq 0
+\end{aligned}
+$$</p>
+</li>
+</ol>
+<p><strong>Affine wealth construction:</strong>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">build_wealth_affine</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">m</span><span class="p">):</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;W[:,t,m] = b + Φ @ X[:t,m]&quot;&quot;&quot;</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    <span class="n">b</span> <span class="o">=</span> <span class="n">W0</span><span class="p">[</span><span class="n">m</span><span class="p">]</span> <span class="o">*</span> <span class="n">F</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">t</span><span class="p">,</span> <span class="n">m</span><span class="p">]</span>  <span class="c1"># Constant term</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="k">if</span> <span class="n">t</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>        <span class="k">return</span> <span class="n">b</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="n">Phi</span> <span class="o">=</span> <span class="n">A</span><span class="p">[:,</span> <span class="p">:</span><span class="n">t</span><span class="p">]</span> <span class="o">*</span> <span class="n">F</span><span class="p">[:,</span> <span class="p">:</span><span class="n">t</span><span class="p">,</span> <span class="n">t</span><span class="p">,</span> <span class="n">m</span><span class="p">]</span>  <span class="c1"># Coefficient matrix</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="k">return</span> <span class="n">b</span> <span class="o">+</span> <span class="n">Phi</span> <span class="o">@</span> <span class="n">X</span><span class="p">[:</span><span class="n">t</span><span class="p">,</span> <span class="n">m</span><span class="p">]</span>
+</span></code></pre></div></p>
+<h3 id="dcp-compliance-disciplined-convex-programming">DCP Compliance (Disciplined Convex Programming)</h3>
+<p><strong>Variance formulation (when used):</strong></p>
+<div class="arithmatex">\[
+\text{Var}(W) = \frac{1}{N}\sum_{i=1}^N (W_i - \bar{W})^2
+\]</div>
+<p>Implemented via <code>cp.sum_squares</code>:
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">mean_wealth</span> <span class="o">=</span> <span class="n">cp</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">W_T_total</span><span class="p">)</span> <span class="o">/</span> <span class="n">n_sims</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">variance</span> <span class="o">=</span> <span class="n">cp</span><span class="o">.</span><span class="n">sum_squares</span><span class="p">(</span><span class="n">W_T_total</span> <span class="o">-</span> <span class="n">mean_wealth</span><span class="p">)</span> <span class="o">/</span> <span class="n">n_sims</span>
+</span></code></pre></div></p>
+<p><strong>Convexity:</strong> Sum of squares of affine expressions is convex (SOC representable).</p>
+<p><strong>Turnover formulation:</strong></p>
+<p>Squared L2 norm is convex:
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">turnover</span> <span class="o">=</span> <span class="n">cp</span><span class="o">.</span><span class="n">sum_squares</span><span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="mi">1</span><span class="p">:,</span> <span class="p">:]</span> <span class="o">-</span> <span class="n">X</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="p">:])</span>
+</span></code></pre></div></p>
+<p>Equivalent to <span class="arithmatex">\(\sum_{t,m} (x_{t+1,m} - x_t^m)^2\)</span>.</p>
+<hr />
+<h2 id="implementation-architecture">Implementation Architecture</h2>
+<h3 id="class-hierarchy">Class Hierarchy</h3>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>AllocationOptimizer (ABC)
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>    ├─ solve(T, A, R, W0, goal_set, ...) → OptimizationResult
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>    ├─ _check_feasibility(...) → bool
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    ├─ _compute_objective(W, X, T, M) → float
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    ├─ _objective_risky(W, X, T, M)
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    ├─ _objective_balanced(W, X, T, M)
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>    ├─ _objective_risky_turnover(W, X, T, M)
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>    └─ _objective_conservative(W, X, T, M)
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>CVaROptimizer(AllocationOptimizer)
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>    ├─ cp: CVXPY module
+</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>    ├─ objective: str ∈ {&quot;risky&quot;, &quot;balanced&quot;, &quot;risky_turnover&quot;, &quot;conservative&quot;}
+</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>    └─ solve(...) → OptimizationResult
+</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a>
+</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>GoalSeeker
+</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a>    ├─ optimizer: AllocationOptimizer
+</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a>    ├─ seek(..., search_method=&quot;binary&quot;) → OptimizationResult
+</span><span id="__span-4-18"><a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a>    ├─ _linear_search(...) → OptimizationResult
+</span><span id="__span-4-19"><a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a>    └─ _binary_search(...) → OptimizationResult
+</span></code></pre></div>
+<h3 id="key-design-changes">Key Design Changes</h3>
+<p><strong>GoalSet passed explicitly:</strong> Caller creates <code>GoalSet</code> once before optimization loop, avoiding redundant validation:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># In GoalSeeker.seek()</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">goal_set</span> <span class="o">=</span> <span class="n">GoalSet</span><span class="p">(</span><span class="n">goals</span><span class="p">,</span> <span class="n">accounts</span><span class="p">,</span> <span class="n">start_date</span><span class="p">)</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="k">for</span> <span class="n">T</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">T_start</span><span class="p">,</span> <span class="n">T_max</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>    <span class="n">result</span> <span class="o">=</span> <span class="n">optimizer</span><span class="o">.</span><span class="n">solve</span><span class="p">(</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>        <span class="n">T</span><span class="o">=</span><span class="n">T</span><span class="p">,</span> <span class="n">A</span><span class="o">=</span><span class="n">A</span><span class="p">,</span> <span class="n">R</span><span class="o">=</span><span class="n">R</span><span class="p">,</span> <span class="n">W0</span><span class="o">=</span><span class="n">W0</span><span class="p">,</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>        <span class="n">goal_set</span><span class="o">=</span><span class="n">goal_set</span><span class="p">,</span>  <span class="c1"># Pre-validated, reused</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>        <span class="o">**</span><span class="n">solver_kwargs</span>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>    <span class="p">)</span>
+</span></code></pre></div>
+<p><strong>Separation of responsibilities:</strong>
+- <code>GoalSet</code>: Validation, account resolution, minimum horizon estimation
+- <code>AllocationOptimizer</code>: Convex programming, feasibility checking
+- <code>GoalSeeker</code>: Bilevel search, warm starting</p>
+<hr />
+<h2 id="cvaroptimizersolve-algorithm">CVaROptimizer.solve() Algorithm</h2>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># 1. Validate inputs</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="k">if</span> <span class="n">T</span> <span class="o">&lt;</span> <span class="n">goal_set</span><span class="o">.</span><span class="n">T_min</span><span class="p">:</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;T=</span><span class="si">{</span><span class="n">T</span><span class="si">}</span><span class="s2"> &lt; goal_set.T_min&quot;</span><span class="p">)</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="c1"># 2. Precompute accumulation factors</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="n">portfolio</span> <span class="o">=</span> <span class="n">Portfolio</span><span class="p">(</span><span class="n">goal_set</span><span class="o">.</span><span class="n">accounts</span><span class="p">)</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="n">F</span> <span class="o">=</span> <span class="n">portfolio</span><span class="o">.</span><span class="n">compute_accumulation_factors</span><span class="p">(</span><span class="n">R</span><span class="p">)</span>  <span class="c1"># (n_sims, T+1, T+1, M)</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="c1"># 3. Decision variables</span>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="n">X</span> <span class="o">=</span> <span class="n">cp</span><span class="o">.</span><span class="n">Variable</span><span class="p">((</span><span class="n">T</span><span class="p">,</span> <span class="n">M</span><span class="p">),</span> <span class="n">nonneg</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="n">gamma</span> <span class="o">=</span> <span class="p">{</span><span class="n">g</span><span class="p">:</span> <span class="n">cp</span><span class="o">.</span><span class="n">Variable</span><span class="p">()</span> <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">goals</span><span class="p">}</span>
+</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="n">z</span> <span class="o">=</span> <span class="p">{</span><span class="n">g</span><span class="p">:</span> <span class="n">cp</span><span class="o">.</span><span class="n">Variable</span><span class="p">(</span><span class="n">n_sims</span><span class="p">,</span> <span class="n">nonneg</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">goals</span><span class="p">}</span>
+</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>
+</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="c1"># 4. Affine wealth helper</span>
+</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="k">def</span><span class="w"> </span><span class="nf">build_wealth_affine</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">m</span><span class="p">):</span>
+</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a>    <span class="n">b</span> <span class="o">=</span> <span class="n">W0</span><span class="p">[</span><span class="n">m</span><span class="p">]</span> <span class="o">*</span> <span class="n">F</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">t</span><span class="p">,</span> <span class="n">m</span><span class="p">]</span>
+</span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a>    <span class="k">if</span> <span class="n">t</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+</span><span id="__span-6-18"><a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a>        <span class="k">return</span> <span class="n">b</span>
+</span><span id="__span-6-19"><a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a>    <span class="n">Phi</span> <span class="o">=</span> <span class="n">A</span><span class="p">[:,</span> <span class="p">:</span><span class="n">t</span><span class="p">]</span> <span class="o">*</span> <span class="n">F</span><span class="p">[:,</span> <span class="p">:</span><span class="n">t</span><span class="p">,</span> <span class="n">t</span><span class="p">,</span> <span class="n">m</span><span class="p">]</span>
+</span><span id="__span-6-20"><a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a>    <span class="k">return</span> <span class="n">b</span> <span class="o">+</span> <span class="n">Phi</span> <span class="o">@</span> <span class="n">X</span><span class="p">[:</span><span class="n">t</span><span class="p">,</span> <span class="n">m</span><span class="p">]</span>
+</span><span id="__span-6-21"><a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a>
+</span><span id="__span-6-22"><a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a><span class="c1"># 5. Constraints</span>
+</span><span id="__span-6-23"><a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a><span class="n">constraints</span> <span class="o">=</span> <span class="p">[</span><span class="n">cp</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">]</span>  <span class="c1"># Simplex</span>
+</span><span id="__span-6-24"><a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a>
+</span><span id="__span-6-25"><a id="__codelineno-6-25" name="__codelineno-6-25" href="#__codelineno-6-25"></a><span class="k">for</span> <span class="n">goal</span> <span class="ow">in</span> <span class="n">goal_set</span><span class="o">.</span><span class="n">terminal_goals</span><span class="p">:</span>
+</span><span id="__span-6-26"><a id="__codelineno-6-26" name="__codelineno-6-26" href="#__codelineno-6-26"></a>    <span class="n">m</span> <span class="o">=</span> <span class="n">goal_set</span><span class="o">.</span><span class="n">get_account_index</span><span class="p">(</span><span class="n">goal</span><span class="p">)</span>
+</span><span id="__span-6-27"><a id="__codelineno-6-27" name="__codelineno-6-27" href="#__codelineno-6-27"></a>    <span class="n">W_T_m</span> <span class="o">=</span> <span class="n">build_wealth_affine</span><span class="p">(</span><span class="n">T</span><span class="p">,</span> <span class="n">m</span><span class="p">)</span>
+</span><span id="__span-6-28"><a id="__codelineno-6-28" name="__codelineno-6-28" href="#__codelineno-6-28"></a>    <span class="n">shortfall</span> <span class="o">=</span> <span class="n">goal</span><span class="o">.</span><span class="n">threshold</span> <span class="o">-</span> <span class="n">W_T_m</span>
+</span><span id="__span-6-29"><a id="__codelineno-6-29" name="__codelineno-6-29" href="#__codelineno-6-29"></a>    <span class="n">constraints</span> <span class="o">+=</span> <span class="p">[</span>
+</span><span id="__span-6-30"><a id="__codelineno-6-30" name="__codelineno-6-30" href="#__codelineno-6-30"></a>        <span class="n">z</span><span class="p">[</span><span class="n">goal</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="n">shortfall</span> <span class="o">-</span> <span class="n">gamma</span><span class="p">[</span><span class="n">goal</span><span class="p">],</span>
+</span><span id="__span-6-31"><a id="__codelineno-6-31" name="__codelineno-6-31" href="#__codelineno-6-31"></a>        <span class="n">gamma</span><span class="p">[</span><span class="n">goal</span><span class="p">]</span> <span class="o">+</span> <span class="n">cp</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">z</span><span class="p">[</span><span class="n">goal</span><span class="p">])</span><span class="o">/</span><span class="p">(</span><span class="n">goal</span><span class="o">.</span><span class="n">epsilon</span> <span class="o">*</span> <span class="n">n_sims</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="mi">0</span>
+</span><span id="__span-6-32"><a id="__codelineno-6-32" name="__codelineno-6-32" href="#__codelineno-6-32"></a>    <span class="p">]</span>
+</span><span id="__span-6-33"><a id="__codelineno-6-33" name="__codelineno-6-33" href="#__codelineno-6-33"></a>
+</span><span id="__span-6-34"><a id="__codelineno-6-34" name="__codelineno-6-34" href="#__codelineno-6-34"></a><span class="k">for</span> <span class="n">goal</span> <span class="ow">in</span> <span class="n">goal_set</span><span class="o">.</span><span class="n">intermediate_goals</span><span class="p">:</span>
+</span><span id="__span-6-35"><a id="__codelineno-6-35" name="__codelineno-6-35" href="#__codelineno-6-35"></a>    <span class="n">m</span> <span class="o">=</span> <span class="n">goal_set</span><span class="o">.</span><span class="n">get_account_index</span><span class="p">(</span><span class="n">goal</span><span class="p">)</span>
+</span><span id="__span-6-36"><a id="__codelineno-6-36" name="__codelineno-6-36" href="#__codelineno-6-36"></a>    <span class="n">t</span> <span class="o">=</span> <span class="n">goal_set</span><span class="o">.</span><span class="n">get_resolved_month</span><span class="p">(</span><span class="n">goal</span><span class="p">)</span>
+</span><span id="__span-6-37"><a id="__codelineno-6-37" name="__codelineno-6-37" href="#__codelineno-6-37"></a>    <span class="n">W_t_m</span> <span class="o">=</span> <span class="n">build_wealth_affine</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">m</span><span class="p">)</span>
+</span><span id="__span-6-38"><a id="__codelineno-6-38" name="__codelineno-6-38" href="#__codelineno-6-38"></a>    <span class="n">shortfall</span> <span class="o">=</span> <span class="n">goal</span><span class="o">.</span><span class="n">threshold</span> <span class="o">-</span> <span class="n">W_t_m</span>
+</span><span id="__span-6-39"><a id="__codelineno-6-39" name="__codelineno-6-39" href="#__codelineno-6-39"></a>    <span class="n">constraints</span> <span class="o">+=</span> <span class="p">[</span>
+</span><span id="__span-6-40"><a id="__codelineno-6-40" name="__codelineno-6-40" href="#__codelineno-6-40"></a>        <span class="n">z</span><span class="p">[</span><span class="n">goal</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="n">shortfall</span> <span class="o">-</span> <span class="n">gamma</span><span class="p">[</span><span class="n">goal</span><span class="p">],</span>
+</span><span id="__span-6-41"><a id="__codelineno-6-41" name="__codelineno-6-41" href="#__codelineno-6-41"></a>        <span class="n">gamma</span><span class="p">[</span><span class="n">goal</span><span class="p">]</span> <span class="o">+</span> <span class="n">cp</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">z</span><span class="p">[</span><span class="n">goal</span><span class="p">])</span><span class="o">/</span><span class="p">(</span><span class="n">goal</span><span class="o">.</span><span class="n">epsilon</span> <span class="o">*</span> <span class="n">n_sims</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="mi">0</span>
+</span><span id="__span-6-42"><a id="__codelineno-6-42" name="__codelineno-6-42" href="#__codelineno-6-42"></a>    <span class="p">]</span>
+</span><span id="__span-6-43"><a id="__codelineno-6-43" name="__codelineno-6-43" href="#__codelineno-6-43"></a>
+</span><span id="__span-6-44"><a id="__codelineno-6-44" name="__codelineno-6-44" href="#__codelineno-6-44"></a><span class="c1"># 6. Objective (dispatch by self.objective)</span>
+</span><span id="__span-6-45"><a id="__codelineno-6-45" name="__codelineno-6-45" href="#__codelineno-6-45"></a><span class="n">W_T_total</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">build_wealth_affine</span><span class="p">(</span><span class="n">T</span><span class="p">,</span> <span class="n">m</span><span class="p">)</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">M</span><span class="p">))</span>
+</span><span id="__span-6-46"><a id="__codelineno-6-46" name="__codelineno-6-46" href="#__codelineno-6-46"></a><span class="n">mean_wealth</span> <span class="o">=</span> <span class="n">cp</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">W_T_total</span><span class="p">)</span> <span class="o">/</span> <span class="n">n_sims</span>
+</span><span id="__span-6-47"><a id="__codelineno-6-47" name="__codelineno-6-47" href="#__codelineno-6-47"></a>
+</span><span id="__span-6-48"><a id="__codelineno-6-48" name="__codelineno-6-48" href="#__codelineno-6-48"></a><span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">objective</span> <span class="o">==</span> <span class="s2">&quot;risky&quot;</span><span class="p">:</span>
+</span><span id="__span-6-49"><a id="__codelineno-6-49" name="__codelineno-6-49" href="#__codelineno-6-49"></a>    <span class="n">objective</span> <span class="o">=</span> <span class="n">cp</span><span class="o">.</span><span class="n">Maximize</span><span class="p">(</span><span class="n">mean_wealth</span><span class="p">)</span>
+</span><span id="__span-6-50"><a id="__codelineno-6-50" name="__codelineno-6-50" href="#__codelineno-6-50"></a><span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">objective</span> <span class="o">==</span> <span class="s2">&quot;conservative&quot;</span><span class="p">:</span>
+</span><span id="__span-6-51"><a id="__codelineno-6-51" name="__codelineno-6-51" href="#__codelineno-6-51"></a>    <span class="n">lambda_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">objective_params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;lambda&quot;</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">)</span>
+</span><span id="__span-6-52"><a id="__codelineno-6-52" name="__codelineno-6-52" href="#__codelineno-6-52"></a>    <span class="n">variance</span> <span class="o">=</span> <span class="n">cp</span><span class="o">.</span><span class="n">sum_squares</span><span class="p">(</span><span class="n">W_T_total</span> <span class="o">-</span> <span class="n">mean_wealth</span><span class="p">)</span> <span class="o">/</span> <span class="n">n_sims</span>
+</span><span id="__span-6-53"><a id="__codelineno-6-53" name="__codelineno-6-53" href="#__codelineno-6-53"></a>    <span class="n">objective</span> <span class="o">=</span> <span class="n">cp</span><span class="o">.</span><span class="n">Maximize</span><span class="p">(</span><span class="n">mean_wealth</span> <span class="o">-</span> <span class="n">lambda_</span> <span class="o">*</span> <span class="n">variance</span><span class="p">)</span>
+</span><span id="__span-6-54"><a id="__codelineno-6-54" name="__codelineno-6-54" href="#__codelineno-6-54"></a><span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">objective</span> <span class="o">==</span> <span class="s2">&quot;risky_turnover&quot;</span><span class="p">:</span>
+</span><span id="__span-6-55"><a id="__codelineno-6-55" name="__codelineno-6-55" href="#__codelineno-6-55"></a>    <span class="n">lambda_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">objective_params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;lambda&quot;</span><span class="p">,</span> <span class="mi">15000</span><span class="p">)</span>
+</span><span id="__span-6-56"><a id="__codelineno-6-56" name="__codelineno-6-56" href="#__codelineno-6-56"></a>    <span class="n">turnover</span> <span class="o">=</span> <span class="n">cp</span><span class="o">.</span><span class="n">sum_squares</span><span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="mi">1</span><span class="p">:,</span> <span class="p">:]</span> <span class="o">-</span> <span class="n">X</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="p">:])</span> <span class="k">if</span> <span class="n">T</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="k">else</span> <span class="mi">0</span>
+</span><span id="__span-6-57"><a id="__codelineno-6-57" name="__codelineno-6-57" href="#__codelineno-6-57"></a>    <span class="n">objective</span> <span class="o">=</span> <span class="n">cp</span><span class="o">.</span><span class="n">Maximize</span><span class="p">(</span><span class="n">mean_wealth</span> <span class="o">-</span> <span class="n">lambda_</span> <span class="o">*</span> <span class="n">turnover</span><span class="p">)</span>
+</span><span id="__span-6-58"><a id="__codelineno-6-58" name="__codelineno-6-58" href="#__codelineno-6-58"></a><span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">objective</span> <span class="o">==</span> <span class="s2">&quot;balanced&quot;</span><span class="p">:</span>
+</span><span id="__span-6-59"><a id="__codelineno-6-59" name="__codelineno-6-59" href="#__codelineno-6-59"></a>    <span class="n">turnover</span> <span class="o">=</span> <span class="n">cp</span><span class="o">.</span><span class="n">sum_squares</span><span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="mi">1</span><span class="p">:,</span> <span class="p">:]</span> <span class="o">-</span> <span class="n">X</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="p">:])</span> <span class="k">if</span> <span class="n">T</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="k">else</span> <span class="mi">0</span>
+</span><span id="__span-6-60"><a id="__codelineno-6-60" name="__codelineno-6-60" href="#__codelineno-6-60"></a>    <span class="n">objective</span> <span class="o">=</span> <span class="n">cp</span><span class="o">.</span><span class="n">Maximize</span><span class="p">(</span><span class="o">-</span><span class="n">turnover</span><span class="p">)</span>
+</span><span id="__span-6-61"><a id="__codelineno-6-61" name="__codelineno-6-61" href="#__codelineno-6-61"></a>
+</span><span id="__span-6-62"><a id="__codelineno-6-62" name="__codelineno-6-62" href="#__codelineno-6-62"></a><span class="c1"># 7. Solve</span>
+</span><span id="__span-6-63"><a id="__codelineno-6-63" name="__codelineno-6-63" href="#__codelineno-6-63"></a><span class="n">prob</span> <span class="o">=</span> <span class="n">cp</span><span class="o">.</span><span class="n">Problem</span><span class="p">(</span><span class="n">objective</span><span class="p">,</span> <span class="n">constraints</span><span class="p">)</span>
+</span><span id="__span-6-64"><a id="__codelineno-6-64" name="__codelineno-6-64" href="#__codelineno-6-64"></a><span class="n">prob</span><span class="o">.</span><span class="n">solve</span><span class="p">(</span><span class="n">solver</span><span class="o">=</span><span class="n">cp</span><span class="o">.</span><span class="n">ECOS</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="n">verbose</span><span class="p">,</span> <span class="n">max_iters</span><span class="o">=</span><span class="n">max_iters</span><span class="p">)</span>
+</span><span id="__span-6-65"><a id="__codelineno-6-65" name="__codelineno-6-65" href="#__codelineno-6-65"></a>
+</span><span id="__span-6-66"><a id="__codelineno-6-66" name="__codelineno-6-66" href="#__codelineno-6-66"></a><span class="c1"># 8. Extract and validate</span>
+</span><span id="__span-6-67"><a id="__codelineno-6-67" name="__codelineno-6-67" href="#__codelineno-6-67"></a><span class="n">X_star</span> <span class="o">=</span> <span class="n">X</span><span class="o">.</span><span class="n">value</span>
+</span><span id="__span-6-68"><a id="__codelineno-6-68" name="__codelineno-6-68" href="#__codelineno-6-68"></a><span class="c1"># Project to simplex if needed (numerical tolerance)</span>
+</span><span id="__span-6-69"><a id="__codelineno-6-69" name="__codelineno-6-69" href="#__codelineno-6-69"></a><span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">T</span><span class="p">):</span>
+</span><span id="__span-6-70"><a id="__codelineno-6-70" name="__codelineno-6-70" href="#__codelineno-6-70"></a>    <span class="k">if</span> <span class="nb">abs</span><span class="p">(</span><span class="n">X_star</span><span class="p">[</span><span class="n">t</span><span class="p">,</span> <span class="p">:]</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">-</span> <span class="mf">1.0</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mf">1e-6</span><span class="p">:</span>
+</span><span id="__span-6-71"><a id="__codelineno-6-71" name="__codelineno-6-71" href="#__codelineno-6-71"></a>        <span class="n">X_star</span><span class="p">[</span><span class="n">t</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">X_star</span><span class="p">[</span><span class="n">t</span><span class="p">,</span> <span class="p">:],</span> <span class="mi">0</span><span class="p">)</span>
+</span><span id="__span-6-72"><a id="__codelineno-6-72" name="__codelineno-6-72" href="#__codelineno-6-72"></a>        <span class="n">X_star</span><span class="p">[</span><span class="n">t</span><span class="p">,</span> <span class="p">:]</span> <span class="o">/=</span> <span class="n">X_star</span><span class="p">[</span><span class="n">t</span><span class="p">,</span> <span class="p">:]</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+</span><span id="__span-6-73"><a id="__codelineno-6-73" name="__codelineno-6-73" href="#__codelineno-6-73"></a>
+</span><span id="__span-6-74"><a id="__codelineno-6-74" name="__codelineno-6-74" href="#__codelineno-6-74"></a><span class="c1"># 9. Exact feasibility check</span>
+</span><span id="__span-6-75"><a id="__codelineno-6-75" name="__codelineno-6-75" href="#__codelineno-6-75"></a><span class="n">feasible</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_check_feasibility</span><span class="p">(</span><span class="n">X_star</span><span class="p">,</span> <span class="n">A</span><span class="p">,</span> <span class="n">R</span><span class="p">,</span> <span class="n">W0</span><span class="p">,</span> <span class="n">portfolio</span><span class="p">,</span> <span class="n">goal_set</span><span class="p">)</span>
+</span><span id="__span-6-76"><a id="__codelineno-6-76" name="__codelineno-6-76" href="#__codelineno-6-76"></a>
+</span><span id="__span-6-77"><a id="__codelineno-6-77" name="__codelineno-6-77" href="#__codelineno-6-77"></a><span class="k">return</span> <span class="n">OptimizationResult</span><span class="p">(</span><span class="n">X</span><span class="o">=</span><span class="n">X_star</span><span class="p">,</span> <span class="n">T</span><span class="o">=</span><span class="n">T</span><span class="p">,</span> <span class="n">feasible</span><span class="o">=</span><span class="n">feasible</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
+</span></code></pre></div>
+<hr />
+<h2 id="goalseeker-search-strategies">GoalSeeker Search Strategies</h2>
+<h3 id="linear-search-safe-slower">Linear Search (Safe, Slower)</h3>
+<p><strong>Algorithm:</strong>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">X_prev</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="k">for</span> <span class="n">T</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">T_start</span><span class="p">,</span> <span class="n">T_max</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>    <span class="n">result</span> <span class="o">=</span> <span class="n">optimizer</span><span class="o">.</span><span class="n">solve</span><span class="p">(</span><span class="n">T</span><span class="p">,</span> <span class="n">A</span><span class="p">,</span> <span class="n">R</span><span class="p">,</span> <span class="n">W0</span><span class="p">,</span> <span class="n">goal_set</span><span class="p">,</span> <span class="n">X_init</span><span class="o">=</span><span class="n">X_prev</span><span class="p">)</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>    <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">feasible</span><span class="p">:</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>        <span class="k">return</span> <span class="n">result</span>  <span class="c1"># Found T*</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>    <span class="c1"># Warm start: extend policy</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>    <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">X</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>        <span class="n">X_prev</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">vstack</span><span class="p">([</span><span class="n">result</span><span class="o">.</span><span class="n">X</span><span class="p">,</span> <span class="n">result</span><span class="o">.</span><span class="n">X</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">:,</span> <span class="p">:]])</span>
+</span></code></pre></div></p>
+<p><strong>Complexity:</strong> <span class="arithmatex">\(O(T^* - T_{\text{start}})\)</span> iterations</p>
+<p><strong>Properties:</strong>
+- Always finds true <span class="arithmatex">\(T^*\)</span> if feasible
+- No assumptions required
+- Warm start accelerates convergence</p>
+<h3 id="binary-search-faster-assumes-monotonicity">Binary Search (Faster, Assumes Monotonicity)</h3>
+<p><strong>Algorithm:</strong>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">left</span><span class="p">,</span> <span class="n">right</span> <span class="o">=</span> <span class="n">T_start</span><span class="p">,</span> <span class="n">T_max</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">best_result</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="k">while</span> <span class="n">left</span> <span class="o">&lt;</span> <span class="n">right</span><span class="p">:</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>    <span class="n">mid</span> <span class="o">=</span> <span class="p">(</span><span class="n">left</span> <span class="o">+</span> <span class="n">right</span><span class="p">)</span> <span class="o">//</span> <span class="mi">2</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>    <span class="c1"># Warm start from previous result</span>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>    <span class="n">X_init</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>    <span class="k">if</span> <span class="n">best_result</span> <span class="ow">and</span> <span class="n">best_result</span><span class="o">.</span><span class="n">T</span> <span class="o">&lt;</span> <span class="n">mid</span><span class="p">:</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>        <span class="n">n_extend</span> <span class="o">=</span> <span class="n">mid</span> <span class="o">-</span> <span class="n">best_result</span><span class="o">.</span><span class="n">T</span>
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>        <span class="n">X_init</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">vstack</span><span class="p">([</span>
+</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>            <span class="n">best_result</span><span class="o">.</span><span class="n">X</span><span class="p">,</span>
+</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>            <span class="n">np</span><span class="o">.</span><span class="n">tile</span><span class="p">(</span><span class="n">best_result</span><span class="o">.</span><span class="n">X</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">:,</span> <span class="p">:],</span> <span class="p">(</span><span class="n">n_extend</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a>        <span class="p">])</span>
+</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a>
+</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a>    <span class="n">result</span> <span class="o">=</span> <span class="n">optimizer</span><span class="o">.</span><span class="n">solve</span><span class="p">(</span><span class="n">mid</span><span class="p">,</span> <span class="n">A</span><span class="p">,</span> <span class="n">R</span><span class="p">,</span> <span class="n">W0</span><span class="p">,</span> <span class="n">goal_set</span><span class="p">,</span> <span class="n">X_init</span><span class="o">=</span><span class="n">X_init</span><span class="p">)</span>
+</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a>
+</span><span id="__span-8-18"><a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a>    <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">feasible</span><span class="p">:</span>
+</span><span id="__span-8-19"><a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a>        <span class="n">best_result</span> <span class="o">=</span> <span class="n">result</span>
+</span><span id="__span-8-20"><a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a>        <span class="n">right</span> <span class="o">=</span> <span class="n">mid</span>  <span class="c1"># Search lower half</span>
+</span><span id="__span-8-21"><a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a>    <span class="k">else</span><span class="p">:</span>
+</span><span id="__span-8-22"><a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a>        <span class="n">left</span> <span class="o">=</span> <span class="n">mid</span> <span class="o">+</span> <span class="mi">1</span>  <span class="c1"># Search upper half</span>
+</span><span id="__span-8-23"><a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a>
+</span><span id="__span-8-24"><a id="__codelineno-8-24" name="__codelineno-8-24" href="#__codelineno-8-24"></a><span class="k">return</span> <span class="n">best_result</span>
+</span></code></pre></div></p>
+<p><strong>Complexity:</strong> <span class="arithmatex">\(O(\log(T_{\max} - T_{\text{start}}))\)</span> iterations</p>
+<p><strong>Assumption:</strong> Monotonicity <span class="arithmatex">\(\mathcal{F}_T \subseteq \mathcal{F}_{T+1}\)</span></p>
+<p><strong>When to use:</strong>
+- Typical financial planning scenarios (safe)
+- Contribution schedules are non-decreasing or stable
+- Goal structure is well-behaved</p>
+<p><strong>When to avoid:</strong>
+- Contributions have sudden drops
+- Pathological goal configurations
+- Safety-critical applications → use linear search</p>
+<hr />
+<h2 id="solver-configuration">Solver Configuration</h2>
+<h3 id="cvxpy-solvers">CVXPY Solvers</h3>
+<p><strong>ECOS</strong> (default):
+- Type: Interior-point (LP/SOCP)
+- Speed: Fast (30-80ms typical)
+- Stability: Good for well-conditioned problems
+- Recommended for most use cases</p>
+<p><strong>SCS</strong> (robust):
+- Type: First-order conic solver
+- Speed: Moderate
+- Stability: Handles ill-conditioned problems
+- Use when ECOS fails or numerical issues</p>
+<p><strong>CLARABEL</strong> (modern):
+- Type: Interior-point
+- Speed: Balanced
+- Stability: Good numerical properties
+- Alternative to ECOS for difficult problems</p>
+<h3 id="solver-options">Solver Options</h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="n">result</span> <span class="o">=</span> <span class="n">optimizer</span><span class="o">.</span><span class="n">solve</span><span class="p">(</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>    <span class="n">T</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span> <span class="n">A</span><span class="o">=</span><span class="n">A</span><span class="p">,</span> <span class="n">R</span><span class="o">=</span><span class="n">R</span><span class="p">,</span> <span class="n">W0</span><span class="o">=</span><span class="n">W0</span><span class="p">,</span> <span class="n">goal_set</span><span class="o">=</span><span class="n">goal_set</span><span class="p">,</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>    <span class="n">solver</span><span class="o">=</span><span class="s1">&#39;ECOS&#39;</span><span class="p">,</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>    <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>    <span class="n">max_iters</span><span class="o">=</span><span class="mi">10000</span><span class="p">,</span>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>    <span class="n">abstol</span><span class="o">=</span><span class="mf">1e-7</span><span class="p">,</span>  <span class="c1"># Absolute tolerance</span>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>    <span class="n">reltol</span><span class="o">=</span><span class="mf">1e-6</span>   <span class="c1"># Relative tolerance</span>
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="p">)</span>
+</span></code></pre></div>
+<h3 id="complexity-analysis">Complexity Analysis</h3>
+<p><strong>Variables:</strong> <span class="arithmatex">\(T \cdot M + G \cdot (1 + N) + f(obj)\)</span>
+- <span class="arithmatex">\(T \cdot M\)</span> allocations <span class="arithmatex">\(X\)</span>
+- <span class="arithmatex">\(G\)</span> VaR levels <span class="arithmatex">\(\gamma_g\)</span>
+- <span class="arithmatex">\(G \cdot N\)</span> excess shortfalls <span class="arithmatex">\(z_g^i\)</span>
+- <span class="arithmatex">\(f(obj)\)</span> = objective-dependent (e.g., variance auxiliary variables)</p>
+<p><strong>Constraints:</strong> <span class="arithmatex">\(T + G \cdot (N + 1) + g(obj)\)</span>
+- <span class="arithmatex">\(T\)</span> simplex constraints
+- <span class="arithmatex">\(G \cdot N\)</span> CVaR auxiliary constraints
+- <span class="arithmatex">\(G\)</span> CVaR threshold constraints
+- <span class="arithmatex">\(g(obj)\)</span> = objective-dependent</p>
+<p><strong>Example:</strong> <span class="arithmatex">\(T=24, M=3, G=3, N=300\)</span>
+- Variables: <span class="arithmatex">\(72 + 903 = 975\)</span>
+- Constraints: <span class="arithmatex">\(24 + 903 = 927\)</span>
+- Solve time: 30-80ms (ECOS)</p>
+<p><strong>Interior-point complexity:</strong> <span class="arithmatex">\(O(n^{3.5})\)</span> where <span class="arithmatex">\(n\)</span> = number of variables</p>
+<hr />
+<h2 id="numerical-considerations">Numerical Considerations</h2>
+<h3 id="memory-management">Memory Management</h3>
+<p>Accumulation factor tensor <span class="arithmatex">\(F \in \mathbb{R}^{N \times (T+1) \times (T+1) \times M}\)</span>:</p>
+<p><strong>Size:</strong> <span class="arithmatex">\(N \cdot T^2 \cdot M \cdot 8\)</span> bytes</p>
+<p><strong>Example:</strong> <span class="arithmatex">\(N=500, T=120, M=5\)</span> → 14 GB ⚠️</p>
+<p><strong>Mitigation:</strong>
+1. Use <code>Portfolio.compute_accumulation_factors()</code> with optimized storage
+2. Batch scenarios (process <span class="arithmatex">\(N\)</span> in chunks)
+3. On-demand computation in optimizer (trade memory for compute)
+4. Reduce <span class="arithmatex">\(N\)</span> for preliminary runs (100-200 sufficient for testing)</p>
+<h3 id="simplex-projection">Simplex Projection</h3>
+<p>Due to finite solver tolerance, may have <span class="arithmatex">\(|\sum_m x_t^m - 1| \approx 10^{-8}\)</span>:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">T</span><span class="p">):</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>    <span class="n">row_sum</span> <span class="o">=</span> <span class="n">X_star</span><span class="p">[</span><span class="n">t</span><span class="p">,</span> <span class="p">:]</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>    <span class="k">if</span> <span class="nb">abs</span><span class="p">(</span><span class="n">row_sum</span> <span class="o">-</span> <span class="mf">1.0</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mf">1e-6</span><span class="p">:</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>        <span class="n">X_star</span><span class="p">[</span><span class="n">t</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">X_star</span><span class="p">[</span><span class="n">t</span><span class="p">,</span> <span class="p">:],</span> <span class="mi">0</span><span class="p">)</span>  <span class="c1"># Clip negatives</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>        <span class="n">X_star</span><span class="p">[</span><span class="n">t</span><span class="p">,</span> <span class="p">:]</span> <span class="o">/=</span> <span class="n">X_star</span><span class="p">[</span><span class="n">t</span><span class="p">,</span> <span class="p">:]</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>  <span class="c1"># Renormalize</span>
+</span></code></pre></div>
+<p>Applied automatically in <code>CVaROptimizer.solve()</code> post-optimization.</p>
+<h3 id="feasibility-validation">Feasibility Validation</h3>
+<p><strong>Two-stage validation:</strong></p>
+<ol>
+<li><strong>CVXPY constraints:</strong> CVaR constraints during solve</li>
+<li>Convex relaxation via epigraphic formulation</li>
+<li>
+<p>Solver tolerances may allow small violations</p>
+</li>
+<li>
+<p><strong>Exact SAA:</strong> Non-smoothed indicator check via <code>_check_feasibility()</code>
+   <div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">violations</span> <span class="o">=</span> <span class="n">W</span><span class="p">[:,</span> <span class="n">t</span><span class="p">,</span> <span class="n">m</span><span class="p">]</span> <span class="o">&lt;</span> <span class="n">goal</span><span class="o">.</span><span class="n">threshold</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">violation_rate</span> <span class="o">=</span> <span class="n">violations</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="n">feasible</span> <span class="o">=</span> <span class="n">violation_rate</span> <span class="o">&lt;=</span> <span class="n">goal</span><span class="o">.</span><span class="n">epsilon</span>
+</span></code></pre></div></p>
+</li>
+</ol>
+<p>Prevents false positives from numerical approximations.</p>
+<p><strong>Implementation pattern:</strong>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># After CVXPY solve</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">X_star</span> <span class="o">=</span> <span class="n">X</span><span class="o">.</span><span class="n">value</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="n">feasible</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_check_feasibility</span><span class="p">(</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>    <span class="n">X_star</span><span class="p">,</span> <span class="n">A</span><span class="p">,</span> <span class="n">R</span><span class="p">,</span> <span class="n">W0</span><span class="p">,</span> <span class="n">portfolio</span><span class="p">,</span> <span class="n">goal_set</span>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="p">)</span>
+</span></code></pre></div></p>
+<hr />
+<h2 id="theoretical-guarantees">Theoretical Guarantees</h2>
+<p><strong>Theorem 1 (Affine Wealth Representation):</strong><br />
+For any allocation policy <span class="arithmatex">\(X \in \mathcal{X}_T\)</span> and return realization <span class="arithmatex">\(\{R_t^m\}\)</span>:
+$$
+W_t^m(X) = W_0^m F_{0,t}^m + \sum_{s=0}^{t-1} A_s x_s^m F_{s,t}^m
+$$
+is affine in <span class="arithmatex">\(X\)</span>, enabling convex programming formulations.</p>
+<p><strong>Theorem 2 (CVaR Epigraphic Convexity):</strong><br />
+The epigraphic reformulation
+$$
+\text{CVaR}<em>\varepsilon(b - W) = \inf</em>{\gamma, z} \left{ \gamma + \frac{1}{\varepsilon N}\sum_{i=1}^N z^i : z^i \geq b - W^i - \gamma, \, z^i \geq 0 \right}
+$$
+defines a convex constraint in <span class="arithmatex">\(X\)</span> when <span class="arithmatex">\(W(X)\)</span> is affine.</p>
+<p><strong>Theorem 3 (Objective Convexity):</strong><br />
+All implemented objectives maintain convexity:
+- <strong>risky:</strong> Linear in <span class="arithmatex">\(X\)</span> → convex
+- <strong>balanced:</strong> <span class="arithmatex">\(-\|X\|_2^2\)</span> → concave (maximizing concave is convex)
+- <strong>risky_turnover:</strong> Linear - convex → convex
+- <strong>conservative:</strong> Linear - concave → convex (when using Std, not Var)</p>
+<p><strong>Corollary (Global Optimality):</strong><br />
+CVXPY interior-point solvers return global optimum for convex programs. No local minima exist.</p>
+<p><strong>Theorem 4 (SAA Convergence):</strong><br />
+Under bounded returns and Lipschitz continuity in <span class="arithmatex">\(X\)</span>:
+$$
+\frac{1}{N}\sum_{i=1}^N \mathbb{1}{W_t^m(X; \omega^{(i)}) \geq b} \xrightarrow{a.s.} \mathbb{P}(W_t^m(X) \geq b)
+$$
+as <span class="arithmatex">\(N \to \infty\)</span>.</p>
+<p><strong>Theorem 5 (Bilevel Optimality):</strong><br />
+- <strong>Linear search:</strong> Finds true <span class="arithmatex">\(T^*\)</span> if inner solver succeeds
+- <strong>Binary search:</strong> Finds <span class="arithmatex">\(T^*\)</span> under monotonicity assumption <span class="arithmatex">\(\mathcal{F}_T \subseteq \mathcal{F}_{T+1}\)</span></p>
+<p><strong>Proposition (Iteration Reduction):</strong><br />
+Binary search reduces expected iterations from <span class="arithmatex">\(O(T^* - T_{\text{start}})\)</span> to <span class="arithmatex">\(O(\log(T_{\max} - T_{\text{start}}))\)</span>.</p>
+<hr />
+<h2 id="diagnostics-and-debugging">Diagnostics and Debugging</h2>
+<h3 id="verbose-output">Verbose Output</h3>
+<p>Enable <code>verbose=True</code> for detailed solver information:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>[CVXPY Solution]
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>  Status: optimal
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>  Objective: 21543678.92
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>  Solve time: 0.067s
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>[Simplex Validation]
+</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>  Max |Σx_t - 1|: 3.45e-09
+</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>  X bounds: [0.0000, 1.0000]
+</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a>
+</span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a>[Goal Satisfaction Diagnostics]
+</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a>  Account 0 (Emergency):
+</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a>    Threshold:        5,500,000
+</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a>    Mean wealth:      6,234,567
+</span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a>    Violation rate: 8.20% (max: 10.00%)
+</span><span id="__span-13-15"><a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a>    CVaR value:         -1234.56 (target: ≤ 0)
+</span><span id="__span-13-16"><a id="__codelineno-13-16" name="__codelineno-13-16" href="#__codelineno-13-16"></a>
+</span><span id="__span-13-17"><a id="__codelineno-13-17" name="__codelineno-13-17" href="#__codelineno-13-17"></a>  Account 1 (Housing) at month 12:
+</span><span id="__span-13-18"><a id="__codelineno-13-18" name="__codelineno-13-18" href="#__codelineno-13-18"></a>    Threshold:       10,000,000
+</span><span id="__span-13-19"><a id="__codelineno-13-19" name="__codelineno-13-19" href="#__codelineno-13-19"></a>    Mean wealth:     11,456,789
+</span><span id="__span-13-20"><a id="__codelineno-13-20" name="__codelineno-13-20" href="#__codelineno-13-20"></a>    Violation rate: 7.50% (max: 10.00%)
+</span><span id="__span-13-21"><a id="__codelineno-13-21" name="__codelineno-13-21" href="#__codelineno-13-21"></a>    CVaR value:         -2345.67 (target: ≤ 0)
+</span></code></pre></div>
+<h3 id="common-issues-and-solutions">Common Issues and Solutions</h3>
+<p><strong>1. Infeasible problem:</strong>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>Status: infeasible
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>Optimal: T*=240 (exhausted T_max)
+</span></code></pre></div>
+<strong>Diagnosis:</strong> Goals too aggressive for available resources</p>
+<p><strong>Solutions:</strong>
+- Increase <code>T_max</code> (extend planning horizon)
+- Reduce goal thresholds (lower target wealth)
+- Increase <code>epsilon</code> (lower confidence requirement: 0.90 → 0.85)
+- Increase contributions (higher income allocation)
+- Verify initial wealth <span class="arithmatex">\(W_0\)</span> is sufficient</p>
+<p><strong>2. Numerical instability:</strong>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>Max |Σx_t - 1|: 1.23e-04
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>⚠️  Minor simplex violations detected
+</span></code></pre></div>
+<strong>Diagnosis:</strong> Solver tolerance issues</p>
+<p><strong>Solutions:</strong>
+- Tighten solver tolerances: <code>abstol=1e-8, reltol=1e-7</code>
+- Switch solver: <code>ECOS</code> → <code>SCS</code> (more robust)
+- Check for extreme returns in <span class="arithmatex">\(R\)</span> (e.g., <span class="arithmatex">\(|R_t^m| &gt; 1\)</span>)
+- Scale problem: normalize wealth to <span class="arithmatex">\([0, 1]\)</span> range</p>
+<p><strong>3. Slow convergence:</strong>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>Solve time: 12.345s (expected: 0.05-0.10s)
+</span></code></pre></div>
+<strong>Diagnosis:</strong> Problem size or conditioning issues</p>
+<p><strong>Solutions:</strong>
+- Reduce scenarios: <span class="arithmatex">\(N=500\)</span> → <span class="arithmatex">\(N=200\)</span> for testing
+- Simplify objective: <code>balanced</code> → <code>risky</code> (LP faster than SOCP)
+- Use warm start: pass <code>X_init</code> from previous horizon
+- Reduce horizon for initial exploration: <span class="arithmatex">\(T=120\)</span> → <span class="arithmatex">\(T=60\)</span></p>
+<p><strong>4. Goal validation failure:</strong>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>Status: optimal (CVXPY)
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>Feasibility check: FAILED
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>  Violation rate: 12.5% (max: 10.0%)
+</span></code></pre></div>
+<strong>Diagnosis:</strong> CVaR approximation vs exact SAA mismatch</p>
+<p><strong>Solutions:</strong>
+- Increase scenarios: <span class="arithmatex">\(N=300\)</span> → <span class="arithmatex">\(N=500\)</span> (reduces sampling error)
+- Tighten CVaR tolerance: adjust solver <code>abstol</code>
+- Verify accumulation factor computation
+- Check for numerical underflow/overflow in <span class="arithmatex">\(F\)</span></p>
+<p><strong>5. Binary search failure:</strong>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>Binary search failed: T=87 infeasible
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>Monotonicity assumption may be violated
+</span></code></pre></div>
+<strong>Diagnosis:</strong> Non-monotonic feasible set</p>
+<p><strong>Solutions:</strong>
+- Switch to linear search: <code>search_method="linear"</code>
+- Inspect contribution schedule for sudden drops
+- Verify goal configuration (check intermediate goals)
+- Plot feasibility vs <span class="arithmatex">\(T\)</span> to identify non-monotonicity</p>
+<hr />
+<h2 id="usage-examples">Usage Examples</h2>
+<h3 id="basic-optimization">Basic Optimization</h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">finopt.src.optimization</span><span class="w"> </span><span class="kn">import</span> <span class="n">CVaROptimizer</span><span class="p">,</span> <span class="n">GoalSeeker</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">finopt.src.goals</span><span class="w"> </span><span class="kn">import</span> <span class="n">TerminalGoal</span>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">date</span>
+</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a>
+</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="c1"># Setup</span>
+</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a><span class="n">accounts</span> <span class="o">=</span> <span class="p">[</span>
+</span><span id="__span-19-7"><a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a>    <span class="n">Account</span><span class="o">.</span><span class="n">from_annual</span><span class="p">(</span><span class="s2">&quot;Emergency&quot;</span><span class="p">,</span> <span class="mf">0.04</span><span class="p">,</span> <span class="mf">0.05</span><span class="p">,</span> <span class="n">initial_wealth</span><span class="o">=</span><span class="mi">1_000_000</span><span class="p">),</span>
+</span><span id="__span-19-8"><a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a>    <span class="n">Account</span><span class="o">.</span><span class="n">from_annual</span><span class="p">(</span><span class="s2">&quot;Housing&quot;</span><span class="p">,</span> <span class="mf">0.07</span><span class="p">,</span> <span class="mf">0.12</span><span class="p">,</span> <span class="n">initial_wealth</span><span class="o">=</span><span class="mi">500_000</span><span class="p">)</span>
+</span><span id="__span-19-9"><a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a><span class="p">]</span>
+</span><span id="__span-19-10"><a id="__codelineno-19-10" name="__codelineno-19-10" href="#__codelineno-19-10"></a><span class="n">W0</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">1_000_000</span><span class="p">,</span> <span class="mi">500_000</span><span class="p">])</span>
+</span><span id="__span-19-11"><a id="__codelineno-19-11" name="__codelineno-19-11" href="#__codelineno-19-11"></a>
+</span><span id="__span-19-12"><a id="__codelineno-19-12" name="__codelineno-19-12" href="#__codelineno-19-12"></a><span class="n">goals</span> <span class="o">=</span> <span class="p">[</span>
+</span><span id="__span-19-13"><a id="__codelineno-19-13" name="__codelineno-19-13" href="#__codelineno-19-13"></a>    <span class="n">TerminalGoal</span><span class="p">(</span><span class="n">account</span><span class="o">=</span><span class="s2">&quot;Emergency&quot;</span><span class="p">,</span> <span class="n">threshold</span><span class="o">=</span><span class="mi">5_500_000</span><span class="p">,</span> <span class="n">confidence</span><span class="o">=</span><span class="mf">0.90</span><span class="p">),</span>
+</span><span id="__span-19-14"><a id="__codelineno-19-14" name="__codelineno-19-14" href="#__codelineno-19-14"></a>    <span class="n">TerminalGoal</span><span class="p">(</span><span class="n">account</span><span class="o">=</span><span class="s2">&quot;Housing&quot;</span><span class="p">,</span> <span class="n">threshold</span><span class="o">=</span><span class="mi">20_000_000</span><span class="p">,</span> <span class="n">confidence</span><span class="o">=</span><span class="mf">0.90</span><span class="p">)</span>
+</span><span id="__span-19-15"><a id="__codelineno-19-15" name="__codelineno-19-15" href="#__codelineno-19-15"></a><span class="p">]</span>
+</span><span id="__span-19-16"><a id="__codelineno-19-16" name="__codelineno-19-16" href="#__codelineno-19-16"></a>
+</span><span id="__span-19-17"><a id="__codelineno-19-17" name="__codelineno-19-17" href="#__codelineno-19-17"></a><span class="c1"># Optimizer with terminal wealth objective</span>
+</span><span id="__span-19-18"><a id="__codelineno-19-18" name="__codelineno-19-18" href="#__codelineno-19-18"></a><span class="n">optimizer</span> <span class="o">=</span> <span class="n">CVaROptimizer</span><span class="p">(</span>
+</span><span id="__span-19-19"><a id="__codelineno-19-19" name="__codelineno-19-19" href="#__codelineno-19-19"></a>    <span class="n">n_accounts</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">accounts</span><span class="p">),</span>
+</span><span id="__span-19-20"><a id="__codelineno-19-20" name="__codelineno-19-20" href="#__codelineno-19-20"></a>    <span class="n">objective</span><span class="o">=</span><span class="s1">&#39;risky&#39;</span><span class="p">,</span>
+</span><span id="__span-19-21"><a id="__codelineno-19-21" name="__codelineno-19-21" href="#__codelineno-19-21"></a>    <span class="n">account_names</span><span class="o">=</span><span class="p">[</span><span class="n">a</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">accounts</span><span class="p">]</span>
+</span><span id="__span-19-22"><a id="__codelineno-19-22" name="__codelineno-19-22" href="#__codelineno-19-22"></a><span class="p">)</span>
+</span><span id="__span-19-23"><a id="__codelineno-19-23" name="__codelineno-19-23" href="#__codelineno-19-23"></a>
+</span><span id="__span-19-24"><a id="__codelineno-19-24" name="__codelineno-19-24" href="#__codelineno-19-24"></a><span class="c1"># Generators for scenarios</span>
+</span><span id="__span-19-25"><a id="__codelineno-19-25" name="__codelineno-19-25" href="#__codelineno-19-25"></a><span class="k">def</span><span class="w"> </span><span class="nf">A_gen</span><span class="p">(</span><span class="n">T</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">s</span><span class="p">):</span>
+</span><span id="__span-19-26"><a id="__codelineno-19-26" name="__codelineno-19-26" href="#__codelineno-19-26"></a>    <span class="k">return</span> <span class="n">model</span><span class="o">.</span><span class="n">income</span><span class="o">.</span><span class="n">contributions</span><span class="p">(</span><span class="n">T</span><span class="p">,</span> <span class="n">n_sims</span><span class="o">=</span><span class="n">n</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="n">s</span><span class="p">,</span> <span class="n">output</span><span class="o">=</span><span class="s2">&quot;array&quot;</span><span class="p">)</span>
+</span><span id="__span-19-27"><a id="__codelineno-19-27" name="__codelineno-19-27" href="#__codelineno-19-27"></a>
+</span><span id="__span-19-28"><a id="__codelineno-19-28" name="__codelineno-19-28" href="#__codelineno-19-28"></a><span class="k">def</span><span class="w"> </span><span class="nf">R_gen</span><span class="p">(</span><span class="n">T</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">s</span><span class="p">):</span>
+</span><span id="__span-19-29"><a id="__codelineno-19-29" name="__codelineno-19-29" href="#__codelineno-19-29"></a>    <span class="k">return</span> <span class="n">model</span><span class="o">.</span><span class="n">returns</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span><span class="n">T</span><span class="p">,</span> <span class="n">n_sims</span><span class="o">=</span><span class="n">n</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="n">s</span><span class="p">)</span>
+</span><span id="__span-19-30"><a id="__codelineno-19-30" name="__codelineno-19-30" href="#__codelineno-19-30"></a>
+</span><span id="__span-19-31"><a id="__codelineno-19-31" name="__codelineno-19-31" href="#__codelineno-19-31"></a><span class="c1"># Bilevel search</span>
+</span><span id="__span-19-32"><a id="__codelineno-19-32" name="__codelineno-19-32" href="#__codelineno-19-32"></a><span class="n">seeker</span> <span class="o">=</span> <span class="n">GoalSeeker</span><span class="p">(</span><span class="n">optimizer</span><span class="p">,</span> <span class="n">T_max</span><span class="o">=</span><span class="mi">120</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-19-33"><a id="__codelineno-19-33" name="__codelineno-19-33" href="#__codelineno-19-33"></a><span class="n">result</span> <span class="o">=</span> <span class="n">seeker</span><span class="o">.</span><span class="n">seek</span><span class="p">(</span>
+</span><span id="__span-19-34"><a id="__codelineno-19-34" name="__codelineno-19-34" href="#__codelineno-19-34"></a>    <span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">,</span>
+</span><span id="__span-19-35"><a id="__codelineno-19-35" name="__codelineno-19-35" href="#__codelineno-19-35"></a>    <span class="n">A_generator</span><span class="o">=</span><span class="n">A_gen</span><span class="p">,</span>
+</span><span id="__span-19-36"><a id="__codelineno-19-36" name="__codelineno-19-36" href="#__codelineno-19-36"></a>    <span class="n">R_generator</span><span class="o">=</span><span class="n">R_gen</span><span class="p">,</span>
+</span><span id="__span-19-37"><a id="__codelineno-19-37" name="__codelineno-19-37" href="#__codelineno-19-37"></a>    <span class="n">W0</span><span class="o">=</span><span class="n">W0</span><span class="p">,</span>
+</span><span id="__span-19-38"><a id="__codelineno-19-38" name="__codelineno-19-38" href="#__codelineno-19-38"></a>    <span class="n">accounts</span><span class="o">=</span><span class="n">accounts</span><span class="p">,</span>
+</span><span id="__span-19-39"><a id="__codelineno-19-39" name="__codelineno-19-39" href="#__codelineno-19-39"></a>    <span class="n">start_date</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+</span><span id="__span-19-40"><a id="__codelineno-19-40" name="__codelineno-19-40" href="#__codelineno-19-40"></a>    <span class="n">n_sims</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span>
+</span><span id="__span-19-41"><a id="__codelineno-19-41" name="__codelineno-19-41" href="#__codelineno-19-41"></a>    <span class="n">seed</span><span class="o">=</span><span class="mi">42</span><span class="p">,</span>
+</span><span id="__span-19-42"><a id="__codelineno-19-42" name="__codelineno-19-42" href="#__codelineno-19-42"></a>    <span class="n">search_method</span><span class="o">=</span><span class="s2">&quot;binary&quot;</span>
+</span><span id="__span-19-43"><a id="__codelineno-19-43" name="__codelineno-19-43" href="#__codelineno-19-43"></a><span class="p">)</span>
+</span><span id="__span-19-44"><a id="__codelineno-19-44" name="__codelineno-19-44" href="#__codelineno-19-44"></a>
+</span><span id="__span-19-45"><a id="__codelineno-19-45" name="__codelineno-19-45" href="#__codelineno-19-45"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Optimal horizon: T*=</span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">T</span><span class="si">}</span><span class="s2"> months&quot;</span><span class="p">)</span>
+</span><span id="__span-19-46"><a id="__codelineno-19-46" name="__codelineno-19-46" href="#__codelineno-19-46"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Feasible: </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">feasible</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span></code></pre></div>
+<h3 id="custom-objective-with-turnover-penalty">Custom Objective with Turnover Penalty</h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="n">optimizer</span> <span class="o">=</span> <span class="n">CVaROptimizer</span><span class="p">(</span>
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>    <span class="n">n_accounts</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>    <span class="n">objective</span><span class="o">=</span><span class="s1">&#39;risky_turnover&#39;</span><span class="p">,</span>
+</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a>    <span class="n">objective_params</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;lambda&#39;</span><span class="p">:</span> <span class="mi">10000</span><span class="p">},</span>  <span class="c1"># Turnover penalty</span>
+</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a>    <span class="n">account_names</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Emergency&quot;</span><span class="p">,</span> <span class="s2">&quot;Housing&quot;</span><span class="p">,</span> <span class="s2">&quot;Retirement&quot;</span><span class="p">]</span>
+</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="p">)</span>
+</span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a>
+</span><span id="__span-20-8"><a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a><span class="n">result</span> <span class="o">=</span> <span class="n">optimizer</span><span class="o">.</span><span class="n">solve</span><span class="p">(</span>
+</span><span id="__span-20-9"><a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a>    <span class="n">T</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span>
+</span><span id="__span-20-10"><a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a>    <span class="n">A</span><span class="o">=</span><span class="n">A_scenarios</span><span class="p">,</span>
+</span><span id="__span-20-11"><a id="__codelineno-20-11" name="__codelineno-20-11" href="#__codelineno-20-11"></a>    <span class="n">R</span><span class="o">=</span><span class="n">R_scenarios</span><span class="p">,</span>
+</span><span id="__span-20-12"><a id="__codelineno-20-12" name="__codelineno-20-12" href="#__codelineno-20-12"></a>    <span class="n">W0</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">1e6</span><span class="p">,</span> <span class="mf">0.5e6</span><span class="p">,</span> <span class="mf">2e6</span><span class="p">]),</span>
+</span><span id="__span-20-13"><a id="__codelineno-20-13" name="__codelineno-20-13" href="#__codelineno-20-13"></a>    <span class="n">goal_set</span><span class="o">=</span><span class="n">goal_set</span><span class="p">,</span>
+</span><span id="__span-20-14"><a id="__codelineno-20-14" name="__codelineno-20-14" href="#__codelineno-20-14"></a>    <span class="n">solver</span><span class="o">=</span><span class="s1">&#39;ECOS&#39;</span><span class="p">,</span>
+</span><span id="__span-20-15"><a id="__codelineno-20-15" name="__codelineno-20-15" href="#__codelineno-20-15"></a>    <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span>
+</span><span id="__span-20-16"><a id="__codelineno-20-16" name="__codelineno-20-16" href="#__codelineno-20-16"></a><span class="p">)</span>
+</span></code></pre></div>
+<h3 id="post-optimization-validation">Post-Optimization Validation</h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Simulate with optimal policy</span>
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="n">sim_result</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">simulate</span><span class="p">(</span>
+</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>    <span class="n">T</span><span class="o">=</span><span class="n">result</span><span class="o">.</span><span class="n">T</span><span class="p">,</span>
+</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>    <span class="n">X</span><span class="o">=</span><span class="n">result</span><span class="o">.</span><span class="n">X</span><span class="p">,</span>
+</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a>    <span class="n">n_sims</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span>  <span class="c1"># Higher fidelity</span>
+</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a>    <span class="n">seed</span><span class="o">=</span><span class="mi">999</span>
+</span><span id="__span-21-7"><a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a><span class="p">)</span>
+</span><span id="__span-21-8"><a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a>
+</span><span id="__span-21-9"><a id="__codelineno-21-9" name="__codelineno-21-9" href="#__codelineno-21-9"></a><span class="c1"># Validate goals</span>
+</span><span id="__span-21-10"><a id="__codelineno-21-10" name="__codelineno-21-10" href="#__codelineno-21-10"></a><span class="n">status</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">validate_goals</span><span class="p">(</span><span class="n">sim_result</span><span class="p">)</span>
+</span><span id="__span-21-11"><a id="__codelineno-21-11" name="__codelineno-21-11" href="#__codelineno-21-11"></a>
+</span><span id="__span-21-12"><a id="__codelineno-21-12" name="__codelineno-21-12" href="#__codelineno-21-12"></a><span class="k">for</span> <span class="n">goal</span><span class="p">,</span> <span class="n">metrics</span> <span class="ow">in</span> <span class="n">status</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+</span><span id="__span-21-13"><a id="__codelineno-21-13" name="__codelineno-21-13" href="#__codelineno-21-13"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">goal</span><span class="o">.</span><span class="n">account</span><span class="si">}</span><span class="s2">:&quot;</span><span class="p">)</span>
+</span><span id="__span-21-14"><a id="__codelineno-21-14" name="__codelineno-21-14" href="#__codelineno-21-14"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Violation rate: </span><span class="si">{</span><span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;violation_rate&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">.2%</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-21-15"><a id="__codelineno-21-15" name="__codelineno-21-15" href="#__codelineno-21-15"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Required confidence: </span><span class="si">{</span><span class="n">goal</span><span class="o">.</span><span class="n">confidence</span><span class="si">:</span><span class="s2">.2%</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-21-16"><a id="__codelineno-21-16" name="__codelineno-21-16" href="#__codelineno-21-16"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Status: </span><span class="si">{</span><span class="s1">&#39;✓ PASS&#39;</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;satisfied&#39;</span><span class="p">]</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="s1">&#39;✗ FAIL&#39;</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span></code></pre></div>
+<hr />
+<h2 id="references">References</h2>
+<p><strong>Rockafellar, R.T. and Uryasev, S. (2000).</strong> Optimization of conditional value-at-risk. <em>Journal of Risk</em>, 2, 21-42.</p>
+<p><strong>Markowitz, H. (1952).</strong> Portfolio Selection. <em>The Journal of Finance</em>, 7(1), 77-91.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../javascripts/mathjax.js"></script>
+      
+        <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+      
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>
