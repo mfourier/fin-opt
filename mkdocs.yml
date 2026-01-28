@@ -1,7 +1,7 @@
 site_name: FinOpt
 site_description: Intelligent financial planning through stochastic simulation and convex optimization.
-site_author: mlioi
-site_url: https://mlioi.github.io/fin-opt/
+site_author: mfourier
+site_url: https://mfourier.github.io/fin-opt/
 
 theme:
   name: material
