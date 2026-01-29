@@ -28,11 +28,13 @@ This separation enables:
 
 Gross returns follow a **correlated lognormal distribution**:
 
+
 $$
 1 + R_t^m \sim \text{LogNormal}(\mu_{\text{log}}^m, \Sigma)
 $$
 
 where the covariance matrix is constructed as:
+
 
 $$
 \Sigma = D \rho D
@@ -46,6 +48,7 @@ with:
 
 Given **arithmetic parameters** $(\mu_{\text{arith}}, \sigma_{\text{arith}})$, convert to **log-space**:
 
+
 $$
 \begin{aligned}
 \sigma_{\text{log}} &= \sqrt{\log\left(1 + \frac{\sigma_{\text{arith}}^2}{(1 + \mu_{\text{arith}})^2}\right)} \\[8pt]
@@ -54,6 +57,7 @@ $$
 $$
 
 **Rationale:** The adjustment $-\sigma_{\text{log}}^2/2$ ensures:
+
 $$
 \mathbb{E}[1 + R_t^m] = \exp\left(\mu_{\text{log}} + \frac{\sigma_{\text{log}}^2}{2}\right) = 1 + \mu_{\text{arith}}
 $$
@@ -534,6 +538,7 @@ returns.plot_cumulative(T=36, n_sims=500, seed=42, start=date(2025, 1, 1))
 
 **Proposition 1 (Lognormal Moments):**
 If $1 + R \sim \text{LogNormal}(\mu_{\log}, \sigma_{\log}^2)$, then:
+
 $$
 \begin{aligned}
 \mathbb{E}[R] &= \exp\left(\mu_{\log} + \frac{\sigma_{\log}^2}{2}\right) - 1 \\[6pt]
@@ -551,6 +556,7 @@ If $(Z_1, Z_2)$ are bivariate normal with correlation $\rho$, then $\text{Corr}(
 
 **Proposition 4 (Time Diversification):**
 For IID returns with $\mu > 0$, the probability of loss decreases exponentially:
+
 $$
 P\left(\prod_{t=1}^T (1+R_t) < 1\right) \approx \Phi\left(-\frac{\mu \sqrt{T}}{\sigma}\right) \xrightarrow{T \to \infty} 0
 $$
@@ -570,6 +576,7 @@ The current IID assumption ($R_t^m \perp R_s^m$ for $t \neq s$) is appropriate f
 3. **Volatility clustering:** Crisis periods with persistent high volatility
 
 ### Proposed AR(1) Extension
+
 
 $$
 R_t^m = \phi^m R_{t-1}^m + \epsilon_t^m, \quad \epsilon_t^m \sim \text{LogNormal}(\mu_\epsilon, \sigma_\epsilon)

@@ -2199,10 +2199,10 @@ W_{t+1}^m = \big(W_t^m + A_t x_t^m\big)(1 + R_t^m)
 \right\}
 \]</div>
 <p>representing all <strong>budget-feasible allocation policies</strong> (full contribution deployment each month).</p>
-<p><strong>Geometric interpretation:</strong> <span class="arithmatex">\(\mathcal{X}_T\)</span> is the Cartesian product of <span class="arithmatex">\(T\)</span> probability simplices:
-$$
-\mathcal{X}<em>T = \underbrace{\Delta^{M-1} \times \cdots \times \Delta^{M-1}}</em>{T \text{ times}}, \quad \Delta^{M-1} = \left{x \in \mathbb{R}<em>+^M : \sum</em>{m=1}^M x^m = 1\right}
-$$</p>
+<p><strong>Geometric interpretation:</strong> <span class="arithmatex">\(\mathcal{X}_T\)</span> is the Cartesian product of <span class="arithmatex">\(T\)</span> probability simplices:</p>
+<div class="arithmatex">\[
+\mathcal{X}_T = \underbrace{\Delta^{M-1} \times \cdots \times \Delta^{M-1}}_{T \text{ times}}, \quad \Delta^{M-1} = \left\{x \in \mathbb{R}_+^M : \sum_{m=1}^M x^m = 1\right\}
+\]</div>
 <p><strong>API:</strong>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">X</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tile</span><span class="p">([</span><span class="mf">0.6</span><span class="p">,</span> <span class="mf">0.4</span><span class="p">],</span> <span class="p">(</span><span class="n">T</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>  <span class="c1"># 60-40 split ∈ 𝒳_T</span>
 </span></code></pre></div></p>
@@ -2237,10 +2237,10 @@ F_{s,t}^m := \prod_{r=s}^{t-1} (1 + R_r^m)
 </span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>    <span class="n">confidence</span><span class="o">=</span><span class="mf">0.90</span>              <span class="c1"># 90% probability</span>
 </span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="p">)</span>
 </span></code></pre></div></p>
-<p>Mathematical constraint:
-$$
+<p>Mathematical constraint:</p>
+<div class="arithmatex">\[
 \mathbb{P}\big(W_{t}^m \ge b\big) \ge 1-\varepsilon
-$$</p>
+\]</div>
 <p><strong>Terminal Goal</strong> (variable time):
 <div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">TerminalGoal</span><span class="p">(</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>    <span class="n">account</span><span class="o">=</span><span class="s2">&quot;Housing&quot;</span><span class="p">,</span>
@@ -2248,10 +2248,10 @@ $$</p>
 </span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>    <span class="n">confidence</span><span class="o">=</span><span class="mf">0.90</span>
 </span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="p">)</span>
 </span></code></pre></div></p>
-<p>Mathematical constraint:
-$$
+<p>Mathematical constraint:</p>
+<div class="arithmatex">\[
 \mathbb{P}\big(W_{T}^m \ge b\big) \ge 1-\varepsilon
-$$</p>
+\]</div>
 <p>where <span class="arithmatex">\(T\)</span> is the optimization horizon (decision variable).</p>
 <h3 id="32-goal-set">3.2 Goal Set</h3>
 <p>The <strong>goal set</strong> <span class="arithmatex">\(\mathcal{G}\)</span> is partitioned into:</p>
@@ -2263,12 +2263,12 @@ $$</p>
 - <span class="arithmatex">\(\mathcal{G}_{\text{term}}\)</span>: terminal goals (determine <span class="arithmatex">\(T^*\)</span>)</p>
 <p><strong>Properties:</strong></p>
 <ol>
-<li>
-<p><strong>Minimum horizon constraint:</strong>
-   $$
-   T \geq T_{\min} := \max_{g \in \mathcal{G}_{\text{int}}} t_g
-   $$</p>
-</li>
+<li><strong>Minimum horizon constraint:</strong></li>
+</ol>
+<div class="arithmatex">\[
+T \geq T_{\min} := \max_{g \in \mathcal{G}_{\text{int}}} t_g
+\]</div>
+<ol>
 <li>
 <p><strong>Goal resolution:</strong> Month indices resolved via <code>start</code> date for calendar alignment</p>
 </li>
@@ -2381,7 +2381,7 @@ $$</li>
 <h4 id="cvar-reformulation-cvaroptimizer-stub">CVaR Reformulation (CVaROptimizer - Stub)</h4>
 <p>Risk-adjusted objective via <strong>Conditional Value-at-Risk</strong>:</p>
 <div class="arithmatex">\[
-\max \; \mathbb{E}[W_T] - \lambda \cdot \text{CVaR}_{\alpha}(-W_T)
+\max \; \mathbb{E}[W_T] - \lambda \cdot \text{CVaR}_{ \alpha }(-W_T)
 \]</div>
 <p>subject to goal constraints. Requires CVXPY for implementation.</p>
 <h3 id="44-solution-strategy-goalseeker">4.4 Solution Strategy (GoalSeeker)</h3>
@@ -2895,8 +2895,6 @@ $$</p>
       <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
       
         <script src="../javascripts/mathjax.js"></script>
-      
-        <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
       
         <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
       

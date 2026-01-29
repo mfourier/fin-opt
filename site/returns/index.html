@@ -1710,10 +1710,10 @@
 \mu_{\text{log}} &amp;= \log(1 + \mu_{\text{arith}}) - \frac{\sigma_{\text{log}}^2}{2}
 \end{aligned}
 \]</div>
-<p><strong>Rationale:</strong> The adjustment <span class="arithmatex">\(-\sigma_{\text{log}}^2/2\)</span> ensures:
-$$
+<p><strong>Rationale:</strong> The adjustment <span class="arithmatex">\(-\sigma_{\text{log}}^2/2\)</span> ensures:</p>
+<div class="arithmatex">\[
 \mathbb{E}[1 + R_t^m] = \exp\left(\mu_{\text{log}} + \frac{\sigma_{\text{log}}^2}{2}\right) = 1 + \mu_{\text{arith}}
-$$</p>
+\]</div>
 <h3 id="generation-algorithm">Generation algorithm</h3>
 <ol>
 <li>Sample log-returns: <span class="arithmatex">\(Z \sim \mathcal{N}(\mu_{\text{log}}, \Sigma)\)</span> with shape <span class="arithmatex">\((n_{\text{sims}}, T, M)\)</span></li>
@@ -2122,23 +2122,23 @@ When <code>start</code> is provided, the x-axis shows calendar dates instead of 
 <hr />
 <h2 id="mathematical-results">Mathematical results</h2>
 <p><strong>Proposition 1 (Lognormal Moments):</strong>
-If <span class="arithmatex">\(1 + R \sim \text{LogNormal}(\mu_{\log}, \sigma_{\log}^2)\)</span>, then:
-$$
+If <span class="arithmatex">\(1 + R \sim \text{LogNormal}(\mu_{\log}, \sigma_{\log}^2)\)</span>, then:</p>
+<div class="arithmatex">\[
 \begin{aligned}
-\mathbb{E}[R] &amp;= \exp\left(\mu_{\log} + \frac{\sigma_{\log}^2}{2}\right) - 1 \[6pt]
+\mathbb{E}[R] &amp;= \exp\left(\mu_{\log} + \frac{\sigma_{\log}^2}{2}\right) - 1 \\[6pt]
 \text{Var}[R] &amp;= \left(\exp(\sigma_{\log}^2) - 1\right) \exp(2\mu_{\log} + \sigma_{\log}^2)
 \end{aligned}
-$$</p>
+\]</div>
 <p><strong>Proposition 2 (Return Bound):</strong>
 For lognormal returns, <span class="arithmatex">\(R_t^m &gt; -1\)</span> almost surely.</p>
 <p><strong>Proof:</strong> <span class="arithmatex">\(1 + R_t^m = \exp(Z_t^m)\)</span> where <span class="arithmatex">\(Z_t^m \in \mathbb{R}\)</span>. Since <span class="arithmatex">\(\exp(z) &gt; 0\)</span> for all <span class="arithmatex">\(z \in \mathbb{R}\)</span>, we have <span class="arithmatex">\(R_t^m &gt; -1\)</span>. ∎</p>
 <p><strong>Proposition 3 (Correlation Preservation):</strong>
 If <span class="arithmatex">\((Z_1, Z_2)\)</span> are bivariate normal with correlation <span class="arithmatex">\(\rho\)</span>, then <span class="arithmatex">\(\text{Corr}(\exp(Z_1), \exp(Z_2))\)</span> is a monotone increasing function of <span class="arithmatex">\(\rho\)</span>.</p>
 <p><strong>Proposition 4 (Time Diversification):</strong>
-For IID returns with <span class="arithmatex">\(\mu &gt; 0\)</span>, the probability of loss decreases exponentially:
-$$
+For IID returns with <span class="arithmatex">\(\mu &gt; 0\)</span>, the probability of loss decreases exponentially:</p>
+<div class="arithmatex">\[
 P\left(\prod_{t=1}^T (1+R_t) &lt; 1\right) \approx \Phi\left(-\frac{\mu \sqrt{T}}{\sigma}\right) \xrightarrow{T \to \infty} 0
-$$</p>
+\]</div>
 <hr />
 <h2 id="extensions-temporal-dependence-roadmap">Extensions: Temporal Dependence (Roadmap)</h2>
 <blockquote>
@@ -2244,8 +2244,6 @@ R_t^m = \phi^m R_{t-1}^m + \epsilon_t^m, \quad \epsilon_t^m \sim \text{LogNormal
       <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
       
         <script src="../javascripts/mathjax.js"></script>
-      
-        <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
       
         <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
       

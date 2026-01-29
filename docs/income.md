@@ -121,9 +121,10 @@ A façade that **combines streams** and produces projections, contributions, met
 
 **`contributions(months, start=None, seed=None, output="series")`**
 - Computes monthly contributions using **12-month fractional arrays** that rotate based on `start`:
-  $$
-  \text{contrib}_t = \alpha^{\text{fixed}}_{(t+\text{offset})\bmod 12} \cdot y^{\text{fixed}}_t + \alpha^{\text{variable}}_{(t+\text{offset})\bmod 12} \cdot y^{\text{variable}}_t
-  $$
+  
+$$
+\text{contrib}_t = \alpha^{\text{fixed}}_{(t+\text{offset})\bmod 12} \cdot y^{\text{fixed}}_t + \alpha^{\text{variable}}_{(t+\text{offset})\bmod 12} \cdot y^{\text{variable}}_t
+$$
   where `offset = normalize_start_month(start)`.
 
 - `output`: `"array"` returns `np.ndarray`, `"series"` returns `pd.Series` with calendar index
@@ -211,9 +212,10 @@ A façade that **combines streams** and produces projections, contributions, met
 
 - **`investment.py`**  
   Receives the contributions from `income.py` and applies **capital accumulation**:
-  $$
-  W_{t+1}=(W_t+A_t)(1+R_t).
-  $$
+  
+$$
+W_{t+1}=(W_t+A_t)(1+R_t).
+$$
   Metrics (CAGR, drawdown, volatility) are computed downstream on the resulting wealth path.
 
 - **`utils.py`**  
