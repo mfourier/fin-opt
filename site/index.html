@@ -312,6 +312,25 @@
   
   
     <li class="md-tabs__item">
+      <a href="withdrawal/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Scheduled Withdrawals
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
       <a href="goals/" class="md-tabs__link">
         
   
@@ -474,13 +493,52 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#getting-started" class="md-nav__link">
+  <a href="#documentation-roadmap" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Getting Started
+        Documentation Roadmap
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Documentation Roadmap">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#core-components" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Components
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#optimization-logic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optimization &amp; Logic
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#integration-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integration &amp; Architecture
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -618,6 +676,33 @@
   
   
     <li class="md-nav__item">
+      <a href="withdrawal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scheduled Withdrawals
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="goals/" class="md-nav__link">
         
   
@@ -730,13 +815,52 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#getting-started" class="md-nav__link">
+  <a href="#documentation-roadmap" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Getting Started
+        Documentation Roadmap
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Documentation Roadmap">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#core-components" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Components
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#optimization-logic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optimization &amp; Logic
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#integration-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integration &amp; Architecture
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -778,13 +902,24 @@
 <li><strong>Bilevel Optimization</strong>: Solve complex problems that minimize time while maximizing terminal wealth.</li>
 <li><strong>Extensible Architecture</strong>: Modular design allows for custom return models, optimizers, and goal types.</li>
 </ul>
-<h2 id="getting-started">Getting Started</h2>
-<p>To explore the technical details of the framework, check out the following sections:</p>
+<h2 id="documentation-roadmap">Documentation Roadmap</h2>
+<p>Explore the technical components of the FinOpt framework:</p>
+<h3 id="core-components">Core Components</h3>
 <ul>
-<li><a href="framework/">Technical Framework</a>: An overview of the system architecture and design principles.</li>
-<li><a href="income/">Income Module</a>: How we model cash flows.</li>
-<li><a href="portfolio/">Portfolio Dynamics</a>: The math behind wealth evolution.</li>
-<li><a href="optimization/">Optimization</a>: Details on the chance-constrained optimization and SAA solvers.</li>
+<li><a href="returns/">Stochastic Returns</a>: Generating correlated lognormal returns for simulation.</li>
+<li><a href="income/">Income Module</a>: Modeling fixed and variable cash flows with growth and seasonality.</li>
+<li><a href="portfolio/">Portfolio Dynamics</a>: The mathematics of wealth evolution and affine representations.</li>
+<li><a href="withdrawal/">Scheduled Withdrawals</a>: Integration of planned cash outflows into the wealth equation.</li>
+</ul>
+<h3 id="optimization-logic">Optimization &amp; Logic</h3>
+<ul>
+<li><a href="goals/">Goals Framework</a>: Defining financial milestones as probabilistic chance constraints.</li>
+<li><a href="optimization/">Optimization</a>: Technical details on CVaR reformulation and Sample Average Approximation (SAA) solvers.</li>
+</ul>
+<h3 id="integration-architecture">Integration &amp; Architecture</h3>
+<ul>
+<li><a href="model/">Unified Model</a>: The <code>FinancialModel</code> facade that orchestrates all system components.</li>
+<li><a href="framework/">Technical Framework</a>: A deep dive into the system architecture, design principles, and mathematical foundations.</li>
 </ul>
 <h2 id="installation">Installation</h2>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pip<span class="w"> </span>install<span class="w"> </span>-r<span class="w"> </span>requirements.txt
