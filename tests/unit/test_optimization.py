@@ -1913,11 +1913,11 @@ class TestCVaROptimizerSolvers:
         ]
 
     def test_solve_with_ecos_solver(self, simulation_data, accounts):
-        """Test solve with ECOS solver (default)."""
+        """Test solve with ECOS solver."""
         goals = [TerminalGoal(account="Aggressive", threshold=1_000_000, confidence=0.60)]
         goal_set = GoalSet(goals, accounts, date(2025, 1, 1))
 
-        optimizer = CVaROptimizer(n_accounts=2, objective="balanced", solver="ECOS")
+        optimizer = CVaROptimizer(n_accounts=2, objective="balanced")
 
         result = optimizer.solve(
             T=simulation_data["T"],
@@ -1925,6 +1925,7 @@ class TestCVaROptimizerSolvers:
             R=simulation_data["R"],
             initial_wealth=simulation_data["initial_wealth"],
             goal_set=goal_set,
+            solver="ECOS",  # Solver passed to solve()
         )
 
         assert isinstance(result, OptimizationResult)
@@ -1934,7 +1935,7 @@ class TestCVaROptimizerSolvers:
         goals = [TerminalGoal(account="Aggressive", threshold=1_000_000, confidence=0.60)]
         goal_set = GoalSet(goals, accounts, date(2025, 1, 1))
 
-        optimizer = CVaROptimizer(n_accounts=2, objective="balanced", solver="SCS")
+        optimizer = CVaROptimizer(n_accounts=2, objective="balanced")
 
         result = optimizer.solve(
             T=simulation_data["T"],
@@ -1942,6 +1943,25 @@ class TestCVaROptimizerSolvers:
             R=simulation_data["R"],
             initial_wealth=simulation_data["initial_wealth"],
             goal_set=goal_set,
+            solver="SCS",  # Solver passed to solve()
+        )
+
+        assert isinstance(result, OptimizationResult)
+
+    def test_solve_with_clarabel_solver(self, simulation_data, accounts):
+        """Test solve with CLARABEL solver (default)."""
+        goals = [TerminalGoal(account="Aggressive", threshold=1_000_000, confidence=0.60)]
+        goal_set = GoalSet(goals, accounts, date(2025, 1, 1))
+
+        optimizer = CVaROptimizer(n_accounts=2, objective="balanced")
+
+        result = optimizer.solve(
+            T=simulation_data["T"],
+            A=simulation_data["A"],
+            R=simulation_data["R"],
+            initial_wealth=simulation_data["initial_wealth"],
+            goal_set=goal_set,
+            solver="CLARABEL",
         )
 
         assert isinstance(result, OptimizationResult)
@@ -1996,6 +2016,527 @@ class TestCVaROptimizerRiskyTurnover:
         )
 
         assert isinstance(result, OptimizationResult)
+
+
+# ============================================================================
+# CVAROPTIMIZER INPUT VALIDATION TESTS
+# ============================================================================
+
+class TestCVaROptimizerInputValidation:
+    """Test CVaROptimizer.solve() input validation."""
+
+    @pytest.fixture
+    def accounts(self):
+        """Create test accounts."""
+        return [
+            Account.from_annual("Conservative", 0.04, 0.05),
+            Account.from_annual("Aggressive", 0.14, 0.15),
+        ]
+
+    @pytest.fixture
+    def basic_data(self):
+        """Create basic simulation data."""
+        T = 6
+        n_sims = 50
+        M = 2
+        np.random.seed(42)
+        return {
+            "T": T,
+            "n_sims": n_sims,
+            "M": M,
+            "A": np.full((n_sims, T), 500_000.0),
+            "R": np.random.randn(n_sims, T, M) * 0.02 + 0.008,
+            "initial_wealth": np.array([0.0, 0.0]),
+        }
+
+    def test_goal_set_must_be_goalset_type(self, basic_data, accounts):
+        """Test solve raises TypeError when goal_set is not GoalSet."""
+        optimizer = CVaROptimizer(n_accounts=2)
+
+        with pytest.raises(TypeError, match="goal_set must be GoalSet"):
+            optimizer.solve(
+                T=basic_data["T"],
+                A=basic_data["A"],
+                R=basic_data["R"],
+                initial_wealth=basic_data["initial_wealth"],
+                goal_set="not a goalset",  # Invalid type
+            )
+
+    def test_T_less_than_T_min_raises(self, basic_data, accounts):
+        """Test solve raises when T < goal_set.T_min."""
+        # Create goal with intermediate goal at month 12
+        goals = [
+            IntermediateGoal(
+                account="Conservative",
+                threshold=500_000,
+                confidence=0.60,
+                date=date(2025, 12, 1)  # Requires T >= 11
+            )
+        ]
+        goal_set = GoalSet(goals, accounts, date(2025, 1, 1))
+        optimizer = CVaROptimizer(n_accounts=2)
+
+        with pytest.raises(ValueError, match="T=.*< goal_set.T_min"):
+            optimizer.solve(
+                T=6,  # T=6 < T_min=11
+                A=basic_data["A"],
+                R=basic_data["R"],
+                initial_wealth=basic_data["initial_wealth"],
+                goal_set=goal_set,
+            )
+
+    def test_A_shape_mismatch_raises(self, basic_data, accounts):
+        """Test solve raises when A has wrong shape."""
+        goals = [TerminalGoal(account="Aggressive", threshold=1_000_000, confidence=0.60)]
+        goal_set = GoalSet(goals, accounts, date(2025, 1, 1))
+        optimizer = CVaROptimizer(n_accounts=2)
+
+        # Wrong shape for A
+        A_wrong = np.full((30, 10), 500_000.0)  # Wrong shape
+
+        with pytest.raises(ValueError, match="A must have shape"):
+            optimizer.solve(
+                T=basic_data["T"],
+                A=A_wrong,
+                R=basic_data["R"],
+                initial_wealth=basic_data["initial_wealth"],
+                goal_set=goal_set,
+            )
+
+    def test_R_shape_mismatch_raises(self, basic_data, accounts):
+        """Test solve raises when R has wrong shape."""
+        goals = [TerminalGoal(account="Aggressive", threshold=1_000_000, confidence=0.60)]
+        goal_set = GoalSet(goals, accounts, date(2025, 1, 1))
+        optimizer = CVaROptimizer(n_accounts=2)
+
+        # Wrong shape for R
+        R_wrong = np.random.randn(50, 6, 3)  # Wrong number of accounts
+
+        with pytest.raises(ValueError, match="R must have shape"):
+            optimizer.solve(
+                T=basic_data["T"],
+                A=basic_data["A"],
+                R=R_wrong,
+                initial_wealth=basic_data["initial_wealth"],
+                goal_set=goal_set,
+            )
+
+    def test_initial_wealth_shape_mismatch_raises(self, basic_data, accounts):
+        """Test solve raises when initial_wealth has wrong shape."""
+        goals = [TerminalGoal(account="Aggressive", threshold=1_000_000, confidence=0.60)]
+        goal_set = GoalSet(goals, accounts, date(2025, 1, 1))
+        optimizer = CVaROptimizer(n_accounts=2)
+
+        # Wrong shape for initial_wealth
+        initial_wealth_wrong = np.array([0.0, 0.0, 0.0])  # 3 instead of 2
+
+        with pytest.raises(ValueError, match="initial_wealth must have shape"):
+            optimizer.solve(
+                T=basic_data["T"],
+                A=basic_data["A"],
+                R=basic_data["R"],
+                initial_wealth=initial_wealth_wrong,
+                goal_set=goal_set,
+            )
+
+    def test_goal_set_M_mismatch_raises(self, basic_data):
+        """Test solve raises when goal_set.M != n_accounts."""
+        # Create accounts with 3 accounts
+        accounts_3 = [
+            Account.from_annual("A", 0.04, 0.05),
+            Account.from_annual("B", 0.08, 0.10),
+            Account.from_annual("C", 0.14, 0.15),
+        ]
+        goals = [TerminalGoal(account="C", threshold=1_000_000, confidence=0.60)]
+        goal_set = GoalSet(goals, accounts_3, date(2025, 1, 1))  # M=3
+
+        optimizer = CVaROptimizer(n_accounts=2)  # M=2
+
+        with pytest.raises(ValueError, match="goal_set.M=.*!= n_accounts"):
+            optimizer.solve(
+                T=basic_data["T"],
+                A=basic_data["A"],
+                R=basic_data["R"],
+                initial_wealth=basic_data["initial_wealth"],
+                goal_set=goal_set,
+            )
+
+    def test_negative_withdrawals_raises(self, basic_data, accounts):
+        """Test solve raises when D contains negative values."""
+        goals = [TerminalGoal(account="Aggressive", threshold=1_000_000, confidence=0.60)]
+        goal_set = GoalSet(goals, accounts, date(2025, 1, 1))
+        optimizer = CVaROptimizer(n_accounts=2)
+
+        # Negative withdrawal
+        D = np.zeros((basic_data["T"], 2))
+        D[2, 0] = -100_000.0  # Negative withdrawal
+
+        with pytest.raises(ValueError, match="D must be non-negative"):
+            optimizer.solve(
+                T=basic_data["T"],
+                A=basic_data["A"],
+                R=basic_data["R"],
+                initial_wealth=basic_data["initial_wealth"],
+                goal_set=goal_set,
+                D=D,
+            )
+
+    def test_D_wrong_2d_shape_raises(self, basic_data, accounts):
+        """Test solve raises when 2D D has wrong shape."""
+        goals = [TerminalGoal(account="Aggressive", threshold=1_000_000, confidence=0.60)]
+        goal_set = GoalSet(goals, accounts, date(2025, 1, 1))
+        optimizer = CVaROptimizer(n_accounts=2)
+
+        # Wrong 2D shape
+        D = np.zeros((10, 3))  # Wrong shape
+
+        with pytest.raises(ValueError, match="D must have shape"):
+            optimizer.solve(
+                T=basic_data["T"],
+                A=basic_data["A"],
+                R=basic_data["R"],
+                initial_wealth=basic_data["initial_wealth"],
+                goal_set=goal_set,
+                D=D,
+            )
+
+    def test_D_wrong_3d_shape_raises(self, basic_data, accounts):
+        """Test solve raises when 3D D has wrong shape."""
+        goals = [TerminalGoal(account="Aggressive", threshold=1_000_000, confidence=0.60)]
+        goal_set = GoalSet(goals, accounts, date(2025, 1, 1))
+        optimizer = CVaROptimizer(n_accounts=2)
+
+        # Wrong 3D shape
+        D = np.zeros((30, 6, 2))  # Wrong n_sims
+
+        with pytest.raises(ValueError, match="D must have shape"):
+            optimizer.solve(
+                T=basic_data["T"],
+                A=basic_data["A"],
+                R=basic_data["R"],
+                initial_wealth=basic_data["initial_wealth"],
+                goal_set=goal_set,
+                D=D,
+            )
+
+    def test_D_wrong_ndim_raises(self, basic_data, accounts):
+        """Test solve raises when D is not 2D or 3D."""
+        goals = [TerminalGoal(account="Aggressive", threshold=1_000_000, confidence=0.60)]
+        goal_set = GoalSet(goals, accounts, date(2025, 1, 1))
+        optimizer = CVaROptimizer(n_accounts=2)
+
+        # 1D array
+        D = np.zeros((10,))
+
+        with pytest.raises(ValueError, match="D must be 2D or 3D"):
+            optimizer.solve(
+                T=basic_data["T"],
+                A=basic_data["A"],
+                R=basic_data["R"],
+                initial_wealth=basic_data["initial_wealth"],
+                goal_set=goal_set,
+                D=D,
+            )
+
+
+# ============================================================================
+# GOALSEEKER T_START VALIDATION TESTS
+# ============================================================================
+
+class TestGoalSeekerTStartValidation:
+    """Test GoalSeeker T_start > T_max validation."""
+
+    @pytest.fixture
+    def accounts(self):
+        """Create test accounts."""
+        return [
+            Account.from_annual("Conservative", 0.04, 0.05),
+            Account.from_annual("Aggressive", 0.14, 0.15),
+        ]
+
+    @pytest.fixture
+    def generators(self):
+        """Create A and R generators."""
+        def A_generator(T, n_sims, seed=None):
+            if seed is not None:
+                np.random.seed(seed)
+            return np.full((n_sims, T), 10_000.0)  # Small contributions
+
+        def R_generator(T, n_sims, seed=None):
+            if seed is not None:
+                np.random.seed(seed)
+            return np.random.randn(n_sims, T, 2) * 0.02 + 0.005
+
+        return A_generator, R_generator
+
+    def test_T_start_exceeds_T_max_raises(self, generators, accounts):
+        """Test seek raises when intermediate goal's T_min > T_max."""
+        A_gen, R_gen = generators
+        optimizer = CVaROptimizer(n_accounts=2, objective="balanced")
+        seeker = GoalSeeker(optimizer, T_max=6, verbose=False)  # Very short T_max
+
+        # Use intermediate goal that requires T_min > T_max
+        # An intermediate goal in December 2025 requires T_min=11 (Jan-Dec is 11 months)
+        goals = [
+            IntermediateGoal(
+                account="Conservative",
+                threshold=100_000,
+                confidence=0.60,
+                date=date(2025, 12, 1)  # Requires T >= 11 > T_max=6
+            )
+        ]
+
+        with pytest.raises(ValueError, match="T_start.*> T_max"):
+            seeker.seek(
+                goals=goals,
+                A_generator=A_gen,
+                R_generator=R_gen,
+                initial_wealth=np.array([0.0, 0.0]),
+                accounts=accounts,
+                start_date=date(2025, 1, 1),
+                n_sims=50,
+                seed=42,
+            )
+
+
+# ============================================================================
+# OPTIMIZATIONRESULT ADDITIONAL VALIDATION TESTS
+# ============================================================================
+
+class TestOptimizationResultAdditionalValidation:
+    """Test additional OptimizationResult validation cases."""
+
+    @pytest.fixture
+    def accounts(self):
+        """Create test accounts."""
+        return [
+            Account.from_annual("Conservative", 0.04, 0.05),
+            Account.from_annual("Aggressive", 0.14, 0.15),
+        ]
+
+    def test_goal_set_type_validation(self, accounts):
+        """Test OptimizationResult raises when goal_set is wrong type."""
+        goals = [TerminalGoal(account="Aggressive", threshold=1_000_000, confidence=0.60)]
+        X = np.tile([0.5, 0.5], (24, 1))
+
+        with pytest.raises(TypeError, match="goal_set must be GoalSet"):
+            OptimizationResult(
+                X=X,
+                T=24,
+                objective_value=10_000_000.0,
+                feasible=True,
+                goals=goals,
+                goal_set="not a goalset",  # Invalid type
+                solve_time=0.5,
+            )
+
+
+# ============================================================================
+# VERBOSE OUTPUT TESTS
+# ============================================================================
+
+class TestGoalSeekerVerbose:
+    """Test GoalSeeker verbose output paths."""
+
+    @pytest.fixture
+    def accounts(self):
+        """Create test accounts."""
+        return [
+            Account.from_annual("Conservative", 0.04, 0.05),
+            Account.from_annual("Aggressive", 0.14, 0.15),
+        ]
+
+    @pytest.fixture
+    def generators(self):
+        """Create A and R generators."""
+        def A_generator(T, n_sims, seed=None):
+            if seed is not None:
+                np.random.seed(seed)
+            return np.full((n_sims, T), 500_000.0)
+
+        def R_generator(T, n_sims, seed=None):
+            if seed is not None:
+                np.random.seed(seed)
+            return np.random.randn(n_sims, T, 2) * 0.02 + 0.008
+
+        return A_generator, R_generator
+
+    def test_seek_with_verbose_linear(self, generators, accounts, capsys):
+        """Test seek with verbose=True in linear search."""
+        A_gen, R_gen = generators
+        optimizer = CVaROptimizer(n_accounts=2, objective="balanced")
+        seeker = GoalSeeker(optimizer, T_max=12, verbose=True)
+
+        goals = [TerminalGoal(account="Aggressive", threshold=1_500_000, confidence=0.60)]
+
+        result = seeker.seek(
+            goals=goals,
+            A_generator=A_gen,
+            R_generator=R_gen,
+            initial_wealth=np.array([0.0, 0.0]),
+            accounts=accounts,
+            start_date=date(2025, 1, 1),
+            n_sims=50,
+            seed=42,
+            search_method="linear",
+        )
+
+        captured = capsys.readouterr()
+        assert "GoalSeeker" in captured.out or "LINEAR" in captured.out
+        assert result.feasible is True
+
+    def test_seek_with_verbose_binary(self, generators, accounts, capsys):
+        """Test seek with verbose=True in binary search."""
+        A_gen, R_gen = generators
+        optimizer = CVaROptimizer(n_accounts=2, objective="balanced")
+        seeker = GoalSeeker(optimizer, T_max=12, verbose=True)
+
+        goals = [TerminalGoal(account="Aggressive", threshold=1_500_000, confidence=0.60)]
+
+        result = seeker.seek(
+            goals=goals,
+            A_generator=A_gen,
+            R_generator=R_gen,
+            initial_wealth=np.array([0.0, 0.0]),
+            accounts=accounts,
+            start_date=date(2025, 1, 1),
+            n_sims=50,
+            seed=42,
+            search_method="binary",
+        )
+
+        captured = capsys.readouterr()
+        assert "GoalSeeker" in captured.out or "BINARY" in captured.out
+        assert result.feasible is True
+
+
+# ============================================================================
+# CVAROPTIMIZER WITH VERBOSE SOLVE
+# ============================================================================
+
+class TestCVaROptimizerVerbose:
+    """Test CVaROptimizer.solve() with verbose output."""
+
+    @pytest.fixture
+    def accounts(self):
+        """Create test accounts."""
+        return [
+            Account.from_annual("Conservative", 0.04, 0.05),
+            Account.from_annual("Aggressive", 0.14, 0.15),
+        ]
+
+    @pytest.fixture
+    def basic_data(self):
+        """Create basic simulation data."""
+        T = 6
+        n_sims = 50
+        M = 2
+        np.random.seed(42)
+        return {
+            "T": T,
+            "n_sims": n_sims,
+            "M": M,
+            "A": np.full((n_sims, T), 500_000.0),
+            "R": np.random.randn(n_sims, T, M) * 0.02 + 0.008,
+            "initial_wealth": np.array([0.0, 0.0]),
+        }
+
+    def test_solve_with_verbose_output(self, basic_data, accounts, capsys):
+        """Test solve with verbose=True."""
+        goals = [TerminalGoal(account="Aggressive", threshold=1_000_000, confidence=0.60)]
+        goal_set = GoalSet(goals, accounts, date(2025, 1, 1))
+
+        optimizer = CVaROptimizer(n_accounts=2, objective="balanced")
+
+        result = optimizer.solve(
+            T=basic_data["T"],
+            A=basic_data["A"],
+            R=basic_data["R"],
+            initial_wealth=basic_data["initial_wealth"],
+            goal_set=goal_set,
+            verbose=True,  # Enable verbose
+        )
+
+        captured = capsys.readouterr()
+        assert "CVXPY" in captured.out or "Status" in captured.out or "Simplex" in captured.out
+        assert isinstance(result, OptimizationResult)
+
+
+# ============================================================================
+# THREE ACCOUNT OPTIMIZATION TESTS
+# ============================================================================
+
+class TestThreeAccountOptimization:
+    """Test optimization with three accounts."""
+
+    @pytest.fixture
+    def three_accounts(self):
+        """Create three test accounts."""
+        return [
+            Account.from_annual("Conservative", 0.04, 0.05),
+            Account.from_annual("Moderate", 0.08, 0.10),
+            Account.from_annual("Aggressive", 0.14, 0.15),
+        ]
+
+    def test_solve_with_three_accounts(self, three_accounts):
+        """Test solve with three accounts."""
+        T = 6
+        n_sims = 50
+        M = 3
+
+        np.random.seed(42)
+        A = np.full((n_sims, T), 500_000.0)
+        R = np.random.randn(n_sims, T, M) * 0.02 + 0.008
+        initial_wealth = np.array([0.0, 0.0, 0.0])
+
+        goals = [TerminalGoal(account="Aggressive", threshold=1_000_000, confidence=0.60)]
+        goal_set = GoalSet(goals, three_accounts, date(2025, 1, 1))
+
+        optimizer = CVaROptimizer(n_accounts=3, objective="balanced")
+
+        result = optimizer.solve(
+            T=T,
+            A=A,
+            R=R,
+            initial_wealth=initial_wealth,
+            goal_set=goal_set,
+        )
+
+        assert isinstance(result, OptimizationResult)
+        assert result.X.shape == (T, 3)
+        assert result.M == 3
+
+    def test_seek_with_three_accounts(self, three_accounts):
+        """Test seek with three accounts."""
+        def A_gen(T, n_sims, seed=None):
+            if seed is not None:
+                np.random.seed(seed)
+            return np.full((n_sims, T), 500_000.0)
+
+        def R_gen(T, n_sims, seed=None):
+            if seed is not None:
+                np.random.seed(seed)
+            return np.random.randn(n_sims, T, 3) * 0.02 + 0.008
+
+        optimizer = CVaROptimizer(n_accounts=3, objective="balanced")
+        seeker = GoalSeeker(optimizer, T_max=18, verbose=False)
+
+        goals = [TerminalGoal(account="Aggressive", threshold=2_000_000, confidence=0.60)]
+
+        result = seeker.seek(
+            goals=goals,
+            A_generator=A_gen,
+            R_generator=R_gen,
+            initial_wealth=np.array([0.0, 0.0, 0.0]),
+            accounts=three_accounts,
+            start_date=date(2025, 1, 1),
+            n_sims=50,
+            seed=42,
+        )
+
+        assert isinstance(result, OptimizationResult)
+        assert result.feasible is True
+        assert result.M == 3
 
 
 if __name__ == "__main__":
