@@ -491,5 +491,351 @@ class TestCorrelationFromGroups:
         assert empirical_corr > 0.6
 
 
+# ============================================================================
+# RETURNMODEL PROPERTY TESTS
+# ============================================================================
+
+class TestReturnModelProperties:
+    """Test ReturnModel properties."""
+
+    @pytest.fixture
+    def return_model(self):
+        """Create test return model."""
+        accounts = [
+            Account.from_annual("Conservative", 0.04, 0.05),
+            Account.from_annual("Aggressive", 0.14, 0.15),
+        ]
+        return ReturnModel(accounts)
+
+    def test_monthly_params_returns_list(self, return_model):
+        """Test monthly_params returns list of dicts."""
+        params = return_model.monthly_params
+
+        assert isinstance(params, list)
+        assert len(params) == 2
+        assert "mu" in params[0]
+        assert "sigma" in params[0]
+
+    def test_monthly_params_reasonable_values(self, return_model):
+        """Test monthly_params values are reasonable."""
+        params = return_model.monthly_params
+
+        # Conservative: 4% annual -> ~0.33% monthly
+        assert 0.001 < params[0]["mu"] < 0.01
+        # Aggressive: 14% annual -> ~1.1% monthly
+        assert 0.005 < params[1]["mu"] < 0.02
+
+    def test_annual_params_returns_list(self, return_model):
+        """Test annual_params returns list of dicts."""
+        params = return_model.annual_params
+
+        assert isinstance(params, list)
+        assert len(params) == 2
+        assert "return" in params[0]
+        assert "volatility" in params[0]
+
+    def test_annual_params_match_input(self, return_model):
+        """Test annual_params match original input."""
+        params = return_model.annual_params
+
+        # Conservative: 4% return, 5% volatility
+        assert abs(params[0]["return"] - 0.04) < 0.001
+        assert abs(params[0]["volatility"] - 0.05) < 0.001
+
+        # Aggressive: 14% return, 15% volatility
+        assert abs(params[1]["return"] - 0.14) < 0.001
+        assert abs(params[1]["volatility"] - 0.15) < 0.001
+
+
+# ============================================================================
+# RETURNMODEL PARAMS TABLE TESTS
+# ============================================================================
+
+class TestReturnModelParamsTable:
+    """Test ReturnModel.params_table() method."""
+
+    @pytest.fixture
+    def return_model(self):
+        """Create test return model."""
+        accounts = [
+            Account.from_annual("Conservative", 0.04, 0.05),
+            Account.from_annual("Aggressive", 0.14, 0.15),
+        ]
+        return ReturnModel(accounts)
+
+    def test_params_table_returns_dataframe(self, return_model):
+        """Test params_table returns DataFrame."""
+        import pandas as pd
+
+        table = return_model.params_table()
+
+        assert isinstance(table, pd.DataFrame)
+
+    def test_params_table_columns(self, return_model):
+        """Test params_table has expected columns."""
+        table = return_model.params_table()
+
+        expected_cols = ["μ (monthly)", "μ (annual)", "σ (monthly)", "σ (annual)"]
+        for col in expected_cols:
+            assert col in table.columns
+
+    def test_params_table_index(self, return_model):
+        """Test params_table has account names as index."""
+        table = return_model.params_table()
+
+        assert "Conservative" in table.index
+        assert "Aggressive" in table.index
+
+    def test_params_table_row_count(self, return_model):
+        """Test params_table has correct row count."""
+        table = return_model.params_table()
+
+        assert len(table) == 2
+
+
+# ============================================================================
+# RETURNMODEL REPR TESTS
+# ============================================================================
+
+class TestReturnModelRepr:
+    """Test ReturnModel __repr__ method."""
+
+    def test_repr_with_identity_correlation(self):
+        """Test __repr__ shows 'eye' for identity correlation."""
+        accounts = [
+            Account.from_annual("A", 0.08, 0.10),
+            Account.from_annual("B", 0.12, 0.15),
+        ]
+        model = ReturnModel(accounts)
+
+        repr_str = repr(model)
+
+        assert "ReturnModel" in repr_str
+        assert "M=2" in repr_str
+        assert "ρ=eye" in repr_str
+
+    def test_repr_with_custom_correlation(self):
+        """Test __repr__ shows 'custom' for non-identity correlation."""
+        accounts = [
+            Account.from_annual("A", 0.08, 0.10),
+            Account.from_annual("B", 0.12, 0.15),
+        ]
+        corr = np.array([[1.0, 0.5], [0.5, 1.0]])
+        model = ReturnModel(accounts, default_correlation=corr)
+
+        repr_str = repr(model)
+
+        assert "ρ=custom" in repr_str
+
+    def test_repr_includes_account_info(self):
+        """Test __repr__ includes account names and returns."""
+        accounts = [
+            Account.from_annual("MyAccount", 0.08, 0.10),
+        ]
+        model = ReturnModel(accounts)
+
+        repr_str = repr(model)
+
+        assert "MyAccount" in repr_str
+        assert "8.0%/year" in repr_str
+
+
+# ============================================================================
+# RETURNMODEL GENERATE VALIDATION TESTS
+# ============================================================================
+
+class TestReturnModelGenerateValidation:
+    """Test ReturnModel.generate() validation."""
+
+    @pytest.fixture
+    def return_model(self):
+        """Create test return model."""
+        accounts = [Account.from_annual("Test", 0.08, 0.10)]
+        return ReturnModel(accounts)
+
+    def test_T_must_be_positive(self, return_model):
+        """Test generate raises for T <= 0."""
+        from src.exceptions import ValidationError
+
+        with pytest.raises(ValidationError, match="T must be positive"):
+            return_model.generate(T=0, n_sims=100, seed=42)
+
+    def test_T_negative_raises(self, return_model):
+        """Test generate raises for negative T."""
+        from src.exceptions import ValidationError
+
+        with pytest.raises(ValidationError, match="T must be positive"):
+            return_model.generate(T=-5, n_sims=100, seed=42)
+
+    def test_n_sims_must_be_positive(self, return_model):
+        """Test generate raises for n_sims <= 0."""
+        with pytest.raises(ValueError, match="n_sims must be positive"):
+            return_model.generate(T=12, n_sims=0, seed=42)
+
+    def test_n_sims_negative_raises(self, return_model):
+        """Test generate raises for negative n_sims."""
+        with pytest.raises(ValueError, match="n_sims must be positive"):
+            return_model.generate(T=12, n_sims=-10, seed=42)
+
+
+# ============================================================================
+# RETURNMODEL CORRELATION VALIDATION TESTS
+# ============================================================================
+
+class TestReturnModelCorrelationValidation:
+    """Test correlation matrix validation."""
+
+    @pytest.fixture
+    def accounts(self):
+        """Create test accounts."""
+        return [
+            Account.from_annual("A", 0.08, 0.10),
+            Account.from_annual("B", 0.12, 0.15),
+        ]
+
+    def test_asymmetric_correlation_raises(self, accounts):
+        """Test asymmetric correlation matrix raises ValueError."""
+        corr = np.array([
+            [1.0, 0.5],
+            [0.3, 1.0],  # Asymmetric: 0.5 != 0.3
+        ])
+
+        with pytest.raises(ValueError, match="symmetric"):
+            ReturnModel(accounts, default_correlation=corr)
+
+    def test_diagonal_not_one_raises(self, accounts):
+        """Test correlation with diagonal != 1.0 raises ValueError."""
+        corr = np.array([
+            [0.9, 0.5],  # Diagonal should be 1.0
+            [0.5, 1.0],
+        ])
+
+        with pytest.raises(ValueError, match="diagonal must be 1.0"):
+            ReturnModel(accounts, default_correlation=corr)
+
+    def test_correlation_override_validation(self, accounts):
+        """Test correlation override is validated in generate()."""
+        model = ReturnModel(accounts)
+
+        # Asymmetric correlation in generate() should fail
+        bad_corr = np.array([
+            [1.0, 0.5],
+            [0.3, 1.0],  # Asymmetric
+        ])
+
+        with pytest.raises(ValueError, match="symmetric"):
+            model.generate(T=12, n_sims=100, correlation=bad_corr, seed=42)
+
+
+# ============================================================================
+# RETURNMODEL EMPTY ACCOUNTS TESTS
+# ============================================================================
+
+class TestReturnModelEmptyAccounts:
+    """Test ReturnModel with empty accounts."""
+
+    def test_empty_accounts_raises(self):
+        """Test empty accounts list raises ValueError."""
+        with pytest.raises(ValueError, match="empty"):
+            ReturnModel([])
+
+
+# ============================================================================
+# RETURNMODEL COVARIANCE TESTS
+# ============================================================================
+
+class TestReturnModelCovariance:
+    """Test covariance matrix construction."""
+
+    def test_build_covariance_diagonal(self):
+        """Test covariance with identity correlation is diagonal."""
+        accounts = [
+            Account.from_annual("A", 0.08, 0.10),
+            Account.from_annual("B", 0.12, 0.15),
+        ]
+        model = ReturnModel(accounts)
+
+        cov = model._build_covariance(np.eye(2))
+
+        # Off-diagonal should be 0
+        assert abs(cov[0, 1]) < 1e-10
+        assert abs(cov[1, 0]) < 1e-10
+
+    def test_build_covariance_with_correlation(self):
+        """Test covariance with non-zero correlation."""
+        accounts = [
+            Account.from_annual("A", 0.08, 0.10),
+            Account.from_annual("B", 0.08, 0.10),
+        ]
+        corr = np.array([[1.0, 0.5], [0.5, 1.0]])
+        model = ReturnModel(accounts, default_correlation=corr)
+
+        cov = model._build_covariance(corr)
+
+        # Off-diagonal should be positive
+        assert cov[0, 1] > 0
+        assert cov[1, 0] > 0
+
+
+# ============================================================================
+# RETURNMODEL INTEGRATION TESTS
+# ============================================================================
+
+class TestReturnModelIntegration:
+    """Integration tests for ReturnModel."""
+
+    def test_full_workflow(self):
+        """Test complete workflow from creation to generation."""
+        # Create accounts
+        accounts = [
+            Account.from_annual("Emergency", 0.04, 0.05),
+            Account.from_annual("Growth", 0.12, 0.20),
+        ]
+
+        # Create model with custom correlation
+        corr = np.array([[1.0, 0.3], [0.3, 1.0]])
+        model = ReturnModel(accounts, default_correlation=corr)
+
+        # Check properties
+        assert model.M == 2
+        assert len(model.monthly_params) == 2
+        assert len(model.annual_params) == 2
+
+        # Generate returns
+        R = model.generate(T=24, n_sims=100, seed=42)
+
+        # Validate output
+        assert R.shape == (100, 24, 2)
+        assert np.all(np.isfinite(R))
+        assert np.all(R > -1.0)
+
+    def test_dict_correlation_end_to_end(self):
+        """Test dict-based correlation from creation to generation."""
+        accounts = [
+            Account.from_annual("A", 0.08, 0.10),
+            Account.from_annual("B", 0.10, 0.12),
+            Account.from_annual("C", 0.12, 0.15),
+        ]
+
+        model = ReturnModel(accounts, default_correlation={
+            ("A", "B"): 0.6,
+            ("B", "C"): 0.4,
+        })
+
+        # Generate returns
+        R = model.generate(T=50, n_sims=500, seed=42)
+
+        # Validate output
+        assert R.shape == (500, 50, 3)
+        assert np.all(np.isfinite(R))
+
+        # Check empirical correlation A-B is higher than A-C
+        R_flat = R.reshape(-1, 3)
+        corr_AB = np.corrcoef(R_flat[:, 0], R_flat[:, 1])[0, 1]
+        corr_AC = np.corrcoef(R_flat[:, 0], R_flat[:, 2])[0, 1]
+
+        assert corr_AB > corr_AC  # A-B should be more correlated
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

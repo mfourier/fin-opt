@@ -1078,7 +1078,16 @@ class CVaROptimizer(AllocationOptimizer):
         if solver_name.upper() == 'ECOS':
             prob.solve(solver=cp.ECOS, verbose=verbose, **solver_options)
         elif solver_name.upper() == 'SCS':
-            prob.solve(solver=cp.SCS, verbose=verbose, **solver_options)
+            # SCS options mapping
+            scs_opts = solver_options.copy()
+
+            # Map standard options to SCS specific ones
+            if 'abstol' in scs_opts:
+                scs_opts['eps_abs'] = scs_opts.pop('abstol')
+            if 'reltol' in scs_opts:
+                scs_opts['eps_rel'] = scs_opts.pop('reltol')
+
+            prob.solve(solver=cp.SCS, verbose=verbose, **scs_opts)
         elif solver_name.upper() == 'CLARABEL':
             # Clarabel options mapping
             clarabel_opts = solver_options.copy()

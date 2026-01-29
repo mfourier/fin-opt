@@ -23,6 +23,13 @@ from src.utils import (
     compute_cagr,
     rescale_returns,
     bootstrap_returns,
+    align_index_like,
+    set_random_seed,
+    summary_metrics,
+    fixed_rate_path,
+    lognormal_iid,
+    PortfolioMetrics,
+    compute_metrics,
 )
 
 
@@ -270,3 +277,305 @@ class TestScenarioHelpers:
         """Should handle empty history."""
         result = bootstrap_returns(np.array([]), months=5)
         assert len(result) == 0
+
+    def test_bootstrap_returns_zero_months(self):
+        """Should return empty array for zero months."""
+        history = np.array([0.01, 0.02, 0.03])
+        result = bootstrap_returns(history, months=0)
+        assert len(result) == 0
+
+
+class TestAlignIndexLike:
+    """Test align_index_like function."""
+
+    def test_align_from_datetimeindex(self):
+        """Should reuse DatetimeIndex if long enough."""
+        idx = pd.date_range("2025-01-01", periods=10, freq="MS")
+        result = align_index_like(5, like=idx)
+
+        assert len(result) == 5
+        assert isinstance(result, pd.DatetimeIndex)
+        assert result[0] == idx[0]
+
+    def test_align_from_series(self):
+        """Should extract index from Series."""
+        idx = pd.date_range("2025-01-01", periods=10, freq="MS")
+        s = pd.Series(range(10), index=idx)
+        result = align_index_like(5, like=s)
+
+        assert len(result) == 5
+        assert result[0] == idx[0]
+
+    def test_align_from_dataframe(self):
+        """Should extract index from DataFrame."""
+        idx = pd.date_range("2025-01-01", periods=10, freq="MS")
+        df = pd.DataFrame({"a": range(10)}, index=idx)
+        result = align_index_like(5, like=df)
+
+        assert len(result) == 5
+        assert result[0] == idx[0]
+
+    def test_align_fallback_when_none(self):
+        """Should create default index when like is None."""
+        result = align_index_like(5, like=None)
+
+        assert len(result) == 5
+        assert isinstance(result, pd.DatetimeIndex)
+
+    def test_align_fallback_when_too_short(self):
+        """Should create default index when like is too short."""
+        idx = pd.date_range("2025-01-01", periods=3, freq="MS")
+        result = align_index_like(10, like=idx)
+
+        assert len(result) == 10
+
+
+class TestSetRandomSeed:
+    """Test set_random_seed function."""
+
+    def test_set_seed_reproducibility(self):
+        """Setting seed should produce reproducible results."""
+        set_random_seed(42)
+        a1 = np.random.random(5)
+
+        set_random_seed(42)
+        a2 = np.random.random(5)
+
+        np.testing.assert_array_equal(a1, a2)
+
+    def test_set_seed_none_does_nothing(self):
+        """None seed should not raise."""
+        set_random_seed(None)
+        # Just verify no exception
+
+
+class TestSummaryMetrics:
+    """Test summary_metrics function."""
+
+    def test_summary_metrics_basic(self):
+        """Should build DataFrame from results dict."""
+        # Create mock result with metrics
+        class MockMetrics:
+            final_wealth = 1_000_000
+            total_contributions = 500_000
+            cagr = 0.08
+            vol = 0.12
+            max_drawdown = -0.15
+
+        class MockResult:
+            metrics = MockMetrics()
+
+        results = {"scenario1": MockResult()}
+        df = summary_metrics(results)
+
+        assert isinstance(df, pd.DataFrame)
+        assert "scenario1" in df.index
+        assert df.loc["scenario1", "final_wealth"] == 1_000_000
+        assert df.loc["scenario1", "cagr"] == 0.08
+
+    def test_summary_metrics_empty(self):
+        """Should return empty DataFrame for empty input."""
+        df = summary_metrics({})
+
+        assert isinstance(df, pd.DataFrame)
+        assert len(df) == 0
+        assert "final_wealth" in df.columns
+
+    def test_summary_metrics_skips_no_metrics(self):
+        """Should skip objects without metrics attribute."""
+        class NoMetrics:
+            pass
+
+        results = {"bad": NoMetrics()}
+        df = summary_metrics(results)
+
+        assert len(df) == 0
+
+    def test_summary_metrics_multiple_scenarios(self):
+        """Should handle multiple scenarios."""
+        class MockMetrics:
+            def __init__(self, fw):
+                self.final_wealth = fw
+                self.total_contributions = 0
+                self.cagr = 0
+                self.vol = 0
+                self.max_drawdown = 0
+
+        class MockResult:
+            def __init__(self, fw):
+                self.metrics = MockMetrics(fw)
+
+        results = {
+            "a": MockResult(100),
+            "b": MockResult(200),
+            "c": MockResult(300),
+        }
+        df = summary_metrics(results)
+
+        assert len(df) == 3
+        assert df.loc["a", "final_wealth"] == 100
+        assert df.loc["c", "final_wealth"] == 300
+
+
+class TestFixedRatePath:
+    """Test fixed_rate_path function."""
+
+    def test_fixed_rate_path_basic(self):
+        """Should return constant rate array."""
+        path = fixed_rate_path(12, 0.01)
+
+        assert len(path) == 12
+        assert all(r == 0.01 for r in path)
+
+    def test_fixed_rate_path_zero_months(self):
+        """Should return empty array for zero months."""
+        path = fixed_rate_path(0, 0.01)
+
+        assert len(path) == 0
+
+    def test_fixed_rate_path_negative_months(self):
+        """Should return empty array for negative months."""
+        path = fixed_rate_path(-5, 0.01)
+
+        assert len(path) == 0
+
+    def test_fixed_rate_path_zero_rate(self):
+        """Should handle zero rate."""
+        path = fixed_rate_path(6, 0.0)
+
+        assert len(path) == 6
+        assert all(r == 0.0 for r in path)
+
+
+class TestLognormalIID:
+    """Test lognormal_iid function."""
+
+    def test_lognormal_iid_basic(self):
+        """Should generate returns from lognormal distribution."""
+        returns = lognormal_iid(100, mu=0.0, sigma=0.1, seed=42)
+
+        assert len(returns) == 100
+        # All returns should be > -1 (lognormal guarantee)
+        assert all(r > -1 for r in returns)
+
+    def test_lognormal_iid_reproducible(self):
+        """Same seed should produce same results."""
+        r1 = lognormal_iid(10, mu=0.0, sigma=0.1, seed=42)
+        r2 = lognormal_iid(10, mu=0.0, sigma=0.1, seed=42)
+
+        np.testing.assert_array_equal(r1, r2)
+
+    def test_lognormal_iid_zero_months(self):
+        """Should return empty array for zero months."""
+        returns = lognormal_iid(0, mu=0.0, sigma=0.1)
+
+        assert len(returns) == 0
+
+    def test_lognormal_iid_negative_months(self):
+        """Should return empty array for negative months."""
+        returns = lognormal_iid(-5, mu=0.0, sigma=0.1)
+
+        assert len(returns) == 0
+
+    def test_lognormal_iid_different_seeds(self):
+        """Different seeds should produce different results."""
+        r1 = lognormal_iid(10, mu=0.0, sigma=0.1, seed=42)
+        r2 = lognormal_iid(10, mu=0.0, sigma=0.1, seed=123)
+
+        assert not np.array_equal(r1, r2)
+
+
+class TestPortfolioMetrics:
+    """Test PortfolioMetrics dataclass."""
+
+    def test_portfolio_metrics_creation(self):
+        """Should create immutable metrics object."""
+        metrics = PortfolioMetrics(
+            final_wealth=1_000_000,
+            total_contributions=500_000,
+            cagr=0.08,
+            vol=0.12,
+            max_drawdown=-0.15,
+        )
+
+        assert metrics.final_wealth == 1_000_000
+        assert metrics.total_contributions == 500_000
+        assert metrics.cagr == 0.08
+        assert metrics.vol == 0.12
+        assert metrics.max_drawdown == -0.15
+
+    def test_portfolio_metrics_frozen(self):
+        """Should be immutable (frozen dataclass)."""
+        metrics = PortfolioMetrics(
+            final_wealth=100,
+            total_contributions=50,
+            cagr=0.05,
+            vol=0.10,
+            max_drawdown=-0.10,
+        )
+
+        with pytest.raises(Exception):  # FrozenInstanceError
+            metrics.final_wealth = 200
+
+
+class TestComputeMetrics:
+    """Test compute_metrics function."""
+
+    def test_compute_metrics_basic(self):
+        """Should compute all metrics from wealth series."""
+        wealth = pd.Series([100, 105, 110, 108, 115, 120])
+        contributions = pd.Series([0, 5, 5, 0, 5, 5])
+
+        metrics = compute_metrics(wealth, contributions=contributions)
+
+        assert isinstance(metrics, PortfolioMetrics)
+        assert metrics.final_wealth == 120
+        assert metrics.total_contributions == 20
+        assert metrics.cagr > 0
+        assert metrics.vol > 0
+        assert metrics.max_drawdown <= 0
+
+    def test_compute_metrics_empty_wealth(self):
+        """Should return zeros for empty wealth."""
+        metrics = compute_metrics(pd.Series(dtype=float))
+
+        assert metrics.final_wealth == 0.0
+        assert metrics.total_contributions == 0.0
+        assert metrics.cagr == 0.0
+        assert metrics.vol == 0.0
+        assert metrics.max_drawdown == 0.0
+
+    def test_compute_metrics_no_contributions(self):
+        """Should handle missing contributions."""
+        wealth = pd.Series([100, 110, 120])
+
+        metrics = compute_metrics(wealth)
+
+        assert metrics.final_wealth == 120
+        assert metrics.total_contributions == 0.0
+
+    def test_compute_metrics_with_drawdown(self):
+        """Should compute max drawdown correctly."""
+        # Wealth drops from 110 to 90, then recovers
+        wealth = pd.Series([100, 110, 90, 95, 100])
+
+        metrics = compute_metrics(wealth)
+
+        # Max drawdown is (90-110)/110 ≈ -0.182
+        assert metrics.max_drawdown == pytest.approx(-0.1818, abs=1e-3)
+
+    def test_compute_metrics_non_series(self):
+        """Should return zeros for non-Series input."""
+        metrics = compute_metrics([100, 110, 120])  # type: ignore
+
+        assert metrics.final_wealth == 0.0
+
+    def test_compute_metrics_zero_start(self):
+        """Should handle zero starting wealth."""
+        wealth = pd.Series([0, 50, 100, 150])
+
+        metrics = compute_metrics(wealth)
+
+        assert metrics.final_wealth == 150
+        # CAGR uses first positive value as base
+        assert metrics.cagr > 0
