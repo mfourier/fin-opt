@@ -15,7 +15,7 @@
         <link rel="canonical" href="https://mfourier.github.io/fin-opt/goals/">
       
       
-        <link rel="prev" href="../returns/">
+        <link rel="prev" href="../withdrawal/">
       
       
         <link rel="next" href="../optimization/">
@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#goals-philosophy-and-role-in-finopt" class="md-skip">
+        <a href="#goals-probabilistic-goal-specification-for-finopt" class="md-skip">
           Skip to content
         </a>
       
@@ -300,6 +300,25 @@
     
   
   Stochastic Returns
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../withdrawal/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Scheduled Withdrawals
 
       </a>
     </li>
@@ -537,6 +556,33 @@
       
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../withdrawal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scheduled Withdrawals
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
     
   
   
@@ -630,25 +676,25 @@
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#main-surfaces-api" class="md-nav__link">
+    <nav class="md-nav" aria-label="Key concepts">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#chance-constraints" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Main surfaces (API)
+        Chance constraints
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Main surfaces (API)">
-      <ul class="md-nav__list">
+</li>
         
           <li class="md-nav__item">
-  <a href="#1-goal-dataclass" class="md-nav__link">
+  <a href="#cvar-reformulation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1) Goal (dataclass)
+        CVaR reformulation
       
     </span>
   </a>
@@ -661,10 +707,110 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#2-goal-evaluation" class="md-nav__link">
+  <a href="#main-api" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2) Goal evaluation
+        Main API
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Main API">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-intermediategoal-dataclass" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1) IntermediateGoal (dataclass)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-terminalgoal-dataclass" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2) TerminalGoal (dataclass)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-goalset-class" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3) GoalSet (class)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-goal-validation-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4) Goal validation functions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4) Goal validation functions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#check_goals-validate-goal-satisfaction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        check_goals() — Validate goal satisfaction
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#goal_progress-track-progress-toward-goals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        goal_progress() — Track progress toward goals
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#print_goal_status-pretty-print-goal-satisfaction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        print_goal_status() — Pretty-print goal satisfaction
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#month-resolution-semantics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Month resolution semantics
       
     </span>
   </a>
@@ -672,10 +818,49 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#3-proportional-contribution-split-mvp" class="md-nav__link">
+  <a href="#integration-with-optimization" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3) Proportional contribution split (MVP)
+        Integration with optimization
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Integration with optimization">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#optimization-workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optimization workflow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-goals-flow-through-the-system" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How goals flow through the system
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#complete-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Complete example
       
     </span>
   </a>
@@ -683,21 +868,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#4-required-constant-contribution-under-a-returns-path" class="md-nav__link">
+  <a href="#comparison-with-legacy-api" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4) Required constant contribution under a returns path
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#integration-in-the-finopt-workflow" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Integration in the FinOpt workflow
+        Comparison with legacy API
       
     </span>
   </a>
@@ -823,25 +997,25 @@
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#main-surfaces-api" class="md-nav__link">
+    <nav class="md-nav" aria-label="Key concepts">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#chance-constraints" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Main surfaces (API)
+        Chance constraints
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Main surfaces (API)">
-      <ul class="md-nav__list">
+</li>
         
           <li class="md-nav__item">
-  <a href="#1-goal-dataclass" class="md-nav__link">
+  <a href="#cvar-reformulation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1) Goal (dataclass)
+        CVaR reformulation
       
     </span>
   </a>
@@ -854,10 +1028,110 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#2-goal-evaluation" class="md-nav__link">
+  <a href="#main-api" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2) Goal evaluation
+        Main API
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Main API">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-intermediategoal-dataclass" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1) IntermediateGoal (dataclass)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-terminalgoal-dataclass" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2) TerminalGoal (dataclass)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-goalset-class" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3) GoalSet (class)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-goal-validation-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4) Goal validation functions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4) Goal validation functions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#check_goals-validate-goal-satisfaction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        check_goals() — Validate goal satisfaction
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#goal_progress-track-progress-toward-goals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        goal_progress() — Track progress toward goals
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#print_goal_status-pretty-print-goal-satisfaction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        print_goal_status() — Pretty-print goal satisfaction
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#month-resolution-semantics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Month resolution semantics
       
     </span>
   </a>
@@ -865,10 +1139,49 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#3-proportional-contribution-split-mvp" class="md-nav__link">
+  <a href="#integration-with-optimization" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3) Proportional contribution split (MVP)
+        Integration with optimization
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Integration with optimization">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#optimization-workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optimization workflow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-goals-flow-through-the-system" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How goals flow through the system
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#complete-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Complete example
       
     </span>
   </a>
@@ -876,21 +1189,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#4-required-constant-contribution-under-a-returns-path" class="md-nav__link">
+  <a href="#comparison-with-legacy-api" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4) Required constant contribution under a returns path
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#integration-in-the-finopt-workflow" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Integration in the FinOpt workflow
+        Comparison with legacy API
       
     </span>
   </a>
@@ -914,127 +1216,400 @@
 
 
 
-<h1 id="goals-philosophy-and-role-in-finopt"><code>goals</code> — Philosophy and Role in FinOpt</h1>
+<h1 id="goals-probabilistic-goal-specification-for-finopt"><code>goals</code> — Probabilistic Goal Specification for FinOpt</h1>
 <blockquote>
-<p><strong>Core idea:</strong> translate <strong>financial goals</strong> (target amount and deadline) into <strong>verifiable criteria</strong> over simulated wealth trajectories.<br />
-<code>goals.py</code> connects what the user <strong>wants to achieve</strong> (e.g., “20M CLP in 24 months”) with what the simulation engine <strong>produces</strong> (<code>wealth</code> series), and outputs clear evaluations: <strong>success</strong>, <strong>shortfall</strong>, and <strong>attainment ratio</strong>.</p>
+<p><strong>Core idea:</strong> translate <strong>financial goals</strong> into <strong>chance constraints</strong> that can be validated against Monte Carlo simulations and reformulated for convex optimization.
+<code>goals.py</code> connects what the user <strong>wants to achieve</strong> (e.g., "$20M in account X with 90% confidence") with the CVaR-based optimization framework that finds the <strong>minimum horizon</strong> and <strong>optimal allocation policy</strong> to satisfy these goals.</p>
 </blockquote>
 <hr />
 <h2 id="why-a-dedicated-goals-module">Why a dedicated goals module?</h2>
 <ul>
-<li><strong>Grounds objectives in numbers</strong>: converts “buy a house in 2 years” into <code>B_m</code> (amount) and <code>T_m</code> (deadline).  </li>
-<li><strong>Separates the <em>what<em> from the </em>how</em></strong>: <code>investment.py</code> grows capital; <code>simulation.py</code> orchestrates scenarios; <code>goals.py</code> checks if results meet the target.  </li>
-<li><strong>Enables optimization</strong>: by quantifying shortfalls, it allows solving for minimum contributions, minimum time, or allocation across multiple goals (goal-based investing).</li>
+<li><strong>Probabilistic semantics</strong>: Goals are chance constraints ℙ(W_t^m ≥ b) ≥ 1-ε, not deterministic targets</li>
+<li><strong>Two temporal flavors</strong>: Intermediate goals (fixed calendar date) vs. terminal goals (variable horizon T)</li>
+<li><strong>Optimization-ready</strong>: Provides <code>GoalSet</code> abstraction consumed by <code>CVaROptimizer</code> and <code>GoalSeeker</code></li>
+<li><strong>Validation utilities</strong>: Post-simulation functions to check goal satisfaction with detailed metrics</li>
 </ul>
 <hr />
 <h2 id="design-philosophy">Design philosophy</h2>
 <ol>
-<li><strong>Minimal and deterministic</strong>  </li>
-<li>Depends only on <code>numpy</code>, <code>pandas</code>, and project utilities (<code>utils.py</code>).  </li>
+<li><strong>Immutable specifications</strong></li>
+<li>Goals are <code>frozen</code> dataclasses — safe to hash, cache, and use as dict keys</li>
 <li>
-<p>Deterministic: any randomness comes from return paths or contribution flows, not from this module.</p>
+<p>No mutation after construction</p>
 </li>
 <li>
-<p><strong>Consistent calendar indexing</strong>  </p>
+<p><strong>Dual temporal semantics</strong></p>
 </li>
-<li>Supports deadlines as <strong>calendar dates</strong> (<code>target_date</code>) or as <strong>month indices</strong> relative to the start (<code>target_month_index</code>).  </li>
+<li><code>IntermediateGoal</code>: Fixed calendar checkpoint (independent of optimization horizon)</li>
 <li>
-<p>Uses helpers (<code>month_index</code>, <code>align_index_like</code>) to align goals with the wealth series.</p>
+<p><code>TerminalGoal</code>: Evaluated at variable T (the horizon being optimized)</p>
 </li>
 <li>
-<p><strong>Simple, serializable interfaces</strong>  </p>
+<p><strong>Account resolution</strong></p>
 </li>
-<li><code>Goal</code> and evaluation results can be <strong>(de)serialized</strong> (<code>to_dict</code>, <code>from_dict</code>) for configs and reporting.</li>
+<li>Goals reference accounts by name (<code>str</code>) or index (<code>int</code>)</li>
+<li>
+<p><code>GoalSet</code> validates and resolves references at construction time</p>
+</li>
+<li>
+<p><strong>Calendar-aware month resolution</strong></p>
+</li>
+<li>Dates converted to month offsets via <code>resolve_month(start_date)</code></li>
+<li>Results cached for O(1) lookup during optimization</li>
 </ol>
 <hr />
 <h2 id="key-concepts">Key concepts</h2>
+<h3 id="chance-constraints">Chance constraints</h3>
+<p>Goals are formulated as probabilistic requirements:</p>
+<p><strong>IntermediateGoal</strong> (fixed time t_fixed):
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>ℙ(W_{t_fixed}^m ≥ threshold) ≥ confidence
+</span></code></pre></div></p>
+<p><strong>TerminalGoal</strong> (variable horizon T):
+<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>ℙ(W_T^m ≥ threshold) ≥ confidence
+</span></code></pre></div></p>
+<p>Where:
+- <code>W_t^m</code> = wealth in account m at time t
+- <code>threshold</code> = minimum required wealth (e.g., $5,500,000 CLP)
+- <code>confidence</code> = 1 - ε (e.g., 0.90 means 90% chance of success)
+- <code>ε</code> = violation tolerance (e.g., 0.10 allows 10% failure rate)</p>
+<h3 id="cvar-reformulation">CVaR reformulation</h3>
+<p>The optimization module transforms these non-convex chance constraints into tractable convex form:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>Original (non-convex):  ℙ(W_t ≥ b) ≥ 1-ε
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>CVaR form (convex):     CVaR_ε(b - W_t) ≤ 0
+</span></code></pre></div>
+<p>This enables globally optimal allocation policies via convex programming.</p>
+<hr />
+<h2 id="main-api">Main API</h2>
+<h3 id="1-intermediategoal-dataclass">1) <code>IntermediateGoal</code> (dataclass)</h3>
+<p>Fixed-time financial checkpoint. Used for liquidity requirements, planned expenses, or milestone tracking.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">date</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">finopt.src.goals</span><span class="w"> </span><span class="kn">import</span> <span class="n">IntermediateGoal</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">goal</span> <span class="o">=</span> <span class="n">IntermediateGoal</span><span class="p">(</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">date</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">7</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>       <span class="c1"># Target date (required)</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">account</span><span class="o">=</span><span class="s2">&quot;Emergency&quot;</span><span class="p">,</span>          <span class="c1"># Account name or index</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    <span class="n">threshold</span><span class="o">=</span><span class="mi">5_500_000</span><span class="p">,</span>          <span class="c1"># Minimum wealth required</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    <span class="n">confidence</span><span class="o">=</span><span class="mf">0.90</span>               <span class="c1"># 90% chance of success</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="p">)</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="c1"># Month resolution (relative to simulation start)</span>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="n">month</span> <span class="o">=</span> <span class="n">goal</span><span class="o">.</span><span class="n">resolve_month</span><span class="p">(</span><span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>  <span class="c1"># → 6</span>
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>
+</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="c1"># Violation tolerance</span>
+</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="n">epsilon</span> <span class="o">=</span> <span class="n">goal</span><span class="o">.</span><span class="n">epsilon</span>  <span class="c1"># → 0.10</span>
+</span></code></pre></div>
+<p><strong>Parameters:</strong>
+- <code>date</code>: Target date for evaluation (converted to month offset)
+- <code>account</code>: Account identifier (int index or str name)
+- <code>threshold</code>: Minimum required wealth (must be &gt; 0)
+- <code>confidence</code>: Required probability of success ∈ (0, 1)</p>
+<p><strong>Month resolution semantics:</strong>
+- <code>date=July 1, 2025</code> with <code>start_date=January 1, 2025</code> → month 6
+- Checks wealth W_6 (wealth at start of period 6, i.e., July 1)</p>
+<hr />
+<h3 id="2-terminalgoal-dataclass">2) <code>TerminalGoal</code> (dataclass)</h3>
+<p>End-of-horizon target evaluated at variable T. Used for retirement targets, long-term savings, or final portfolio value.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">finopt.src.goals</span><span class="w"> </span><span class="kn">import</span> <span class="n">TerminalGoal</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">goal</span> <span class="o">=</span> <span class="n">TerminalGoal</span><span class="p">(</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="n">account</span><span class="o">=</span><span class="s2">&quot;Retirement&quot;</span><span class="p">,</span>         <span class="c1"># Account name or index</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="n">threshold</span><span class="o">=</span><span class="mi">20_000_000</span><span class="p">,</span>         <span class="c1"># Terminal wealth target</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    <span class="n">confidence</span><span class="o">=</span><span class="mf">0.90</span>               <span class="c1"># 90% chance of success</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="p">)</span>
+</span></code></pre></div>
+<p><strong>Parameters:</strong>
+- <code>account</code>: Account identifier (int index or str name)
+- <code>threshold</code>: Minimum required terminal wealth (must be &gt; 0)
+- <code>confidence</code>: Required probability of success ∈ (0, 1)</p>
+<p><strong>Key difference from IntermediateGoal:</strong>
+- No fixed <code>date</code> — evaluated at horizon T (the optimization variable)
+- Used by <code>GoalSeeker</code> to find minimum T* such that goal is feasible</p>
+<hr />
+<h3 id="3-goalset-class">3) <code>GoalSet</code> (class)</h3>
+<p>Validated collection of goals with account resolution and utilities for optimization.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">date</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">finopt.src.portfolio</span><span class="w"> </span><span class="kn">import</span> <span class="n">Account</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">finopt.src.goals</span><span class="w"> </span><span class="kn">import</span> <span class="n">IntermediateGoal</span><span class="p">,</span> <span class="n">TerminalGoal</span><span class="p">,</span> <span class="n">GoalSet</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="c1"># Define accounts</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="n">accounts</span> <span class="o">=</span> <span class="p">[</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>    <span class="n">Account</span><span class="o">.</span><span class="n">from_annual</span><span class="p">(</span><span class="s2">&quot;Emergency&quot;</span><span class="p">,</span> <span class="n">annual_return</span><span class="o">=</span><span class="mf">0.04</span><span class="p">,</span> <span class="n">annual_volatility</span><span class="o">=</span><span class="mf">0.05</span><span class="p">),</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>    <span class="n">Account</span><span class="o">.</span><span class="n">from_annual</span><span class="p">(</span><span class="s2">&quot;Housing&quot;</span><span class="p">,</span> <span class="n">annual_return</span><span class="o">=</span><span class="mf">0.07</span><span class="p">,</span> <span class="n">annual_volatility</span><span class="o">=</span><span class="mf">0.12</span><span class="p">)</span>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="p">]</span>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="c1"># Define goals</span>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="n">goals</span> <span class="o">=</span> <span class="p">[</span>
+</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a>    <span class="n">IntermediateGoal</span><span class="p">(</span><span class="n">date</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">7</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">account</span><span class="o">=</span><span class="s2">&quot;Emergency&quot;</span><span class="p">,</span>
+</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a>                     <span class="n">threshold</span><span class="o">=</span><span class="mi">5_500_000</span><span class="p">,</span> <span class="n">confidence</span><span class="o">=</span><span class="mf">0.90</span><span class="p">),</span>
+</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a>    <span class="n">TerminalGoal</span><span class="p">(</span><span class="n">account</span><span class="o">=</span><span class="s2">&quot;Emergency&quot;</span><span class="p">,</span> <span class="n">threshold</span><span class="o">=</span><span class="mi">20_000_000</span><span class="p">,</span> <span class="n">confidence</span><span class="o">=</span><span class="mf">0.90</span><span class="p">),</span>
+</span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a>    <span class="n">TerminalGoal</span><span class="p">(</span><span class="n">account</span><span class="o">=</span><span class="s2">&quot;Housing&quot;</span><span class="p">,</span> <span class="n">threshold</span><span class="o">=</span><span class="mi">7_000_000</span><span class="p">,</span> <span class="n">confidence</span><span class="o">=</span><span class="mf">0.90</span><span class="p">)</span>
+</span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="p">]</span>
+</span><span id="__span-5-18"><a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a>
+</span><span id="__span-5-19"><a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="c1"># Create validated collection</span>
+</span><span id="__span-5-20"><a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="n">goal_set</span> <span class="o">=</span> <span class="n">GoalSet</span><span class="p">(</span><span class="n">goals</span><span class="p">,</span> <span class="n">accounts</span><span class="p">,</span> <span class="n">start_date</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+</span><span id="__span-5-21"><a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a>
+</span><span id="__span-5-22"><a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a><span class="c1"># Access properties</span>
+</span><span id="__span-5-23"><a id="__codelineno-5-23" name="__codelineno-5-23" href="#__codelineno-5-23"></a><span class="n">goal_set</span><span class="o">.</span><span class="n">T_min</span>                    <span class="c1"># → 6 (from intermediate goal)</span>
+</span><span id="__span-5-24"><a id="__codelineno-5-24" name="__codelineno-5-24" href="#__codelineno-5-24"></a><span class="n">goal_set</span><span class="o">.</span><span class="n">M</span>                        <span class="c1"># → 2 (number of accounts)</span>
+</span><span id="__span-5-25"><a id="__codelineno-5-25" name="__codelineno-5-25" href="#__codelineno-5-25"></a><span class="n">goal_set</span><span class="o">.</span><span class="n">intermediate_goals</span>       <span class="c1"># → [IntermediateGoal(...)]</span>
+</span><span id="__span-5-26"><a id="__codelineno-5-26" name="__codelineno-5-26" href="#__codelineno-5-26"></a><span class="n">goal_set</span><span class="o">.</span><span class="n">terminal_goals</span>           <span class="c1"># → [TerminalGoal(...), TerminalGoal(...)]</span>
+</span><span id="__span-5-27"><a id="__codelineno-5-27" name="__codelineno-5-27" href="#__codelineno-5-27"></a>
+</span><span id="__span-5-28"><a id="__codelineno-5-28" name="__codelineno-5-28" href="#__codelineno-5-28"></a><span class="c1"># Resolve account index for a goal</span>
+</span><span id="__span-5-29"><a id="__codelineno-5-29" name="__codelineno-5-29" href="#__codelineno-5-29"></a><span class="n">idx</span> <span class="o">=</span> <span class="n">goal_set</span><span class="o">.</span><span class="n">get_account_index</span><span class="p">(</span><span class="n">goals</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>  <span class="c1"># → 0</span>
+</span><span id="__span-5-30"><a id="__codelineno-5-30" name="__codelineno-5-30" href="#__codelineno-5-30"></a>
+</span><span id="__span-5-31"><a id="__codelineno-5-31" name="__codelineno-5-31" href="#__codelineno-5-31"></a><span class="c1"># Get cached resolved month (O(1))</span>
+</span><span id="__span-5-32"><a id="__codelineno-5-32" name="__codelineno-5-32" href="#__codelineno-5-32"></a><span class="n">month</span> <span class="o">=</span> <span class="n">goal_set</span><span class="o">.</span><span class="n">get_resolved_month</span><span class="p">(</span><span class="n">goals</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>  <span class="c1"># → 6</span>
+</span></code></pre></div>
+<p><strong>Validation rules:</strong>
+- Goals list cannot be empty
+- All account references must resolve to valid indices
+- No duplicate IntermediateGoal for same (month, account) pair
+- No duplicate TerminalGoal for same account</p>
+<p><strong>Key methods:</strong>
+- <code>get_account_index(goal)</code>: Returns resolved 0-based account index
+- <code>get_resolved_month(goal)</code>: Returns cached month offset for IntermediateGoal
+- <code>estimate_minimum_horizon(...)</code>: Heuristic T estimate for terminal goals</p>
+<hr />
+<h3 id="4-goal-validation-functions">4) Goal validation functions</h3>
+<h4 id="check_goals-validate-goal-satisfaction"><code>check_goals()</code> — Validate goal satisfaction</h4>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">finopt.src.goals</span><span class="w"> </span><span class="kn">import</span> <span class="n">check_goals</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">status</span> <span class="o">=</span> <span class="n">check_goals</span><span class="p">(</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>    <span class="n">result</span><span class="o">=</span><span class="n">simulation_result</span><span class="p">,</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>    <span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">,</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>    <span class="n">accounts</span><span class="o">=</span><span class="n">accounts</span><span class="p">,</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>    <span class="n">start_date</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="p">)</span>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="k">for</span> <span class="n">goal</span><span class="p">,</span> <span class="n">metrics</span> <span class="ow">in</span> <span class="n">status</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">goal</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="s1">&#39;✓&#39;</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;satisfied&#39;</span><span class="p">]</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="s1">&#39;✗&#39;</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Violation rate: </span><span class="si">{</span><span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;violation_rate&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">.1%</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Required rate:  </span><span class="si">{</span><span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;required_rate&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">.1%</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Margin:         </span><span class="si">{</span><span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;margin&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">+.1%</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span></code></pre></div>
+<p><strong>Returns dict with metrics for each goal:</strong>
+- <code>satisfied</code>: bool — True if empirical violation rate ≤ ε
+- <code>violation_rate</code>: float — Empirical ℙ(W_t^m &lt; threshold)
+- <code>required_rate</code>: float — Goal's ε = 1 - confidence
+- <code>margin</code>: float — required_rate - violation_rate (positive = satisfied)
+- <code>median_shortfall</code>: float — Median shortfall over violated scenarios
+- <code>n_violations</code>: int — Count of scenarios violating threshold</p>
+<hr />
+<h4 id="goal_progress-track-progress-toward-goals"><code>goal_progress()</code> — Track progress toward goals</h4>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">finopt.src.goals</span><span class="w"> </span><span class="kn">import</span> <span class="n">goal_progress</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">progress</span> <span class="o">=</span> <span class="n">goal_progress</span><span class="p">(</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>    <span class="n">result</span><span class="o">=</span><span class="n">simulation_result</span><span class="p">,</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>    <span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">,</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>    <span class="n">accounts</span><span class="o">=</span><span class="n">accounts</span><span class="p">,</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>    <span class="n">start_date</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="p">)</span>
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="k">for</span> <span class="n">goal</span><span class="p">,</span> <span class="n">pct</span> <span class="ow">in</span> <span class="n">progress</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>    <span class="n">account</span> <span class="o">=</span> <span class="n">goal</span><span class="o">.</span><span class="n">account</span>
+</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">account</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">pct</span><span class="si">:</span><span class="s2">.1%</span><span class="si">}</span><span class="s2"> progress&quot;</span><span class="p">)</span>
+</span></code></pre></div>
+<p><strong>Progress metric:</strong> <code>min(1, VaR_{1-ε}(W_t^m) / threshold)</code></p>
 <ul>
-<li><strong>Goal (<code>Goal</code>)</strong>: pair of (target amount <code>B_m</code>, deadline <code>T_m</code>) plus metadata (<code>name</code>, <code>priority</code>, <code>notes</code>).  </li>
-<li><strong>Evaluation</strong>: given a wealth path, compute:  </li>
-<li><code>success</code> (boolean),  </li>
-<li><code>shortfall = max(0, B_m - W_{m,T_m})</code>,  </li>
-<li><code>attainment_ratio = min(W_{m,T_m}/B_m, 1)</code>.  </li>
-<li><strong>Contribution split</strong> (MVP): split aggregate contributions into per-goal series by proportions summing to 1.  </li>
-<li><strong>Required constant contribution</strong>: compute the <code>a*</code> needed to guarantee the goal under a given returns path (possibly time-varying).</li>
+<li>0.0: VaR is zero (far from goal)</li>
+<li>0.5: VaR is 50% of threshold (halfway)</li>
+<li>1.0: VaR ≥ threshold (goal achieved at confidence level)</li>
 </ul>
 <hr />
-<h2 id="main-surfaces-api">Main surfaces (API)</h2>
-<h3 id="1-goal-dataclass">1) <code>Goal</code> (dataclass)</h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">Goal</span><span class="p">(</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>  <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>  <span class="n">target_amount</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>  <span class="n">target_date</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">date</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>        <span class="c1"># or...</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>  <span class="n">target_month_index</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>  <span class="c1"># ...exactly one must be provided</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>  <span class="n">priority</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>  <span class="n">notes</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="p">)</span>
+<h4 id="print_goal_status-pretty-print-goal-satisfaction"><code>print_goal_status()</code> — Pretty-print goal satisfaction</h4>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">finopt.src.goals</span><span class="w"> </span><span class="kn">import</span> <span class="n">print_goal_status</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="n">print_goal_status</span><span class="p">(</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>    <span class="n">result</span><span class="o">=</span><span class="n">simulation_result</span><span class="p">,</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>    <span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">,</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>    <span class="n">accounts</span><span class="o">=</span><span class="n">accounts</span><span class="p">,</span>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>    <span class="n">start_date</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="p">)</span>
 </span></code></pre></div>
-<h2 id="2-goal-evaluation">2) Goal evaluation</h2>
-<ul>
-<li>
-<p><strong>Single goal</strong>:<br />
-<code>evaluate_goal(wealth: pd.Series, goal: Goal) -&gt; GoalEvaluation</code></p>
-</li>
-<li>
-<p><strong>Multiple goals</strong>:<br />
-<code>evaluate_goals(wealth: pd.Series, goals: Iterable[Goal]) -&gt; pd.DataFrame</code></p>
-</li>
-</ul>
-<p>The multiple-goal version returns a <strong>DataFrame</strong> ordered by priority (if available), with the following columns:</p>
-<ul>
-<li><code>goal</code>  </li>
-<li><code>deadline_pos</code>  </li>
-<li><code>deadline_timestamp</code>  </li>
-<li><code>target_amount</code>  </li>
-<li><code>wealth_at_deadline</code>  </li>
-<li><code>success</code>  </li>
-<li><code>shortfall</code>  </li>
-<li><code>attainment_ratio</code></li>
-</ul>
-<p><strong>Interpretation:</strong><br />
-- <code>attainment_ratio</code> allows comparison of heterogeneous goals on a [0,1] scale.<br />
-- <code>shortfall</code> quantifies the missing amount in currency units.</p>
-<h2 id="3-proportional-contribution-split-mvp">3) Proportional contribution split (MVP)</h2>
-<p><code>allocate_contributions_proportional(contributions: pd.Series, weights_by_goal: dict) -&gt; pd.DataFrame</code></p>
-<ul>
-<li><strong>Purpose</strong>: obtain per-goal contribution columns that <strong>sum</strong> to the aggregate.  </li>
-<li><strong>Rules</strong>: weights must be non-negative; normalized to sum to 1; index preserved.</li>
-</ul>
-<p><strong>Use case</strong>: build per-goal reports or run per-goal simulations (via <code>simulate_capital</code> on each column).</p>
-<h2 id="4-required-constant-contribution-under-a-returns-path">4) Required constant contribution under a returns path</h2>
-<p><code>required_constant_contribution(target_amount, start_wealth, returns_path) -&gt; float</code></p>
-<ul>
-<li>
-<p><strong>Dynamics:</strong>
-$$
-W_{t+1} = (W_t + a)\,(1 + r_t), \quad t=0,\dots,T-1
-$$</p>
-</li>
-<li>
-<p><strong>Closed form for time-varying <span class="arithmatex">\(r_t\)</span>:</strong><br />
-Define 
-$$
-G_t = \prod_{u=t}^{T-1}(1+r_u), \quad
-AF = \sum_{t=0}^{T-1} G_{t+1}
-$$
-Then:
-$$
-W_T = W_0\,G_0 + a\,AF \;\;\Rightarrow\;\;
-a^* = \max!\left(0, \frac{B - W_0 G_0}{AF}\right)
-$$</p>
-</li>
-<li>
-<p><strong>Interpretation:</strong><br />
-<code>a*</code> is the minimum constant monthly contribution required to <strong>guarantee</strong> reaching the target amount <code>B</code> at horizon <code>T</code>, under the given return path.</p>
-</li>
-</ul>
-<h2 id="integration-in-the-finopt-workflow">Integration in the FinOpt workflow</h2>
+<p><strong>Example output:</strong>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>=== Goal Status ===
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>[✓] IntermediateGoal: Emergency Fund @ month 6
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>    Target: $5,500,000 | Confidence: 90.0%
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>    Status: SATISFIED (margin: +2.3%)
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>    Violation rate: 7.7% (38 scenarios)
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>[✗] TerminalGoal: Emergency Fund @ T=24
+</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>    Target: $20,000,000 | Confidence: 90.0%
+</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>    Status: VIOLATED (margin: -3.1%)
+</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a>    Violation rate: 13.1% (66 scenarios)
+</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a>    Median shortfall: $1,234,567
+</span></code></pre></div></p>
+<hr />
+<h2 id="month-resolution-semantics">Month resolution semantics</h2>
+<p>Goals and the wealth array use <strong>start-of-period</strong> indexing:</p>
+<table>
+<thead>
+<tr>
+<th>Date</th>
+<th><code>resolve_month()</code></th>
+<th>Wealth Index</th>
+<th>Interpretation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>January 1, 2025 (start)</td>
+<td>—</td>
+<td>W_0</td>
+<td>Initial wealth</td>
+</tr>
+<tr>
+<td>February 1, 2025</td>
+<td>1</td>
+<td>W_1</td>
+<td>Wealth at start of month 1</td>
+</tr>
+<tr>
+<td>July 1, 2025</td>
+<td>6</td>
+<td>W_6</td>
+<td>Wealth at start of month 6</td>
+</tr>
+<tr>
+<td>January 1, 2026 (T=12)</td>
+<td>12</td>
+<td>W_12</td>
+<td>Terminal wealth</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Example with start_date = January 1, 2025:</strong>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">goal</span> <span class="o">=</span> <span class="n">IntermediateGoal</span><span class="p">(</span><span class="n">date</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">7</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="o">...</span><span class="p">)</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">month</span> <span class="o">=</span> <span class="n">goal</span><span class="o">.</span><span class="n">resolve_month</span><span class="p">(</span><span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>  <span class="c1"># → 6</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="c1"># Checks wealth[i, 6, m] which is W_6 (wealth at July 1)</span>
+</span></code></pre></div></p>
+<hr />
+<h2 id="integration-with-optimization">Integration with optimization</h2>
+<h3 id="optimization-workflow">Optimization workflow</h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">finopt</span><span class="w"> </span><span class="kn">import</span> <span class="n">FinancialModel</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">finopt.src.goals</span><span class="w"> </span><span class="kn">import</span> <span class="n">IntermediateGoal</span><span class="p">,</span> <span class="n">TerminalGoal</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">finopt.optimization</span><span class="w"> </span><span class="kn">import</span> <span class="n">CVaROptimizer</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="c1"># 1. Define goals</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="n">goals</span> <span class="o">=</span> <span class="p">[</span>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>    <span class="n">IntermediateGoal</span><span class="p">(</span><span class="n">date</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">7</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">account</span><span class="o">=</span><span class="s2">&quot;Emergency&quot;</span><span class="p">,</span>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>                     <span class="n">threshold</span><span class="o">=</span><span class="mi">5_500_000</span><span class="p">,</span> <span class="n">confidence</span><span class="o">=</span><span class="mf">0.90</span><span class="p">),</span>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>    <span class="n">TerminalGoal</span><span class="p">(</span><span class="n">account</span><span class="o">=</span><span class="s2">&quot;Retirement&quot;</span><span class="p">,</span> <span class="n">threshold</span><span class="o">=</span><span class="mi">20_000_000</span><span class="p">,</span> <span class="n">confidence</span><span class="o">=</span><span class="mf">0.90</span><span class="p">)</span>
+</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="p">]</span>
+</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a>
+</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="c1"># 2. Create optimizer</span>
+</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a><span class="n">optimizer</span> <span class="o">=</span> <span class="n">CVaROptimizer</span><span class="p">(</span><span class="n">n_accounts</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">objective</span><span class="o">=</span><span class="s2">&quot;balanced&quot;</span><span class="p">)</span>
+</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a>
+</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a><span class="c1"># 3. Optimize (finds minimum T* and optimal X*)</span>
+</span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a><span class="n">result</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">optimize</span><span class="p">(</span>
+</span><span id="__span-11-17"><a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a>    <span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">,</span>
+</span><span id="__span-11-18"><a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a>    <span class="n">optimizer</span><span class="o">=</span><span class="n">optimizer</span><span class="p">,</span>
+</span><span id="__span-11-19"><a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a>    <span class="n">T_max</span><span class="o">=</span><span class="mi">120</span><span class="p">,</span>
+</span><span id="__span-11-20"><a id="__codelineno-11-20" name="__codelineno-11-20" href="#__codelineno-11-20"></a>    <span class="n">n_sims</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span>
+</span><span id="__span-11-21"><a id="__codelineno-11-21" name="__codelineno-11-21" href="#__codelineno-11-21"></a>    <span class="n">seed</span><span class="o">=</span><span class="mi">42</span>
+</span><span id="__span-11-22"><a id="__codelineno-11-22" name="__codelineno-11-22" href="#__codelineno-11-22"></a><span class="p">)</span>
+</span><span id="__span-11-23"><a id="__codelineno-11-23" name="__codelineno-11-23" href="#__codelineno-11-23"></a>
+</span><span id="__span-11-24"><a id="__codelineno-11-24" name="__codelineno-11-24" href="#__codelineno-11-24"></a><span class="c1"># 4. Validate goals</span>
+</span><span id="__span-11-25"><a id="__codelineno-11-25" name="__codelineno-11-25" href="#__codelineno-11-25"></a><span class="n">result</span><span class="o">.</span><span class="n">validate_goals</span><span class="p">()</span>  <span class="c1"># Uses stored goal_set</span>
+</span></code></pre></div>
+<h3 id="how-goals-flow-through-the-system">How goals flow through the system</h3>
 <ol>
-<li><strong><code>income.py</code></strong> → produces aggregate contributions.  </li>
-<li><strong><code>investment.py</code></strong> → simulates wealth (single or multi-asset).  </li>
-<li><strong><code>simulation.py</code></strong> → orchestrates scenarios and outputs wealth.  </li>
-<li><strong><code>goals.py</code></strong> → evaluates goal attainment, splits contributions per goal, and computes required <code>a*</code>.</li>
+<li><strong>User defines goals</strong> → <code>IntermediateGoal</code> / <code>TerminalGoal</code> objects</li>
+<li><strong><code>GoalSet</code> validates</strong> → Resolves accounts, caches months, computes T_min</li>
+<li><strong><code>CVaROptimizer</code> reformulates</strong> → Chance constraints → CVaR ≤ 0</li>
+<li><strong><code>GoalSeeker</code> searches</strong> → Binary search over T with warm-start</li>
+<li><strong><code>check_goals</code> validates</strong> → Post-simulation verification</li>
 </ol>
+<hr />
+<h2 id="complete-example">Complete example</h2>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">date</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">finopt</span><span class="w"> </span><span class="kn">import</span> <span class="n">FinancialModel</span><span class="p">,</span> <span class="n">Account</span><span class="p">,</span> <span class="n">IncomeModel</span><span class="p">,</span> <span class="n">FixedIncome</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">finopt.src.goals</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>    <span class="n">IntermediateGoal</span><span class="p">,</span> <span class="n">TerminalGoal</span><span class="p">,</span> <span class="n">GoalSet</span><span class="p">,</span>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>    <span class="n">check_goals</span><span class="p">,</span> <span class="n">goal_progress</span><span class="p">,</span> <span class="n">print_goal_status</span>
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="p">)</span>
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="kn">from</span><span class="w"> </span><span class="nn">finopt.optimization</span><span class="w"> </span><span class="kn">import</span> <span class="n">CVaROptimizer</span>
+</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a>
+</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="c1"># Setup</span>
+</span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a><span class="n">income</span> <span class="o">=</span> <span class="n">IncomeModel</span><span class="p">(</span><span class="n">fixed</span><span class="o">=</span><span class="n">FixedIncome</span><span class="p">(</span><span class="n">base</span><span class="o">=</span><span class="mi">1_500_000</span><span class="p">,</span> <span class="n">annual_growth</span><span class="o">=</span><span class="mf">0.03</span><span class="p">))</span>
+</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a><span class="n">accounts</span> <span class="o">=</span> <span class="p">[</span>
+</span><span id="__span-12-12"><a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a>    <span class="n">Account</span><span class="o">.</span><span class="n">from_annual</span><span class="p">(</span><span class="s2">&quot;Emergency&quot;</span><span class="p">,</span> <span class="n">annual_return</span><span class="o">=</span><span class="mf">0.04</span><span class="p">,</span> <span class="n">annual_volatility</span><span class="o">=</span><span class="mf">0.05</span><span class="p">),</span>
+</span><span id="__span-12-13"><a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a>    <span class="n">Account</span><span class="o">.</span><span class="n">from_annual</span><span class="p">(</span><span class="s2">&quot;Growth&quot;</span><span class="p">,</span> <span class="n">annual_return</span><span class="o">=</span><span class="mf">0.12</span><span class="p">,</span> <span class="n">annual_volatility</span><span class="o">=</span><span class="mf">0.15</span><span class="p">)</span>
+</span><span id="__span-12-14"><a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a><span class="p">]</span>
+</span><span id="__span-12-15"><a id="__codelineno-12-15" name="__codelineno-12-15" href="#__codelineno-12-15"></a><span class="n">model</span> <span class="o">=</span> <span class="n">FinancialModel</span><span class="p">(</span><span class="n">income</span><span class="p">,</span> <span class="n">accounts</span><span class="p">)</span>
+</span><span id="__span-12-16"><a id="__codelineno-12-16" name="__codelineno-12-16" href="#__codelineno-12-16"></a>
+</span><span id="__span-12-17"><a id="__codelineno-12-17" name="__codelineno-12-17" href="#__codelineno-12-17"></a><span class="c1"># Define goals</span>
+</span><span id="__span-12-18"><a id="__codelineno-12-18" name="__codelineno-12-18" href="#__codelineno-12-18"></a><span class="n">start_date</span> <span class="o">=</span> <span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+</span><span id="__span-12-19"><a id="__codelineno-12-19" name="__codelineno-12-19" href="#__codelineno-12-19"></a><span class="n">goals</span> <span class="o">=</span> <span class="p">[</span>
+</span><span id="__span-12-20"><a id="__codelineno-12-20" name="__codelineno-12-20" href="#__codelineno-12-20"></a>    <span class="n">IntermediateGoal</span><span class="p">(</span><span class="n">date</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">7</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">account</span><span class="o">=</span><span class="s2">&quot;Emergency&quot;</span><span class="p">,</span>
+</span><span id="__span-12-21"><a id="__codelineno-12-21" name="__codelineno-12-21" href="#__codelineno-12-21"></a>                     <span class="n">threshold</span><span class="o">=</span><span class="mi">5_000_000</span><span class="p">,</span> <span class="n">confidence</span><span class="o">=</span><span class="mf">0.95</span><span class="p">),</span>
+</span><span id="__span-12-22"><a id="__codelineno-12-22" name="__codelineno-12-22" href="#__codelineno-12-22"></a>    <span class="n">TerminalGoal</span><span class="p">(</span><span class="n">account</span><span class="o">=</span><span class="s2">&quot;Growth&quot;</span><span class="p">,</span> <span class="n">threshold</span><span class="o">=</span><span class="mi">50_000_000</span><span class="p">,</span> <span class="n">confidence</span><span class="o">=</span><span class="mf">0.80</span><span class="p">)</span>
+</span><span id="__span-12-23"><a id="__codelineno-12-23" name="__codelineno-12-23" href="#__codelineno-12-23"></a><span class="p">]</span>
+</span><span id="__span-12-24"><a id="__codelineno-12-24" name="__codelineno-12-24" href="#__codelineno-12-24"></a>
+</span><span id="__span-12-25"><a id="__codelineno-12-25" name="__codelineno-12-25" href="#__codelineno-12-25"></a><span class="c1"># Validate goal structure</span>
+</span><span id="__span-12-26"><a id="__codelineno-12-26" name="__codelineno-12-26" href="#__codelineno-12-26"></a><span class="n">goal_set</span> <span class="o">=</span> <span class="n">GoalSet</span><span class="p">(</span><span class="n">goals</span><span class="p">,</span> <span class="n">accounts</span><span class="p">,</span> <span class="n">start_date</span><span class="p">)</span>
+</span><span id="__span-12-27"><a id="__codelineno-12-27" name="__codelineno-12-27" href="#__codelineno-12-27"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Minimum horizon from intermediate goals: T_min = </span><span class="si">{</span><span class="n">goal_set</span><span class="o">.</span><span class="n">T_min</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-12-28"><a id="__codelineno-12-28" name="__codelineno-12-28" href="#__codelineno-12-28"></a>
+</span><span id="__span-12-29"><a id="__codelineno-12-29" name="__codelineno-12-29" href="#__codelineno-12-29"></a><span class="c1"># Optimize</span>
+</span><span id="__span-12-30"><a id="__codelineno-12-30" name="__codelineno-12-30" href="#__codelineno-12-30"></a><span class="n">optimizer</span> <span class="o">=</span> <span class="n">CVaROptimizer</span><span class="p">(</span><span class="n">n_accounts</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">objective</span><span class="o">=</span><span class="s2">&quot;balanced&quot;</span><span class="p">)</span>
+</span><span id="__span-12-31"><a id="__codelineno-12-31" name="__codelineno-12-31" href="#__codelineno-12-31"></a><span class="n">result</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">optimize</span><span class="p">(</span><span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">,</span> <span class="n">optimizer</span><span class="o">=</span><span class="n">optimizer</span><span class="p">,</span> <span class="n">T_max</span><span class="o">=</span><span class="mi">120</span><span class="p">,</span> <span class="n">n_sims</span><span class="o">=</span><span class="mi">500</span><span class="p">)</span>
+</span><span id="__span-12-32"><a id="__codelineno-12-32" name="__codelineno-12-32" href="#__codelineno-12-32"></a>
+</span><span id="__span-12-33"><a id="__codelineno-12-33" name="__codelineno-12-33" href="#__codelineno-12-33"></a><span class="c1"># Check results</span>
+</span><span id="__span-12-34"><a id="__codelineno-12-34" name="__codelineno-12-34" href="#__codelineno-12-34"></a><span class="n">print_goal_status</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">goals</span><span class="p">,</span> <span class="n">accounts</span><span class="p">,</span> <span class="n">start_date</span><span class="p">)</span>
+</span><span id="__span-12-35"><a id="__codelineno-12-35" name="__codelineno-12-35" href="#__codelineno-12-35"></a>
+</span><span id="__span-12-36"><a id="__codelineno-12-36" name="__codelineno-12-36" href="#__codelineno-12-36"></a><span class="c1"># Get detailed metrics</span>
+</span><span id="__span-12-37"><a id="__codelineno-12-37" name="__codelineno-12-37" href="#__codelineno-12-37"></a><span class="n">status</span> <span class="o">=</span> <span class="n">check_goals</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">goals</span><span class="p">,</span> <span class="n">accounts</span><span class="p">,</span> <span class="n">start_date</span><span class="p">)</span>
+</span><span id="__span-12-38"><a id="__codelineno-12-38" name="__codelineno-12-38" href="#__codelineno-12-38"></a><span class="n">progress</span> <span class="o">=</span> <span class="n">goal_progress</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">goals</span><span class="p">,</span> <span class="n">accounts</span><span class="p">,</span> <span class="n">start_date</span><span class="p">)</span>
+</span></code></pre></div>
+<hr />
+<h2 id="comparison-with-legacy-api">Comparison with legacy API</h2>
+<table>
+<thead>
+<tr>
+<th>Legacy (removed)</th>
+<th>Current</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Goal</code> dataclass</td>
+<td><code>IntermediateGoal</code>, <code>TerminalGoal</code></td>
+</tr>
+<tr>
+<td><code>target_amount</code></td>
+<td><code>threshold</code></td>
+</tr>
+<tr>
+<td><code>target_date</code> / <code>target_month_index</code></td>
+<td><code>date</code> (IntermediateGoal only)</td>
+</tr>
+<tr>
+<td><code>evaluate_goal()</code></td>
+<td><code>check_goals()</code></td>
+</tr>
+<tr>
+<td><code>evaluate_goals()</code> → DataFrame</td>
+<td><code>check_goals()</code> → Dict</td>
+</tr>
+<tr>
+<td><code>GoalEvaluation</code></td>
+<td>Dict with metrics</td>
+</tr>
+<tr>
+<td><code>allocate_contributions_proportional()</code></td>
+<td>Removed (use optimization)</td>
+</tr>
+<tr>
+<td><code>required_constant_contribution()</code></td>
+<td><code>GoalSet.estimate_minimum_horizon()</code></td>
+</tr>
+<tr>
+<td>Deterministic success/failure</td>
+<td>Probabilistic chance constraints</td>
+</tr>
+</tbody>
+</table>
 
 
 

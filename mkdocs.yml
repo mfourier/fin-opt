@@ -63,6 +63,7 @@ nav:
   - Income Model: income.md
   - Portfolio Dynamics: portfolio.md
   - Stochastic Returns: returns.md
+  - Scheduled Withdrawals: withdrawal.md
   - Goals Framework: goals.md
   - Optimization: optimization.md
   - Integration Model: model.md

@@ -10,14 +10,23 @@
 - **Bilevel Optimization**: Solve complex problems that minimize time while maximizing terminal wealth.
 - **Extensible Architecture**: Modular design allows for custom return models, optimizers, and goal types.
 
-## Getting Started
+## Documentation Roadmap
 
-To explore the technical details of the framework, check out the following sections:
+Explore the technical components of the FinOpt framework:
 
-- [Technical Framework](framework.md): An overview of the system architecture and design principles.
-- [Income Module](income.md): How we model cash flows.
-- [Portfolio Dynamics](portfolio.md): The math behind wealth evolution.
-- [Optimization](optimization.md): Details on the chance-constrained optimization and SAA solvers.
+### Core Components
+- [Stochastic Returns](returns.md): Generating correlated lognormal returns for simulation.
+- [Income Module](income.md): Modeling fixed and variable cash flows with growth and seasonality.
+- [Portfolio Dynamics](portfolio.md): The mathematics of wealth evolution and affine representations.
+- [Scheduled Withdrawals](withdrawal.md): Integration of planned cash outflows into the wealth equation.
+
+### Optimization & Logic
+- [Goals Framework](goals.md): Defining financial milestones as probabilistic chance constraints.
+- [Optimization](optimization.md): Technical details on CVaR reformulation and Sample Average Approximation (SAA) solvers.
+
+### Integration & Architecture
+- [Unified Model](model.md): The `FinancialModel` facade that orchestrates all system components.
+- [Technical Framework](framework.md): A deep dive into the system architecture, design principles, and mathematical foundations.
 
 ## Installation
 
