@@ -42,6 +42,7 @@ model.py (FinancialModel)
 
 Total monthly income at time $t$ is composed of fixed and variable parts:
 
+
 $$
 Y_t = y_t^{\text{fixed}} + Y_t^{\text{variable}}
 $$
@@ -49,6 +50,7 @@ $$
 ### 1.1 Fixed Income
 
 The fixed component, $y_t^{\text{fixed}}$, reflects baseline salary subject to compounded annual growth $g$ and scheduled raises $\{(d_k, \Delta_k)\}$:
+
 
 $$
 y_t^{\text{fixed}} = \text{current\_salary}(t) \cdot (1+m)^{\Delta t}
@@ -76,11 +78,13 @@ The variable component, $Y_t^{\text{variable}}$, models irregular income (freela
 
 The underlying stochastic projection:
 
+
 $$
 \tilde{Y}_t = \max(\text{floor},\ \mu_t (1 + \epsilon_t)), \quad \text{where } \mu_t = \text{base} \cdot (1 + m)^t \cdot s_{(t \bmod 12)}
 $$
 
 Then, guardrails:
+
 
 $$
 Y_t^{\text{variable}} = \begin{cases}
@@ -103,6 +107,7 @@ variable = VariableIncome(
 ### 1.3 Contributions
 
 A fraction of income is allocated monthly via calendar-rotating schedules:
+
 
 $$
 A_t = \alpha_{(t \bmod 12)}^{f} \cdot y_t^{\text{fixed}} + \alpha_{(t \bmod 12)}^{v} \cdot Y_t^{\text{variable}}
@@ -129,6 +134,7 @@ A = income.contributions(
 
 Multiple accounts $m \in \mathcal{M} = \{1,\dots,M\}$ evolve via:
 
+
 $$
 W_{t+1}^m = \big(W_t^m + A_t x_t^m\big)(1 + R_t^m)
 $$
@@ -153,11 +159,13 @@ portfolio = Portfolio(accounts)
 
 Contributions allocated via decision variables $x_t^m \in [0,1]$ satisfying:
 
+
 $$
 \sum_{m=1}^M x_t^m = 1, \quad x_t^m \ge 0, \quad \forall t
 $$
 
 The **allocation simplex** at horizon $T$ is:
+
 
 $$
 \mathcal{X}_T = \left\{ X \in \mathbb{R}^{T \times M} : 
@@ -172,6 +180,7 @@ $$
 representing all **budget-feasible allocation policies** (full contribution deployment each month).
 
 **Geometric interpretation:** $\mathcal{X}_T$ is the Cartesian product of $T$ probability simplices:
+
 $$
 \mathcal{X}_T = \underbrace{\Delta^{M-1} \times \cdots \times \Delta^{M-1}}_{T \text{ times}}, \quad \Delta^{M-1} = \left\{x \in \mathbb{R}_+^M : \sum_{m=1}^M x^m = 1\right\}
 $$
@@ -192,6 +201,7 @@ W_t^m(X) = W_0^m F_{0,t}^m + \sum_{s=0}^{t-1} A_s \, x_s^m \, F_{s,t}^m
 $$
 
 where the **accumulation factor** from month $s$ to $t$ is:
+
 
 $$
 F_{s,t}^m := \prod_{r=s}^{t-1} (1 + R_r^m)
@@ -227,6 +237,7 @@ IntermediateGoal(
 ```
 
 Mathematical constraint:
+
 $$
 \mathbb{P}\big(W_{t}^m \ge b\big) \ge 1-\varepsilon
 $$
@@ -241,6 +252,7 @@ TerminalGoal(
 ```
 
 Mathematical constraint:
+
 $$
 \mathbb{P}\big(W_{T}^m \ge b\big) \ge 1-\varepsilon
 $$
@@ -262,9 +274,10 @@ where:
 **Properties:**
 
 1. **Minimum horizon constraint:**
-   $$
-   T \geq T_{\min} := \max_{g \in \mathcal{G}_{\text{int}}} t_g
-   $$
+   
+$$
+T \geq T_{\min} := \max_{g \in \mathcal{G}_{\text{int}}} t_g
+$$
 
 2. **Goal resolution:** Month indices resolved via `start` date for calendar alignment
 
@@ -288,6 +301,7 @@ goal_set = GoalSet(goals, account_names=["Emergency", "Housing"],
 ### 3.3 Horizon Estimation Heuristic
 
 For **terminal-only goals** ($\mathcal{G}_{\text{int}} = \emptyset$), naive linear search starts at $T=1$, wasting iterations. Instead, FinOpt uses a **conservative heuristic**:
+
 
 $$
 T_{\text{start}} = \max_{g \in \mathcal{G}_{\text{term}}} \left\lceil \frac{b_g - W_0^m \cdot (1 + \mu)^{T_{\min}}}{A_{\text{avg}} \cdot x_{\min}^m \cdot (1 + \mu - \sigma)} \right\rceil
@@ -317,6 +331,7 @@ $$
 
 where the **goal-feasible set** at horizon $T$ is:
 
+
 $$
 \mathcal{F}_T := \left\{ X \in \mathcal{X}_T : \begin{aligned}
 & \mathbb{P}\big(W_t^m(X) \ge b_t^m\big) \ge 1-\varepsilon_t^m, \; \forall g \in \mathcal{G}_{\text{int}}, \\
@@ -338,6 +353,7 @@ $$
 ### 4.2 Inner Problem (Fixed Horizon)
 
 For given horizon $T$, solve:
+
 
 $$
 \begin{aligned}
@@ -361,6 +377,7 @@ $$
 
 Discrete approximation with $N$ scenarios $\omega^{(i)}$:
 
+
 $$
 \frac{1}{N}\sum_{i=1}^N \mathbb{1}\{W_t^m(X; \omega^{(i)}) \ge b_t^m\} \ge 1-\varepsilon_t^m
 $$
@@ -370,6 +387,7 @@ $$
 #### Sigmoid Smoothing (SAAOptimizer)
 
 Replace indicator with **sigmoid** $\sigma(z) = 1/(1 + e^{-z})$:
+
 
 $$
 \boxed{
@@ -409,8 +427,9 @@ optimizer = SAAOptimizer(
 
 Risk-adjusted objective via **Conditional Value-at-Risk**:
 
+
 $$
-\max \; \mathbb{E}[W_T] - \lambda \cdot \text{CVaR}_{\alpha}(-W_T)
+\max \; \mathbb{E}[W_T] - \lambda \cdot \text{CVaR}_{ \alpha }(-W_T)
 $$
 
 subject to goal constraints. Requires CVXPY for implementation.

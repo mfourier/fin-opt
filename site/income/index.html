@@ -1469,10 +1469,10 @@ In FinOpt's pipeline, <code>income.py</code> is the <strong>entry point of cash 
 </span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">df</span> <span class="o">=</span> <span class="n">income</span><span class="o">.</span><span class="n">project</span><span class="p">(</span><span class="n">months</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">9</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">output</span><span class="o">=</span><span class="s2">&quot;dataframe&quot;</span><span class="p">)</span>
 </span></code></pre></div></p>
 <p><strong><code>contributions(months, start=None, seed=None, output="series")</code></strong>
-- Computes monthly contributions using <strong>12-month fractional arrays</strong> that rotate based on <code>start</code>:
-  $$
-  \text{contrib}<em>t = \alpha^{\text{fixed}}</em>{(t+\text{offset})\bmod 12} \cdot y^{\text{fixed}}<em>t + \alpha^{\text{variable}}</em>{(t+\text{offset})\bmod 12} \cdot y^{\text{variable}}_t
-  $$
+- Computes monthly contributions using <strong>12-month fractional arrays</strong> that rotate based on <code>start</code>:</p>
+<p>$$
+\text{contrib}<em>t = \alpha^{\text{fixed}}</em>{(t+\text{offset})\bmod 12} \cdot y^{\text{fixed}}<em>t + \alpha^{\text{variable}}</em>{(t+\text{offset})\bmod 12} \cdot y^{\text{variable}}_t
+$$
   where <code>offset = normalize_start_month(start)</code>.</p>
 <ul>
 <li><code>output</code>: <code>"array"</code> returns <code>np.ndarray</code>, <code>"series"</code> returns <code>pd.Series</code> with calendar index</li>
@@ -1556,16 +1556,16 @@ In FinOpt's pipeline, <code>income.py</code> is the <strong>entry point of cash 
 </li>
 <li>
 <p><strong><code>investment.py</code></strong><br />
-  Receives the contributions from <code>income.py</code> and applies <strong>capital accumulation</strong>:
-  $$
-  W_{t+1}=(W_t+A_t)(1+R_t).
-  $$
+  Receives the contributions from <code>income.py</code> and applies <strong>capital accumulation</strong>:</p>
+</li>
+</ul>
+<p>$$
+W_{t+1}=(W_t+A_t)(1+R_t).
+$$
   Metrics (CAGR, drawdown, volatility) are computed downstream on the resulting wealth path.</p>
-</li>
-<li>
-<p><strong><code>utils.py</code></strong><br />
-  Provides shared helpers used by <code>income.py</code> (e.g., <strong>rate conversions</strong> annual↔monthly, <strong>month index</strong> construction, <strong>validation</strong>).</p>
-</li>
+<ul>
+<li><strong><code>utils.py</code></strong><br />
+  Provides shared helpers used by <code>income.py</code> (e.g., <strong>rate conversions</strong> annual↔monthly, <strong>month index</strong> construction, <strong>validation</strong>).</li>
 </ul>
 <hr />
 <h2 id="recommended-usage-patterns">Recommended usage patterns</h2>
@@ -1780,8 +1780,6 @@ This enables reproducible stochastic projections without mutating the model stat
       <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
       
         <script src="../javascripts/mathjax.js"></script>
-      
-        <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
       
         <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
       
