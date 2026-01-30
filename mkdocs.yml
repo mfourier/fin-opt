@@ -66,3 +66,7 @@ nav:
   - Goals Framework: goals.md
   - Optimization: optimization.md
   - Integration Model: model.md
+  - Advanced:
+      - Exceptions: exceptions.md
+      - Serialization: serialization.md
+      - Utilities: utils.md

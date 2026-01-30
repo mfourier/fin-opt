@@ -28,6 +28,11 @@ Explore the technical components of the FinOpt framework:
 - [Unified Model](model.md): The `FinancialModel` facade that orchestrates all system components.
 - [Technical Framework](framework.md): A deep dive into the system architecture, design principles, and mathematical foundations.
 
+### Advanced & Utilities
+- [Exceptions](exceptions.md): Error handling and custom exception classes.
+- [Serialization](serialization.md): Saving and loading models and scenarios.
+- [Shared Utilities](utils.md): Common helper functions and numerical routines.
+
 ## Installation
 
 ```bash
