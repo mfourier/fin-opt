@@ -1,0 +1,2693 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Intelligent financial planning through stochastic simulation and convex optimization.">
+      
+      
+        <meta name="author" content="mfourier">
+      
+      
+        <link rel="canonical" href="https://mfourier.github.io/fin-opt/optimization/">
+      
+      
+        <link rel="prev" href="../goals/">
+      
+      
+        <link rel="next" href="../model/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
+    
+    
+      
+        <title>Optimization - FinOpt</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://mfourier.github.io; script-src 'self' 'unsafe-inline' https://polyfill.io https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://mfourier.github.io; connect-src 'self';">
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="cyan">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#optimization-convex-programming-for-goal-driven-portfolios" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="FinOpt" class="md-header__button md-logo" aria-label="FinOpt" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            FinOpt
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Optimization
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="cyan"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="cyan"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../framework/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Framework
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../income/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Income Model
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../portfolio/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Portfolio Dynamics
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../returns/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Stochastic Returns
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../withdrawal/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Scheduled Withdrawals
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../goals/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Goals Framework
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    <li class="md-tabs__item md-tabs__item--active">
+      <a href="./" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Optimization
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../model/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Integration Model
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../exceptions/" class="md-tabs__link">
+          
+  
+  
+  Advanced
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="FinOpt" class="md-nav__button md-logo" aria-label="FinOpt" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    FinOpt
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../framework/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Framework
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../income/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Income Model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../portfolio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Portfolio Dynamics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../returns/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stochastic Returns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../withdrawal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scheduled Withdrawals
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../goals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Goals Framework
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Optimization
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Optimization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#philosophy-and-role" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Philosophy and Role
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Philosophy and Role">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#separation-of-concerns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Separation of Concerns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#inversion-of-traditional-planning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inversion of Traditional Planning
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mathematical-foundations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mathematical Foundations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Mathematical Foundations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#wealth-evolution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wealth Evolution
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#allocation-simplex" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Allocation Simplex
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#bilevel-optimization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bilevel Optimization
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Bilevel Optimization">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#problem-statement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Problem Statement
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#implemented-objectives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implemented Objectives
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cvar-reformulation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CVaR Reformulation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CVaR Reformulation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#epigraphic-formulation-rockafellar-uryasev-2000" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Epigraphic Formulation (Rockafellar &amp; Uryasev 2000)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#convex-program-formulation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Convex Program Formulation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementation-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation Architecture
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Implementation Architecture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#class-hierarchy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Class Hierarchy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key-design-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Design Patterns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cvaroptimizer-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CVaROptimizer API
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CVaROptimizer API">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#constructor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Constructor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#solve-method" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        solve() Method
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#withdrawal-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Withdrawal Support
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#goalseeker-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GoalSeeker API
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="GoalSeeker API">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#constructor_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Constructor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#seek-method" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        seek() Method
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#search-strategies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Search Strategies
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Search Strategies">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#linear-search-safe-slower" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Linear Search (Safe, Slower)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#binary-search-faster-assumes-monotonicity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Binary Search (Faster, Assumes Monotonicity)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#solver-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Solver Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Solver Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#available-solvers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Available Solvers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#solver-options-mapping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Solver Options Mapping
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#complexity-analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Complexity Analysis
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#optimizationresult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OptimizationResult
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="OptimizationResult">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#attributes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Attributes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#diagnostics-and-debugging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Diagnostics and Debugging
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Diagnostics and Debugging">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#verbose-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verbose Output
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#common-issues-and-solutions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common Issues and Solutions
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#complete-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Complete Examples
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Complete Examples">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#basic-optimization-with-goals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Basic Optimization with Goals
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#optimization-with-withdrawals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optimization with Withdrawals
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#custom-objective-with-turnover-penalty" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Custom Objective with Turnover Penalty
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#theoretical-guarantees" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Theoretical Guarantees
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exceptions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exceptions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        References
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Integration Model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Advanced
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../exceptions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Exceptions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../serialization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Serialization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../utils/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Utilities
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#philosophy-and-role" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Philosophy and Role
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Philosophy and Role">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#separation-of-concerns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Separation of Concerns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#inversion-of-traditional-planning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inversion of Traditional Planning
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mathematical-foundations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mathematical Foundations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Mathematical Foundations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#wealth-evolution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wealth Evolution
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#allocation-simplex" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Allocation Simplex
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#bilevel-optimization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bilevel Optimization
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Bilevel Optimization">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#problem-statement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Problem Statement
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#implemented-objectives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implemented Objectives
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cvar-reformulation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CVaR Reformulation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CVaR Reformulation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#epigraphic-formulation-rockafellar-uryasev-2000" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Epigraphic Formulation (Rockafellar &amp; Uryasev 2000)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#convex-program-formulation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Convex Program Formulation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementation-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation Architecture
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Implementation Architecture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#class-hierarchy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Class Hierarchy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key-design-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Design Patterns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cvaroptimizer-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CVaROptimizer API
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CVaROptimizer API">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#constructor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Constructor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#solve-method" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        solve() Method
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#withdrawal-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Withdrawal Support
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#goalseeker-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GoalSeeker API
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="GoalSeeker API">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#constructor_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Constructor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#seek-method" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        seek() Method
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#search-strategies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Search Strategies
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Search Strategies">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#linear-search-safe-slower" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Linear Search (Safe, Slower)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#binary-search-faster-assumes-monotonicity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Binary Search (Faster, Assumes Monotonicity)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#solver-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Solver Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Solver Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#available-solvers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Available Solvers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#solver-options-mapping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Solver Options Mapping
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#complexity-analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Complexity Analysis
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#optimizationresult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OptimizationResult
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="OptimizationResult">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#attributes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Attributes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#diagnostics-and-debugging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Diagnostics and Debugging
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Diagnostics and Debugging">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#verbose-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verbose Output
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#common-issues-and-solutions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common Issues and Solutions
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#complete-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Complete Examples
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Complete Examples">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#basic-optimization-with-goals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Basic Optimization with Goals
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#optimization-with-withdrawals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optimization with Withdrawals
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#custom-objective-with-turnover-penalty" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Custom Objective with Turnover Penalty
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#theoretical-guarantees" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Theoretical Guarantees
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exceptions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exceptions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        References
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="optimization-convex-programming-for-goal-driven-portfolios"><code>optimization</code> — Convex Programming for Goal-Driven Portfolios</h1>
+<blockquote>
+<p><strong>Core idea:</strong> Transform financial goals into convex optimization problems via CVaR reformulation, searching over horizons to find minimum feasible time and optimal allocations.</p>
+</blockquote>
+<hr />
+<h2 id="philosophy-and-role">Philosophy and Role</h2>
+<h3 id="separation-of-concerns">Separation of Concerns</h3>
+<ul>
+<li><strong><code>income.py</code></strong> → Contribution scenarios <span class="arithmatex">\(A_t\)</span></li>
+<li><strong><code>portfolio.py</code></strong> → Wealth dynamics <span class="arithmatex">\(W_t^m(X)\)</span> via affine representation</li>
+<li><strong><code>goals.py</code></strong> → Goal specifications as chance constraints</li>
+<li><strong><code>optimization.py</code></strong> → Decision synthesis: minimize <span class="arithmatex">\(T\)</span>, optimize allocations <span class="arithmatex">\(X\)</span></li>
+</ul>
+<h3 id="inversion-of-traditional-planning">Inversion of Traditional Planning</h3>
+<p><strong>Traditional:</strong> Given savings <span class="arithmatex">\(X\)</span> and horizon <span class="arithmatex">\(T\)</span>, compute terminal wealth
+<strong>FinOpt:</strong> Given wealth goals, find minimum <span class="arithmatex">\(T^*\)</span> and optimal <span class="arithmatex">\(X^*\)</span></p>
+<p>Requires:
+1. Chance-constrained formulation: <span class="arithmatex">\(\mathbb{P}(W_t^m \geq b) \geq 1-\varepsilon\)</span>
+2. Convex reformulation via CVaR
+3. Bilevel optimization: outer (minimize <span class="arithmatex">\(T\)</span>), inner (convex program)</p>
+<hr />
+<h2 id="mathematical-foundations">Mathematical Foundations</h2>
+<h3 id="wealth-evolution">Wealth Evolution</h3>
+<p>Multiple accounts <span class="arithmatex">\(m \in \{1,\dots,M\}\)</span>:</p>
+<div class="arithmatex">\[
+W_{t+1}^m = \big(W_t^m + A_t x_t^m - D_t^m\big)(1 + R_t^m)
+\]</div>
+<p>where <span class="arithmatex">\(D_t^m\)</span> is the withdrawal from account <span class="arithmatex">\(m\)</span> at time <span class="arithmatex">\(t\)</span>.</p>
+<p><strong>Closed-form (affine representation):</strong></p>
+<div class="arithmatex">\[
+\boxed{
+W_t^m(X) = W_0^m F_{0,t}^m + \sum_{s=0}^{t-1} \big(A_s \, x_s^m - D_s^m\big) \, F_{s,t}^m
+}
+\]</div>
+<p>where accumulation factor:</p>
+<div class="arithmatex">\[
+F_{s,t}^m := \prod_{\tau=s+1}^{t} (1 + R_\tau^m)
+\]</div>
+<p><strong>Key consequences:</strong>
+- <strong>Affinity:</strong> <span class="arithmatex">\(W_t^m(X)\)</span> linear in <span class="arithmatex">\(X\)</span> (withdrawals <span class="arithmatex">\(D\)</span> are parameters) → enables convex programming
+- <strong>Gradient:</strong> <span class="arithmatex">\(\frac{\partial W_t^m}{\partial x_s^m} = A_s F_{s,t}^m\)</span> → analytical derivatives
+- <strong>Efficiency:</strong> <span class="arithmatex">\(O(1)\)</span> wealth evaluation, no recursion</p>
+<h3 id="allocation-simplex">Allocation Simplex</h3>
+<p>Decision variables satisfy budget constraint:</p>
+<div class="arithmatex">\[
+\mathcal{X}_T = \left\{ X \in \mathbb{R}^{T \times M} : x_t^m \geq 0, \; \sum_{m=1}^M x_t^m = 1, \; \forall t \right\}
+\]</div>
+<p>Cartesian product of <span class="arithmatex">\(T\)</span> probability simplices: <span class="arithmatex">\(\mathcal{X}_T = \Delta^{M-1} \times \cdots \times \Delta^{M-1}\)</span>.</p>
+<hr />
+<h2 id="bilevel-optimization">Bilevel Optimization</h2>
+<h3 id="problem-statement">Problem Statement</h3>
+<div class="arithmatex">\[
+\boxed{
+\min_{T \in \mathbb{N}} \;\; T \quad \text{s.t.} \quad \mathcal{F}_T \neq \emptyset
+}
+\]</div>
+<p>where goal-feasible set:</p>
+<div class="arithmatex">\[
+\mathcal{F}_T := \left\{ X \in \mathcal{X}_T : \begin{aligned}
+&amp; \mathbb{P}\big(W_t^m(X) \geq b_t^m\big) \geq 1-\varepsilon_t^m, \; \forall g \in \mathcal{G}_{\text{int}} \\
+&amp; \mathbb{P}\big(W_T^m(X) \geq b^m\big) \geq 1-\varepsilon^m, \; \forall g \in \mathcal{G}_{\text{term}} \\
+&amp; \mathbb{P}\big(W_t^m(X) \geq D_t^m\big) \geq 1-\delta, \; \forall \text{ withdrawals}
+\end{aligned} \right\}
+\]</div>
+<p><strong>Inner problem</strong> (fixed <span class="arithmatex">\(T\)</span>):
+$$
+\max_{X \in \mathcal{F}_T} f(X)
+$$</p>
+<h3 id="implemented-objectives">Implemented Objectives</h3>
+<p>All objectives exploit affine wealth <span class="arithmatex">\(W_t^m(X) = b + \Phi X\)</span> for convexity:</p>
+<table>
+<thead>
+<tr>
+<th>Objective</th>
+<th>Formula</th>
+<th>Type</th>
+<th>Use Case</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>"risky"</code></td>
+<td><span class="arithmatex">\(\mathbb{E}\left[\sum_{m} W_T^m\right]\)</span></td>
+<td>LP</td>
+<td>Maximum wealth accumulation</td>
+</tr>
+<tr>
+<td><code>"balanced"</code></td>
+<td><span class="arithmatex">\(-\sum_{t,m}(x_{t+1,m} - x_t^m)^2\)</span></td>
+<td>QP</td>
+<td>Stable allocations (default)</td>
+</tr>
+<tr>
+<td><code>"conservative"</code></td>
+<td><span class="arithmatex">\(\mathbb{E}[W_T] - \lambda \cdot \text{Var}(W_T)\)</span></td>
+<td>QP</td>
+<td>Risk-averse mean-variance</td>
+</tr>
+<tr>
+<td><code>"risky_turnover"</code></td>
+<td><span class="arithmatex">\(\mathbb{E}[W_T] - \lambda \cdot \sum(\Delta x)^2\)</span></td>
+<td>QP</td>
+<td>Wealth + stability tradeoff</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Note:</strong> The <code>conservative</code> objective uses variance (not standard deviation) in the CVXPY formulation for DCP compliance.</p>
+<hr />
+<h2 id="cvar-reformulation">CVaR Reformulation</h2>
+<h3 id="epigraphic-formulation-rockafellar-uryasev-2000">Epigraphic Formulation (Rockafellar &amp; Uryasev 2000)</h3>
+<p>Transform chance constraint <span class="arithmatex">\(\mathbb{P}(W \geq b) \geq 1-\varepsilon\)</span> into convex constraint:</p>
+<div class="arithmatex">\[
+\text{CVaR}_\varepsilon(b - W) \leq 0
+\]</div>
+<p><strong>Epigraphic representation:</strong>
+$$
+\text{CVaR}<em>\alpha(L) = \min</em>{\gamma, z} \left{ \gamma + \frac{1}{\alpha N} \sum_{i=1}^N z^i \right}
+$$
+subject to:
+$$
+z^i \geq L^i - \gamma, \quad z^i \geq 0, \quad \forall i
+$$</p>
+<p>where <span class="arithmatex">\(L^i = b - W^i\)</span> is shortfall in scenario <span class="arithmatex">\(i\)</span>.</p>
+<h3 id="convex-program-formulation">Convex Program Formulation</h3>
+<p><strong>Decision variables:</strong>
+- <span class="arithmatex">\(X \in \mathbb{R}^{T \times M}\)</span>: allocations
+- <span class="arithmatex">\(\gamma_g \in \mathbb{R}\)</span>: VaR level per goal <span class="arithmatex">\(g\)</span>
+- <span class="arithmatex">\(z_g \in \mathbb{R}_+^N\)</span>: excess shortfall per goal <span class="arithmatex">\(g\)</span></p>
+<p><strong>Constraints:</strong></p>
+<ol>
+<li>
+<p><strong>Simplex:</strong> <span class="arithmatex">\(\sum_m x_t^m = 1, \; x_t^m \geq 0\)</span></p>
+</li>
+<li>
+<p><strong>CVaR (per goal):</strong>
+$$
+\begin{aligned}
+z_g^i &amp;\geq (\text{threshold}<em>g - W</em>{t_g}^{m_g,i}(X)) - \gamma_g \
+\gamma_g &amp;+ \frac{1}{\varepsilon_g N} \sum_{i=1}^N z_g^i \leq 0
+\end{aligned}
+$$</p>
+</li>
+<li>
+<p><strong>Withdrawal feasibility (per withdrawal):</strong>
+$$
+\begin{aligned}
+z_w^i &amp;\geq (D_t^m - W_t^{m,i}(X)) - \gamma_w \
+\gamma_w &amp;+ \frac{1}{\delta N} \sum_{i=1}^N z_w^i \leq 0
+\end{aligned}
+$$</p>
+</li>
+</ol>
+<hr />
+<h2 id="implementation-architecture">Implementation Architecture</h2>
+<h3 id="class-hierarchy">Class Hierarchy</h3>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>OptimizationResult (frozen dataclass)
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    ├─ X: np.ndarray (T, M)
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    ├─ T: int
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    ├─ objective_value: float
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    ├─ feasible: bool
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    ├─ goals: List[IntermediateGoal | TerminalGoal]
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    ├─ goal_set: GoalSet
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    ├─ solve_time: float
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    ├─ validate_goals(result) → dict
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    ├─ is_valid_allocation(tol) → bool
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    └─ summary() → str
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>AllocationOptimizer (ABC)
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    ├─ solve(T, A, R, initial_wealth, goal_set, D, ...) → OptimizationResult
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>    ├─ _check_feasibility(...) → bool
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>    └─ _compute_objective(W, X, T, M) → float
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>CVaROptimizer(AllocationOptimizer)
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>    ├─ cp: CVXPY module
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>    ├─ objective: str ∈ {&quot;risky&quot;, &quot;balanced&quot;, &quot;risky_turnover&quot;, &quot;conservative&quot;}
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>    └─ solve(..., D, withdrawal_epsilon, ...) → OptimizationResult
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>
+</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>GoalSeeker
+</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>    ├─ optimizer: AllocationOptimizer
+</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>    ├─ seek(..., D_generator, withdrawal_epsilon, search_method) → OptimizationResult
+</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>    ├─ _linear_search(...) → OptimizationResult
+</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>    └─ _binary_search(...) → OptimizationResult
+</span></code></pre></div>
+<h3 id="key-design-patterns">Key Design Patterns</h3>
+<p><strong>GoalSet passed explicitly:</strong> Caller creates <code>GoalSet</code> once before optimization loop:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># In GoalSeeker.seek()</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">goal_set</span> <span class="o">=</span> <span class="n">GoalSet</span><span class="p">(</span><span class="n">goals</span><span class="p">,</span> <span class="n">accounts</span><span class="p">,</span> <span class="n">start_date</span><span class="p">)</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="k">for</span> <span class="n">T</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">T_start</span><span class="p">,</span> <span class="n">T_max</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="n">result</span> <span class="o">=</span> <span class="n">optimizer</span><span class="o">.</span><span class="n">solve</span><span class="p">(</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>        <span class="n">T</span><span class="o">=</span><span class="n">T</span><span class="p">,</span> <span class="n">A</span><span class="o">=</span><span class="n">A</span><span class="p">,</span> <span class="n">R</span><span class="o">=</span><span class="n">R</span><span class="p">,</span> <span class="n">initial_wealth</span><span class="o">=</span><span class="n">initial_wealth</span><span class="p">,</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>        <span class="n">goal_set</span><span class="o">=</span><span class="n">goal_set</span><span class="p">,</span>  <span class="c1"># Pre-validated, reused</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>        <span class="n">D</span><span class="o">=</span><span class="n">D</span><span class="p">,</span>                <span class="c1"># Withdrawals (optional)</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>        <span class="n">withdrawal_epsilon</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>        <span class="o">**</span><span class="n">solver_kwargs</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>    <span class="p">)</span>
+</span></code></pre></div>
+<p><strong>Separation of responsibilities:</strong>
+- <code>GoalSet</code>: Validation, account resolution, minimum horizon estimation
+- <code>AllocationOptimizer</code>: Convex programming, feasibility checking
+- <code>GoalSeeker</code>: Bilevel search, warm starting</p>
+<hr />
+<h2 id="cvaroptimizer-api">CVaROptimizer API</h2>
+<h3 id="constructor">Constructor</h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">finopt.src.optimization</span><span class="w"> </span><span class="kn">import</span> <span class="n">CVaROptimizer</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">optimizer</span> <span class="o">=</span> <span class="n">CVaROptimizer</span><span class="p">(</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">n_accounts</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">objective</span><span class="o">=</span><span class="s1">&#39;balanced&#39;</span><span class="p">,</span>           <span class="c1"># Default: turnover minimization</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="n">objective_params</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;lambda&#39;</span><span class="p">:</span> <span class="mf">0.5</span><span class="p">},</span>  <span class="c1"># For conservative/risky_turnover</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>    <span class="n">account_names</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;Emergency&#39;</span><span class="p">,</span> <span class="s1">&#39;Housing&#39;</span><span class="p">,</span> <span class="s1">&#39;Retirement&#39;</span><span class="p">]</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="p">)</span>
+</span></code></pre></div>
+<h3 id="solve-method">solve() Method</h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">result</span> <span class="o">=</span> <span class="n">optimizer</span><span class="o">.</span><span class="n">solve</span><span class="p">(</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>    <span class="n">T</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span>                          <span class="c1"># Horizon (months)</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="n">A</span><span class="o">=</span><span class="n">A_scenarios</span><span class="p">,</span>                 <span class="c1"># (n_sims, T) contributions</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="n">R</span><span class="o">=</span><span class="n">R_scenarios</span><span class="p">,</span>                 <span class="c1"># (n_sims, T, M) returns</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">initial_wealth</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">1e6</span><span class="p">,</span> <span class="mf">0.5e6</span><span class="p">,</span> <span class="mf">2e6</span><span class="p">]),</span>  <span class="c1"># (M,)</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">goal_set</span><span class="o">=</span><span class="n">goal_set</span><span class="p">,</span>             <span class="c1"># Pre-validated GoalSet (REQUIRED)</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    <span class="n">X_init</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>                   <span class="c1"># Warm start (optional, ignored by CVXPY)</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    <span class="n">D</span><span class="o">=</span><span class="n">withdrawal_matrix</span><span class="p">,</span>           <span class="c1"># (T, M) or (n_sims, T, M) withdrawals</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>    <span class="n">withdrawal_epsilon</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span>       <span class="c1"># 95% confidence for withdrawals</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>    <span class="n">solver</span><span class="o">=</span><span class="s1">&#39;CLARABEL&#39;</span><span class="p">,</span>             <span class="c1"># Solver: CLARABEL, ECOS, SCS</span>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>    <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>    <span class="n">max_iters</span><span class="o">=</span><span class="mi">10000</span><span class="p">,</span>
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>    <span class="n">abstol</span><span class="o">=</span><span class="mf">1e-7</span><span class="p">,</span>
+</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>    <span class="n">reltol</span><span class="o">=</span><span class="mf">1e-6</span>
+</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="p">)</span>
+</span></code></pre></div>
+<h3 id="withdrawal-support">Withdrawal Support</h3>
+<p>Withdrawals <span class="arithmatex">\(D\)</span> can be:
+- <strong>Deterministic:</strong> Shape <code>(T, M)</code> — same withdrawal across all scenarios
+- <strong>Stochastic:</strong> Shape <code>(n_sims, T, M)</code> — per-scenario withdrawals</p>
+<p><strong>Withdrawal feasibility constraint (Conservative - Option 1):</strong>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>ℙ(W_t^m ≥ D_t^m) ≥ 1 - withdrawal_epsilon
+</span></code></pre></div></p>
+<p>Ensures sufficient wealth <strong>before</strong> each withdrawal, without relying on contributions.</p>
+<p><strong>Implementation:</strong>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># CVaR reformulation for withdrawal constraint</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="c1"># Shortfall: D_t - W_t (positive = cannot meet withdrawal)</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">shortfall</span> <span class="o">=</span> <span class="n">D_tm</span> <span class="o">-</span> <span class="n">W_pre_withdrawal</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="c1"># CVaR epigraphic constraints</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="n">z_wd</span> <span class="o">&gt;=</span> <span class="n">shortfall</span> <span class="o">-</span> <span class="n">gamma_wd</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="n">gamma_wd</span> <span class="o">+</span> <span class="nb">sum</span><span class="p">(</span><span class="n">z_wd</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">withdrawal_epsilon</span> <span class="o">*</span> <span class="n">n_sims</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="mi">0</span>
+</span></code></pre></div></p>
+<p>Since <span class="arithmatex">\(D\)</span> is a <strong>parameter</strong> (not decision variable), convexity is preserved.</p>
+<hr />
+<h2 id="goalseeker-api">GoalSeeker API</h2>
+<h3 id="constructor_1">Constructor</h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">finopt.src.optimization</span><span class="w"> </span><span class="kn">import</span> <span class="n">GoalSeeker</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">seeker</span> <span class="o">=</span> <span class="n">GoalSeeker</span><span class="p">(</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>    <span class="n">optimizer</span><span class="o">=</span><span class="n">optimizer</span><span class="p">,</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>    <span class="n">T_max</span><span class="o">=</span><span class="mi">120</span><span class="p">,</span>       <span class="c1"># Maximum search horizon</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>    <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="p">)</span>
+</span></code></pre></div>
+<h3 id="seek-method">seek() Method</h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">date</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="c1"># Generator functions for scenarios</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="k">def</span><span class="w"> </span><span class="nf">A_gen</span><span class="p">(</span><span class="n">T</span><span class="p">,</span> <span class="n">n_sims</span><span class="p">,</span> <span class="n">seed</span><span class="p">):</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>    <span class="k">return</span> <span class="n">model</span><span class="o">.</span><span class="n">income</span><span class="o">.</span><span class="n">contributions</span><span class="p">(</span><span class="n">T</span><span class="p">,</span> <span class="n">n_sims</span><span class="o">=</span><span class="n">n_sims</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="n">seed</span><span class="p">,</span> <span class="n">output</span><span class="o">=</span><span class="s2">&quot;array&quot;</span><span class="p">)</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="k">def</span><span class="w"> </span><span class="nf">R_gen</span><span class="p">(</span><span class="n">T</span><span class="p">,</span> <span class="n">n_sims</span><span class="p">,</span> <span class="n">seed</span><span class="p">):</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>    <span class="k">return</span> <span class="n">model</span><span class="o">.</span><span class="n">returns</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span><span class="n">T</span><span class="p">,</span> <span class="n">n_sims</span><span class="o">=</span><span class="n">n_sims</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="n">seed</span><span class="p">)</span>
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="c1"># Optional: withdrawal generator</span>
+</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="k">def</span><span class="w"> </span><span class="nf">D_gen</span><span class="p">(</span><span class="n">T</span><span class="p">,</span> <span class="n">n_sims</span><span class="p">,</span> <span class="n">seed</span><span class="p">):</span>
+</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a>    <span class="c1"># Example: $500K withdrawal at month 12 from account 0</span>
+</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>    <span class="n">D</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">T</span><span class="p">,</span> <span class="n">M</span><span class="p">))</span>
+</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>    <span class="k">if</span> <span class="n">T</span> <span class="o">&gt;</span> <span class="mi">12</span><span class="p">:</span>
+</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a>        <span class="n">D</span><span class="p">[</span><span class="mi">12</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">500_000</span>
+</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a>    <span class="k">return</span> <span class="n">D</span>
+</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a>
+</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="n">result</span> <span class="o">=</span> <span class="n">seeker</span><span class="o">.</span><span class="n">seek</span><span class="p">(</span>
+</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a>    <span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">,</span>
+</span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a>    <span class="n">A_generator</span><span class="o">=</span><span class="n">A_gen</span><span class="p">,</span>
+</span><span id="__span-7-21"><a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a>    <span class="n">R_generator</span><span class="o">=</span><span class="n">R_gen</span><span class="p">,</span>
+</span><span id="__span-7-22"><a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a>    <span class="n">initial_wealth</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">1e6</span><span class="p">,</span> <span class="mf">0.5e6</span><span class="p">]),</span>
+</span><span id="__span-7-23"><a id="__codelineno-7-23" name="__codelineno-7-23" href="#__codelineno-7-23"></a>    <span class="n">accounts</span><span class="o">=</span><span class="n">accounts</span><span class="p">,</span>
+</span><span id="__span-7-24"><a id="__codelineno-7-24" name="__codelineno-7-24" href="#__codelineno-7-24"></a>    <span class="n">start_date</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+</span><span id="__span-7-25"><a id="__codelineno-7-25" name="__codelineno-7-25" href="#__codelineno-7-25"></a>    <span class="n">n_sims</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span>
+</span><span id="__span-7-26"><a id="__codelineno-7-26" name="__codelineno-7-26" href="#__codelineno-7-26"></a>    <span class="n">seed</span><span class="o">=</span><span class="mi">42</span><span class="p">,</span>
+</span><span id="__span-7-27"><a id="__codelineno-7-27" name="__codelineno-7-27" href="#__codelineno-7-27"></a>    <span class="n">search_method</span><span class="o">=</span><span class="s2">&quot;binary&quot;</span><span class="p">,</span>        <span class="c1"># &quot;binary&quot; or &quot;linear&quot;</span>
+</span><span id="__span-7-28"><a id="__codelineno-7-28" name="__codelineno-7-28" href="#__codelineno-7-28"></a>    <span class="n">D_generator</span><span class="o">=</span><span class="n">D_gen</span><span class="p">,</span>             <span class="c1"># Optional withdrawals</span>
+</span><span id="__span-7-29"><a id="__codelineno-7-29" name="__codelineno-7-29" href="#__codelineno-7-29"></a>    <span class="n">withdrawal_epsilon</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span>       <span class="c1"># 95% confidence</span>
+</span><span id="__span-7-30"><a id="__codelineno-7-30" name="__codelineno-7-30" href="#__codelineno-7-30"></a>    <span class="n">solver</span><span class="o">=</span><span class="s1">&#39;CLARABEL&#39;</span><span class="p">,</span>
+</span><span id="__span-7-31"><a id="__codelineno-7-31" name="__codelineno-7-31" href="#__codelineno-7-31"></a>    <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span>
+</span><span id="__span-7-32"><a id="__codelineno-7-32" name="__codelineno-7-32" href="#__codelineno-7-32"></a><span class="p">)</span>
+</span></code></pre></div>
+<hr />
+<h2 id="search-strategies">Search Strategies</h2>
+<h3 id="linear-search-safe-slower">Linear Search (Safe, Slower)</h3>
+<p><strong>Algorithm:</strong>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">X_prev</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="k">for</span> <span class="n">T</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">T_start</span><span class="p">,</span> <span class="n">T_max</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>    <span class="n">result</span> <span class="o">=</span> <span class="n">optimizer</span><span class="o">.</span><span class="n">solve</span><span class="p">(</span><span class="n">T</span><span class="p">,</span> <span class="n">A</span><span class="p">,</span> <span class="n">R</span><span class="p">,</span> <span class="n">initial_wealth</span><span class="p">,</span> <span class="n">goal_set</span><span class="p">,</span> <span class="n">D</span><span class="p">,</span> <span class="n">X_init</span><span class="o">=</span><span class="n">X_prev</span><span class="p">)</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>    <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">feasible</span><span class="p">:</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>        <span class="k">return</span> <span class="n">result</span>  <span class="c1"># Found T*</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>    <span class="c1"># Warm start: extend policy</span>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>    <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">X</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>        <span class="n">X_prev</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">vstack</span><span class="p">([</span><span class="n">result</span><span class="o">.</span><span class="n">X</span><span class="p">,</span> <span class="n">result</span><span class="o">.</span><span class="n">X</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">:,</span> <span class="p">:]])</span>
+</span></code></pre></div></p>
+<p><strong>Complexity:</strong> <span class="arithmatex">\(O(T^* - T_{\text{start}})\)</span> iterations</p>
+<p><strong>Properties:</strong>
+- Always finds true <span class="arithmatex">\(T^*\)</span> if feasible
+- No assumptions required
+- Warm start accelerates convergence</p>
+<h3 id="binary-search-faster-assumes-monotonicity">Binary Search (Faster, Assumes Monotonicity)</h3>
+<p><strong>Algorithm:</strong>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="n">left</span><span class="p">,</span> <span class="n">right</span> <span class="o">=</span> <span class="n">T_start</span><span class="p">,</span> <span class="n">T_max</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">best_result</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="k">while</span> <span class="n">left</span> <span class="o">&lt;</span> <span class="n">right</span><span class="p">:</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>    <span class="n">mid</span> <span class="o">=</span> <span class="p">(</span><span class="n">left</span> <span class="o">+</span> <span class="n">right</span><span class="p">)</span> <span class="o">//</span> <span class="mi">2</span>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>    <span class="n">result</span> <span class="o">=</span> <span class="n">optimizer</span><span class="o">.</span><span class="n">solve</span><span class="p">(</span><span class="n">mid</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>    <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">feasible</span><span class="p">:</span>
+</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>        <span class="n">best_result</span> <span class="o">=</span> <span class="n">result</span>
+</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>        <span class="n">right</span> <span class="o">=</span> <span class="n">mid</span>  <span class="c1"># Search lower half</span>
+</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a>    <span class="k">else</span><span class="p">:</span>
+</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a>        <span class="n">left</span> <span class="o">=</span> <span class="n">mid</span> <span class="o">+</span> <span class="mi">1</span>  <span class="c1"># Search upper half</span>
+</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a>
+</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="k">return</span> <span class="n">best_result</span>
+</span></code></pre></div></p>
+<p><strong>Complexity:</strong> <span class="arithmatex">\(O(\log(T_{\max} - T_{\text{start}}))\)</span> iterations</p>
+<p><strong>Assumption:</strong> Monotonicity <span class="arithmatex">\(\mathcal{F}_T \subseteq \mathcal{F}_{T+1}\)</span></p>
+<p><strong>When to use:</strong>
+- Typical financial planning scenarios (safe)
+- Contribution schedules are non-decreasing or stable
+- Goal structure is well-behaved</p>
+<p><strong>When to avoid:</strong>
+- Contributions have sudden drops
+- Pathological goal configurations
+- Safety-critical applications → use linear search</p>
+<hr />
+<h2 id="solver-configuration">Solver Configuration</h2>
+<h3 id="available-solvers">Available Solvers</h3>
+<table>
+<thead>
+<tr>
+<th>Solver</th>
+<th>Type</th>
+<th>Speed</th>
+<th>Stability</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>CLARABEL</strong></td>
+<td>Interior-point</td>
+<td>Balanced</td>
+<td>Good</td>
+<td>✓</td>
+</tr>
+<tr>
+<td>ECOS</td>
+<td>Interior-point (LP/SOCP)</td>
+<td>Fast</td>
+<td>Good for well-conditioned</td>
+<td></td>
+</tr>
+<tr>
+<td>SCS</td>
+<td>First-order conic</td>
+<td>Moderate</td>
+<td>Handles ill-conditioned</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h3 id="solver-options-mapping">Solver Options Mapping</h3>
+<p>The API uses standard option names that are mapped to solver-specific options:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Standard options</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">result</span> <span class="o">=</span> <span class="n">optimizer</span><span class="o">.</span><span class="n">solve</span><span class="p">(</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>    <span class="o">...</span><span class="p">,</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>    <span class="n">solver</span><span class="o">=</span><span class="s1">&#39;CLARABEL&#39;</span><span class="p">,</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>    <span class="n">max_iters</span><span class="o">=</span><span class="mi">10000</span><span class="p">,</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>    <span class="n">abstol</span><span class="o">=</span><span class="mf">1e-7</span><span class="p">,</span>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>    <span class="n">reltol</span><span class="o">=</span><span class="mf">1e-6</span>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="p">)</span>
+</span></code></pre></div>
+<p><strong>Option mapping:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Standard</th>
+<th>ECOS</th>
+<th>SCS</th>
+<th>CLARABEL</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>max_iters</code></td>
+<td><code>max_iters</code></td>
+<td><code>max_iters</code></td>
+<td><code>max_iter</code></td>
+</tr>
+<tr>
+<td><code>abstol</code></td>
+<td><code>abstol</code></td>
+<td><code>eps_abs</code></td>
+<td><code>tol_gap_abs</code></td>
+</tr>
+<tr>
+<td><code>reltol</code></td>
+<td><code>reltol</code></td>
+<td><code>eps_rel</code></td>
+<td><code>tol_gap_rel</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="complexity-analysis">Complexity Analysis</h3>
+<p><strong>Variables:</strong> <span class="arithmatex">\(T \cdot M + G \cdot (1 + N) + W \cdot (1 + N)\)</span>
+- <span class="arithmatex">\(T \cdot M\)</span> allocations <span class="arithmatex">\(X\)</span>
+- <span class="arithmatex">\(G\)</span> VaR levels <span class="arithmatex">\(\gamma_g\)</span> + <span class="arithmatex">\(G \cdot N\)</span> excess shortfalls <span class="arithmatex">\(z_g^i\)</span>
+- <span class="arithmatex">\(W\)</span> withdrawal constraints (if applicable)</p>
+<p><strong>Example:</strong> <span class="arithmatex">\(T=24, M=3, G=3, N=300, W=2\)</span>
+- Variables: <span class="arithmatex">\(72 + 903 + 602 = 1577\)</span>
+- Solve time: 30-100ms (CLARABEL)</p>
+<hr />
+<h2 id="optimizationresult">OptimizationResult</h2>
+<h3 id="attributes">Attributes</h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="k">class</span><span class="w"> </span><span class="nc">OptimizationResult</span><span class="p">:</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>    <span class="n">X</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>              <span class="c1"># Optimal allocation policy (T, M)</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>    <span class="n">T</span><span class="p">:</span> <span class="nb">int</span>                     <span class="c1"># Horizon</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>    <span class="n">objective_value</span><span class="p">:</span> <span class="nb">float</span>     <span class="c1"># f(X*)</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>    <span class="n">feasible</span><span class="p">:</span> <span class="nb">bool</span>             <span class="c1"># All goals satisfied?</span>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>    <span class="n">goals</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="o">...</span><span class="p">]</span>           <span class="c1"># Original goal specs</span>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>    <span class="n">goal_set</span><span class="p">:</span> <span class="n">GoalSet</span>          <span class="c1"># Validated collection</span>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>    <span class="n">solve_time</span><span class="p">:</span> <span class="nb">float</span>          <span class="c1"># Solver time (seconds)</span>
+</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a>    <span class="n">n_iterations</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span>
+</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a>    <span class="n">diagnostics</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">dict</span><span class="p">]</span>
+</span></code></pre></div>
+<h3 id="methods">Methods</h3>
+<p><strong>summary()</strong> — Human-readable output:
+<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nb">print</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">summary</span><span class="p">())</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="c1"># OptimizationResult(</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="c1">#   Status: ✓ Feasible</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="c1">#   Horizon: T=24 months</span>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="c1">#   Objective: 11234567.89</span>
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="c1">#   Goals: 3 (1 intermediate, 2 terminal)</span>
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="c1">#   Solve time: 0.342s</span>
+</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="c1">#   Iterations: N/A</span>
+</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="c1"># )</span>
+</span></code></pre></div></p>
+<p><strong>validate_goals(result)</strong> — Post-simulation validation:
+<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="n">sim_result</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">simulate</span><span class="p">(</span><span class="n">T</span><span class="o">=</span><span class="n">result</span><span class="o">.</span><span class="n">T</span><span class="p">,</span> <span class="n">X</span><span class="o">=</span><span class="n">result</span><span class="o">.</span><span class="n">X</span><span class="p">,</span> <span class="n">n_sims</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">999</span><span class="p">)</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">status</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">validate_goals</span><span class="p">(</span><span class="n">sim_result</span><span class="p">)</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="k">for</span> <span class="n">goal</span><span class="p">,</span> <span class="n">metrics</span> <span class="ow">in</span> <span class="n">status</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">goal</span><span class="o">.</span><span class="n">account</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;violation_rate&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">.2%</span><span class="si">}</span><span class="s2"> violations&quot;</span><span class="p">)</span>
+</span></code></pre></div></p>
+<p><strong>is_valid_allocation(tol)</strong> — Check simplex constraints:
+<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="k">if</span> <span class="ow">not</span> <span class="n">result</span><span class="o">.</span><span class="n">is_valid_allocation</span><span class="p">(</span><span class="n">tol</span><span class="o">=</span><span class="mf">1e-6</span><span class="p">):</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Warning: allocation violates simplex constraints&quot;</span><span class="p">)</span>
+</span></code></pre></div></p>
+<hr />
+<h2 id="diagnostics-and-debugging">Diagnostics and Debugging</h2>
+<h3 id="verbose-output">Verbose Output</h3>
+<p>Enable <code>verbose=True</code> for detailed solver information:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>[CVXPY Solution]
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>  Status: optimal
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>  Objective: 21543678.92
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>  Solve time: 0.067s
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>
+</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a>[Simplex Validation]
+</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a>  Max |Σx_t - 1|: 3.45e-09
+</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a>  X bounds: [0.0000, 1.0000]
+</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a>
+</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a>[Goal Satisfaction Diagnostics]
+</span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a>  Account 0 (Emergency):
+</span><span id="__span-15-12"><a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a>    Threshold:        5,500,000
+</span><span id="__span-15-13"><a id="__codelineno-15-13" name="__codelineno-15-13" href="#__codelineno-15-13"></a>    Mean wealth:      6,234,567
+</span><span id="__span-15-14"><a id="__codelineno-15-14" name="__codelineno-15-14" href="#__codelineno-15-14"></a>    Violation rate: 8.20% (max: 10.00%)
+</span><span id="__span-15-15"><a id="__codelineno-15-15" name="__codelineno-15-15" href="#__codelineno-15-15"></a>    CVaR value:         -1234.56 (target: ≤ 0)
+</span><span id="__span-15-16"><a id="__codelineno-15-16" name="__codelineno-15-16" href="#__codelineno-15-16"></a>
+</span><span id="__span-15-17"><a id="__codelineno-15-17" name="__codelineno-15-17" href="#__codelineno-15-17"></a>[Withdrawal Feasibility Diagnostics]
+</span><span id="__span-15-18"><a id="__codelineno-15-18" name="__codelineno-15-18" href="#__codelineno-15-18"></a>  Confidence level: 95% (ε=5%)
+</span><span id="__span-15-19"><a id="__codelineno-15-19" name="__codelineno-15-19" href="#__codelineno-15-19"></a>  ✓ Period 11, Account 0 (Emergency Fund):
+</span><span id="__span-15-20"><a id="__codelineno-15-20" name="__codelineno-15-20" href="#__codelineno-15-20"></a>    Withdrawal D_11:      500,000
+</span><span id="__span-15-21"><a id="__codelineno-15-21" name="__codelineno-15-21" href="#__codelineno-15-21"></a>    Wealth W_11:        1,234,567
+</span><span id="__span-15-22"><a id="__codelineno-15-22" name="__codelineno-15-22" href="#__codelineno-15-22"></a>    Violation rate:    2.30% (max: 5.00%)
+</span><span id="__span-15-23"><a id="__codelineno-15-23" name="__codelineno-15-23" href="#__codelineno-15-23"></a>    CVaR value:          -5678.90 (target: ≤ 0)
+</span></code></pre></div>
+<h3 id="common-issues-and-solutions">Common Issues and Solutions</h3>
+<p><strong>1. Infeasible problem:</strong>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>Status: infeasible
+</span></code></pre></div>
+<strong>Solutions:</strong>
+- Increase <code>T_max</code> (extend planning horizon)
+- Reduce goal thresholds
+- Increase <code>epsilon</code> (lower confidence: 0.90 → 0.85)
+- Increase contributions
+- Reduce withdrawal amounts</p>
+<p><strong>2. Numerical instability:</strong>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>Max |Σx_t - 1|: 1.23e-04
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>⚠️  Minor simplex violations detected
+</span></code></pre></div>
+<strong>Solutions:</strong>
+- Tighten solver tolerances: <code>abstol=1e-8, reltol=1e-7</code>
+- Switch solver: <code>CLARABEL</code> → <code>SCS</code>
+- Check for extreme returns</p>
+<p><strong>3. Binary search failure:</strong>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>InfeasibleError: Binary search failed: T=87 infeasible
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>Monotonicity assumption may be violated
+</span></code></pre></div>
+<strong>Solutions:</strong>
+- Switch to linear search: <code>search_method="linear"</code>
+- Inspect contribution schedule for sudden drops
+- Verify goal configuration</p>
+<p><strong>4. Withdrawal infeasibility:</strong>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>Withdrawal constraint violated at T=12
+</span></code></pre></div>
+<strong>Solutions:</strong>
+- Increase <code>withdrawal_epsilon</code> (0.05 → 0.10)
+- Reduce withdrawal amount
+- Extend horizon to allow more accumulation
+- Prioritize liquidity in allocation</p>
+<hr />
+<h2 id="complete-examples">Complete Examples</h2>
+<h3 id="basic-optimization-with-goals">Basic Optimization with Goals</h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">date</span>
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">finopt.src.optimization</span><span class="w"> </span><span class="kn">import</span> <span class="n">CVaROptimizer</span><span class="p">,</span> <span class="n">GoalSeeker</span>
+</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">finopt.src.goals</span><span class="w"> </span><span class="kn">import</span> <span class="n">IntermediateGoal</span><span class="p">,</span> <span class="n">TerminalGoal</span>
+</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">finopt.src.portfolio</span><span class="w"> </span><span class="kn">import</span> <span class="n">Account</span>
+</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a>
+</span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="c1"># Setup accounts</span>
+</span><span id="__span-20-8"><a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a><span class="n">accounts</span> <span class="o">=</span> <span class="p">[</span>
+</span><span id="__span-20-9"><a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a>    <span class="n">Account</span><span class="o">.</span><span class="n">from_annual</span><span class="p">(</span><span class="s2">&quot;Emergency&quot;</span><span class="p">,</span> <span class="mf">0.04</span><span class="p">,</span> <span class="mf">0.05</span><span class="p">,</span> <span class="n">initial_wealth</span><span class="o">=</span><span class="mi">1_000_000</span><span class="p">),</span>
+</span><span id="__span-20-10"><a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a>    <span class="n">Account</span><span class="o">.</span><span class="n">from_annual</span><span class="p">(</span><span class="s2">&quot;Housing&quot;</span><span class="p">,</span> <span class="mf">0.07</span><span class="p">,</span> <span class="mf">0.12</span><span class="p">,</span> <span class="n">initial_wealth</span><span class="o">=</span><span class="mi">500_000</span><span class="p">)</span>
+</span><span id="__span-20-11"><a id="__codelineno-20-11" name="__codelineno-20-11" href="#__codelineno-20-11"></a><span class="p">]</span>
+</span><span id="__span-20-12"><a id="__codelineno-20-12" name="__codelineno-20-12" href="#__codelineno-20-12"></a><span class="n">initial_wealth</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">1_000_000</span><span class="p">,</span> <span class="mi">500_000</span><span class="p">])</span>
+</span><span id="__span-20-13"><a id="__codelineno-20-13" name="__codelineno-20-13" href="#__codelineno-20-13"></a>
+</span><span id="__span-20-14"><a id="__codelineno-20-14" name="__codelineno-20-14" href="#__codelineno-20-14"></a><span class="c1"># Define goals</span>
+</span><span id="__span-20-15"><a id="__codelineno-20-15" name="__codelineno-20-15" href="#__codelineno-20-15"></a><span class="n">goals</span> <span class="o">=</span> <span class="p">[</span>
+</span><span id="__span-20-16"><a id="__codelineno-20-16" name="__codelineno-20-16" href="#__codelineno-20-16"></a>    <span class="n">IntermediateGoal</span><span class="p">(</span><span class="n">date</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">7</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">account</span><span class="o">=</span><span class="s2">&quot;Emergency&quot;</span><span class="p">,</span>
+</span><span id="__span-20-17"><a id="__codelineno-20-17" name="__codelineno-20-17" href="#__codelineno-20-17"></a>                     <span class="n">threshold</span><span class="o">=</span><span class="mi">2_000_000</span><span class="p">,</span> <span class="n">confidence</span><span class="o">=</span><span class="mf">0.95</span><span class="p">),</span>
+</span><span id="__span-20-18"><a id="__codelineno-20-18" name="__codelineno-20-18" href="#__codelineno-20-18"></a>    <span class="n">TerminalGoal</span><span class="p">(</span><span class="n">account</span><span class="o">=</span><span class="s2">&quot;Housing&quot;</span><span class="p">,</span> <span class="n">threshold</span><span class="o">=</span><span class="mi">20_000_000</span><span class="p">,</span> <span class="n">confidence</span><span class="o">=</span><span class="mf">0.90</span><span class="p">)</span>
+</span><span id="__span-20-19"><a id="__codelineno-20-19" name="__codelineno-20-19" href="#__codelineno-20-19"></a><span class="p">]</span>
+</span><span id="__span-20-20"><a id="__codelineno-20-20" name="__codelineno-20-20" href="#__codelineno-20-20"></a>
+</span><span id="__span-20-21"><a id="__codelineno-20-21" name="__codelineno-20-21" href="#__codelineno-20-21"></a><span class="c1"># Create optimizer</span>
+</span><span id="__span-20-22"><a id="__codelineno-20-22" name="__codelineno-20-22" href="#__codelineno-20-22"></a><span class="n">optimizer</span> <span class="o">=</span> <span class="n">CVaROptimizer</span><span class="p">(</span>
+</span><span id="__span-20-23"><a id="__codelineno-20-23" name="__codelineno-20-23" href="#__codelineno-20-23"></a>    <span class="n">n_accounts</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">accounts</span><span class="p">),</span>
+</span><span id="__span-20-24"><a id="__codelineno-20-24" name="__codelineno-20-24" href="#__codelineno-20-24"></a>    <span class="n">objective</span><span class="o">=</span><span class="s1">&#39;balanced&#39;</span><span class="p">,</span>
+</span><span id="__span-20-25"><a id="__codelineno-20-25" name="__codelineno-20-25" href="#__codelineno-20-25"></a>    <span class="n">account_names</span><span class="o">=</span><span class="p">[</span><span class="n">a</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">accounts</span><span class="p">]</span>
+</span><span id="__span-20-26"><a id="__codelineno-20-26" name="__codelineno-20-26" href="#__codelineno-20-26"></a><span class="p">)</span>
+</span><span id="__span-20-27"><a id="__codelineno-20-27" name="__codelineno-20-27" href="#__codelineno-20-27"></a>
+</span><span id="__span-20-28"><a id="__codelineno-20-28" name="__codelineno-20-28" href="#__codelineno-20-28"></a><span class="c1"># Generator functions</span>
+</span><span id="__span-20-29"><a id="__codelineno-20-29" name="__codelineno-20-29" href="#__codelineno-20-29"></a><span class="k">def</span><span class="w"> </span><span class="nf">A_gen</span><span class="p">(</span><span class="n">T</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">s</span><span class="p">):</span>
+</span><span id="__span-20-30"><a id="__codelineno-20-30" name="__codelineno-20-30" href="#__codelineno-20-30"></a>    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">full</span><span class="p">((</span><span class="n">n</span><span class="p">,</span> <span class="n">T</span><span class="p">),</span> <span class="mi">500_000</span><span class="p">)</span>  <span class="c1"># $500K/month</span>
+</span><span id="__span-20-31"><a id="__codelineno-20-31" name="__codelineno-20-31" href="#__codelineno-20-31"></a>
+</span><span id="__span-20-32"><a id="__codelineno-20-32" name="__codelineno-20-32" href="#__codelineno-20-32"></a><span class="k">def</span><span class="w"> </span><span class="nf">R_gen</span><span class="p">(</span><span class="n">T</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">s</span><span class="p">):</span>
+</span><span id="__span-20-33"><a id="__codelineno-20-33" name="__codelineno-20-33" href="#__codelineno-20-33"></a>    <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
+</span><span id="__span-20-34"><a id="__codelineno-20-34" name="__codelineno-20-34" href="#__codelineno-20-34"></a>    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="mf">0.005</span><span class="p">,</span> <span class="mf">0.02</span><span class="p">,</span> <span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">T</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
+</span><span id="__span-20-35"><a id="__codelineno-20-35" name="__codelineno-20-35" href="#__codelineno-20-35"></a>
+</span><span id="__span-20-36"><a id="__codelineno-20-36" name="__codelineno-20-36" href="#__codelineno-20-36"></a><span class="c1"># Find minimum horizon</span>
+</span><span id="__span-20-37"><a id="__codelineno-20-37" name="__codelineno-20-37" href="#__codelineno-20-37"></a><span class="n">seeker</span> <span class="o">=</span> <span class="n">GoalSeeker</span><span class="p">(</span><span class="n">optimizer</span><span class="p">,</span> <span class="n">T_max</span><span class="o">=</span><span class="mi">120</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-20-38"><a id="__codelineno-20-38" name="__codelineno-20-38" href="#__codelineno-20-38"></a><span class="n">result</span> <span class="o">=</span> <span class="n">seeker</span><span class="o">.</span><span class="n">seek</span><span class="p">(</span>
+</span><span id="__span-20-39"><a id="__codelineno-20-39" name="__codelineno-20-39" href="#__codelineno-20-39"></a>    <span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">,</span>
+</span><span id="__span-20-40"><a id="__codelineno-20-40" name="__codelineno-20-40" href="#__codelineno-20-40"></a>    <span class="n">A_generator</span><span class="o">=</span><span class="n">A_gen</span><span class="p">,</span>
+</span><span id="__span-20-41"><a id="__codelineno-20-41" name="__codelineno-20-41" href="#__codelineno-20-41"></a>    <span class="n">R_generator</span><span class="o">=</span><span class="n">R_gen</span><span class="p">,</span>
+</span><span id="__span-20-42"><a id="__codelineno-20-42" name="__codelineno-20-42" href="#__codelineno-20-42"></a>    <span class="n">initial_wealth</span><span class="o">=</span><span class="n">initial_wealth</span><span class="p">,</span>
+</span><span id="__span-20-43"><a id="__codelineno-20-43" name="__codelineno-20-43" href="#__codelineno-20-43"></a>    <span class="n">accounts</span><span class="o">=</span><span class="n">accounts</span><span class="p">,</span>
+</span><span id="__span-20-44"><a id="__codelineno-20-44" name="__codelineno-20-44" href="#__codelineno-20-44"></a>    <span class="n">start_date</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+</span><span id="__span-20-45"><a id="__codelineno-20-45" name="__codelineno-20-45" href="#__codelineno-20-45"></a>    <span class="n">n_sims</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span>
+</span><span id="__span-20-46"><a id="__codelineno-20-46" name="__codelineno-20-46" href="#__codelineno-20-46"></a>    <span class="n">seed</span><span class="o">=</span><span class="mi">42</span><span class="p">,</span>
+</span><span id="__span-20-47"><a id="__codelineno-20-47" name="__codelineno-20-47" href="#__codelineno-20-47"></a>    <span class="n">search_method</span><span class="o">=</span><span class="s2">&quot;binary&quot;</span>
+</span><span id="__span-20-48"><a id="__codelineno-20-48" name="__codelineno-20-48" href="#__codelineno-20-48"></a><span class="p">)</span>
+</span><span id="__span-20-49"><a id="__codelineno-20-49" name="__codelineno-20-49" href="#__codelineno-20-49"></a>
+</span><span id="__span-20-50"><a id="__codelineno-20-50" name="__codelineno-20-50" href="#__codelineno-20-50"></a><span class="nb">print</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">summary</span><span class="p">())</span>
+</span></code></pre></div>
+<h3 id="optimization-with-withdrawals">Optimization with Withdrawals</h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Define withdrawal schedule</span>
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">D_gen</span><span class="p">(</span><span class="n">T</span><span class="p">,</span> <span class="n">n_sims</span><span class="p">,</span> <span class="n">seed</span><span class="p">):</span>
+</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;$1M withdrawal from Housing account at month 24.&quot;&quot;&quot;</span>
+</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>    <span class="n">D</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">T</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
+</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a>    <span class="k">if</span> <span class="n">T</span> <span class="o">&gt;</span> <span class="mi">24</span><span class="p">:</span>
+</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a>        <span class="n">D</span><span class="p">[</span><span class="mi">24</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1_000_000</span>  <span class="c1"># Account 1 = Housing</span>
+</span><span id="__span-21-7"><a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a>    <span class="k">return</span> <span class="n">D</span>
+</span><span id="__span-21-8"><a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a>
+</span><span id="__span-21-9"><a id="__codelineno-21-9" name="__codelineno-21-9" href="#__codelineno-21-9"></a><span class="c1"># Seek with withdrawals</span>
+</span><span id="__span-21-10"><a id="__codelineno-21-10" name="__codelineno-21-10" href="#__codelineno-21-10"></a><span class="n">result</span> <span class="o">=</span> <span class="n">seeker</span><span class="o">.</span><span class="n">seek</span><span class="p">(</span>
+</span><span id="__span-21-11"><a id="__codelineno-21-11" name="__codelineno-21-11" href="#__codelineno-21-11"></a>    <span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">,</span>
+</span><span id="__span-21-12"><a id="__codelineno-21-12" name="__codelineno-21-12" href="#__codelineno-21-12"></a>    <span class="n">A_generator</span><span class="o">=</span><span class="n">A_gen</span><span class="p">,</span>
+</span><span id="__span-21-13"><a id="__codelineno-21-13" name="__codelineno-21-13" href="#__codelineno-21-13"></a>    <span class="n">R_generator</span><span class="o">=</span><span class="n">R_gen</span><span class="p">,</span>
+</span><span id="__span-21-14"><a id="__codelineno-21-14" name="__codelineno-21-14" href="#__codelineno-21-14"></a>    <span class="n">initial_wealth</span><span class="o">=</span><span class="n">initial_wealth</span><span class="p">,</span>
+</span><span id="__span-21-15"><a id="__codelineno-21-15" name="__codelineno-21-15" href="#__codelineno-21-15"></a>    <span class="n">accounts</span><span class="o">=</span><span class="n">accounts</span><span class="p">,</span>
+</span><span id="__span-21-16"><a id="__codelineno-21-16" name="__codelineno-21-16" href="#__codelineno-21-16"></a>    <span class="n">start_date</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+</span><span id="__span-21-17"><a id="__codelineno-21-17" name="__codelineno-21-17" href="#__codelineno-21-17"></a>    <span class="n">n_sims</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span>
+</span><span id="__span-21-18"><a id="__codelineno-21-18" name="__codelineno-21-18" href="#__codelineno-21-18"></a>    <span class="n">seed</span><span class="o">=</span><span class="mi">42</span><span class="p">,</span>
+</span><span id="__span-21-19"><a id="__codelineno-21-19" name="__codelineno-21-19" href="#__codelineno-21-19"></a>    <span class="n">search_method</span><span class="o">=</span><span class="s2">&quot;binary&quot;</span><span class="p">,</span>
+</span><span id="__span-21-20"><a id="__codelineno-21-20" name="__codelineno-21-20" href="#__codelineno-21-20"></a>    <span class="n">D_generator</span><span class="o">=</span><span class="n">D_gen</span><span class="p">,</span>
+</span><span id="__span-21-21"><a id="__codelineno-21-21" name="__codelineno-21-21" href="#__codelineno-21-21"></a>    <span class="n">withdrawal_epsilon</span><span class="o">=</span><span class="mf">0.05</span>  <span class="c1"># 95% confidence</span>
+</span><span id="__span-21-22"><a id="__codelineno-21-22" name="__codelineno-21-22" href="#__codelineno-21-22"></a><span class="p">)</span>
+</span></code></pre></div>
+<h3 id="custom-objective-with-turnover-penalty">Custom Objective with Turnover Penalty</h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="n">optimizer</span> <span class="o">=</span> <span class="n">CVaROptimizer</span><span class="p">(</span>
+</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>    <span class="n">n_accounts</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>    <span class="n">objective</span><span class="o">=</span><span class="s1">&#39;risky_turnover&#39;</span><span class="p">,</span>
+</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a>    <span class="n">objective_params</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;lambda&#39;</span><span class="p">:</span> <span class="mi">10000</span><span class="p">},</span>  <span class="c1"># Turnover penalty weight</span>
+</span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a>    <span class="n">account_names</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Emergency&quot;</span><span class="p">,</span> <span class="s2">&quot;Housing&quot;</span><span class="p">,</span> <span class="s2">&quot;Retirement&quot;</span><span class="p">]</span>
+</span><span id="__span-22-6"><a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a><span class="p">)</span>
+</span></code></pre></div>
+<hr />
+<h2 id="theoretical-guarantees">Theoretical Guarantees</h2>
+<p><strong>Theorem 1 (Affine Wealth Representation):</strong>
+For any allocation policy <span class="arithmatex">\(X \in \mathcal{X}_T\)</span>, return realization <span class="arithmatex">\(\{R_t^m\}\)</span>, and withdrawal schedule <span class="arithmatex">\(\{D_t^m\}\)</span>:
+$$
+W_t^m(X) = W_0^m F_{0,t}^m + \sum_{s=0}^{t-1} (A_s x_s^m - D_s^m) F_{s,t}^m
+$$
+is affine in <span class="arithmatex">\(X\)</span> (since <span class="arithmatex">\(D\)</span> is a parameter), enabling convex programming.</p>
+<p><strong>Theorem 2 (CVaR Epigraphic Convexity):</strong>
+The epigraphic reformulation defines a convex constraint in <span class="arithmatex">\(X\)</span> when <span class="arithmatex">\(W(X)\)</span> is affine.</p>
+<p><strong>Theorem 3 (Global Optimality):</strong>
+CVXPY interior-point solvers return global optimum for convex programs. No local minima exist.</p>
+<p><strong>Theorem 4 (Bilevel Optimality):</strong>
+- <strong>Linear search:</strong> Finds true <span class="arithmatex">\(T^*\)</span> if inner solver succeeds
+- <strong>Binary search:</strong> Finds <span class="arithmatex">\(T^*\)</span> under monotonicity assumption <span class="arithmatex">\(\mathcal{F}_T \subseteq \mathcal{F}_{T+1}\)</span></p>
+<hr />
+<h2 id="exceptions">Exceptions</h2>
+<p>The module raises <code>InfeasibleError</code> when no feasible solution is found:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">finopt.src.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">InfeasibleError</span>
+</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>
+</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="k">try</span><span class="p">:</span>
+</span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a>    <span class="n">result</span> <span class="o">=</span> <span class="n">seeker</span><span class="o">.</span><span class="n">seek</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
+</span><span id="__span-23-5"><a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a><span class="k">except</span> <span class="n">InfeasibleError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+</span><span id="__span-23-6"><a id="__codelineno-23-6" name="__codelineno-23-6" href="#__codelineno-23-6"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Optimization failed: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-23-7"><a id="__codelineno-23-7" name="__codelineno-23-7" href="#__codelineno-23-7"></a>    <span class="c1"># Suggestions: increase T_max, relax goals, increase contributions</span>
+</span></code></pre></div>
+<hr />
+<h2 id="references">References</h2>
+<p><strong>Rockafellar, R.T. and Uryasev, S. (2000).</strong> Optimization of conditional value-at-risk. <em>Journal of Risk</em>, 2, 21-42.</p>
+<p><strong>Markowitz, H. (1952).</strong> Portfolio Selection. <em>The Journal of Finance</em>, 7(1), 77-91.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../javascripts/mathjax.js"></script>
+      
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>

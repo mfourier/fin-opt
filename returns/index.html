@@ -1,0 +1,2417 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Intelligent financial planning through stochastic simulation and convex optimization.">
+      
+      
+        <meta name="author" content="mfourier">
+      
+      
+        <link rel="canonical" href="https://mfourier.github.io/fin-opt/returns/">
+      
+      
+        <link rel="prev" href="../portfolio/">
+      
+      
+        <link rel="next" href="../withdrawal/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
+    
+    
+      
+        <title>Stochastic Returns - FinOpt</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://mfourier.github.io; script-src 'self' 'unsafe-inline' https://polyfill.io https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://mfourier.github.io; connect-src 'self';">
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="cyan">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#returns-stochastic-return-generation-for-finopt" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="FinOpt" class="md-header__button md-logo" aria-label="FinOpt" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            FinOpt
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Stochastic Returns
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="cyan"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="cyan"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../framework/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Framework
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../income/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Income Model
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../portfolio/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Portfolio Dynamics
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    <li class="md-tabs__item md-tabs__item--active">
+      <a href="./" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Stochastic Returns
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../withdrawal/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Scheduled Withdrawals
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../goals/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Goals Framework
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../optimization/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Optimization
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../model/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Integration Model
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../exceptions/" class="md-tabs__link">
+          
+  
+  
+  Advanced
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="FinOpt" class="md-nav__button md-logo" aria-label="FinOpt" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    FinOpt
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../framework/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Framework
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../income/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Income Model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../portfolio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Portfolio Dynamics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stochastic Returns
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stochastic Returns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#why-a-dedicated-returns-module" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why a dedicated returns module?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mathematical-framework" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mathematical framework
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Mathematical framework">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#lognormal-return-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lognormal return model
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#parameter-conversion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameter conversion
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#generation-algorithm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generation algorithm
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#design-principles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Design principles
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-core-surface-returnmodel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The core surface: ReturnModel
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The core surface: ReturnModel">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#constructor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Constructor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#properties" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Properties
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#core-generation-method" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core generation method
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#visualization-methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Visualization methods
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Visualization methods">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-plot-distribution-analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1) plot() — Distribution analysis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-plot_cumulative-wealth-evolution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2) plot_cumulative() — Wealth evolution
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-plot_horizon_analysis-time-diversification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3) plot_horizon_analysis() — Time diversification
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#integration-with-finopt-pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integration with FinOpt pipeline
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Integration with FinOpt pipeline">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Workflow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#data-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Data flow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#optimization-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optimization integration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#usage-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Usage patterns
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Usage patterns">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#a-basic-generation-uncorrelated" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A) Basic generation (uncorrelated)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#b-correlated-accounts-matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        B) Correlated accounts (matrix)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#c-correlated-accounts-groups" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        C) Correlated accounts (groups)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#d-correlation-override-sensitivity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        D) Correlation override (sensitivity)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#e-introspection-and-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        E) Introspection and validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#f-calendar-aware-visualization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        F) Calendar-aware visualization
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-design-decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key design decisions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Key design decisions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-lognormal-vs-normal-vs-bootstrap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Lognormal vs Normal vs Bootstrap
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-correlation-as-parameter-not-covariance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Correlation as parameter (not covariance)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-group-based-correlation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Group-based correlation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-precomputed-log-parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Precomputed log-parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-correlation-override-per-generate-call" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Correlation override per generate() call
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mathematical-results" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mathematical results
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#extensions-temporal-dependence-roadmap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Extensions: Temporal Dependence (Roadmap)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Extensions: Temporal Dependence (Roadmap)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#motivation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Motivation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#proposed-ar1-extension" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proposed AR(1) Extension
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#proposed-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proposed API
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#when-to-implement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to Implement
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exceptions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exceptions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../withdrawal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scheduled Withdrawals
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../goals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Goals Framework
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../optimization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Optimization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Integration Model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Advanced
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../exceptions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Exceptions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../serialization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Serialization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../utils/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Utilities
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#why-a-dedicated-returns-module" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why a dedicated returns module?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mathematical-framework" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mathematical framework
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Mathematical framework">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#lognormal-return-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lognormal return model
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#parameter-conversion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameter conversion
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#generation-algorithm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generation algorithm
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#design-principles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Design principles
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-core-surface-returnmodel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The core surface: ReturnModel
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The core surface: ReturnModel">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#constructor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Constructor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#properties" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Properties
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#core-generation-method" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core generation method
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#visualization-methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Visualization methods
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Visualization methods">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-plot-distribution-analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1) plot() — Distribution analysis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-plot_cumulative-wealth-evolution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2) plot_cumulative() — Wealth evolution
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-plot_horizon_analysis-time-diversification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3) plot_horizon_analysis() — Time diversification
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#integration-with-finopt-pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integration with FinOpt pipeline
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Integration with FinOpt pipeline">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Workflow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#data-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Data flow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#optimization-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optimization integration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#usage-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Usage patterns
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Usage patterns">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#a-basic-generation-uncorrelated" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A) Basic generation (uncorrelated)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#b-correlated-accounts-matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        B) Correlated accounts (matrix)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#c-correlated-accounts-groups" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        C) Correlated accounts (groups)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#d-correlation-override-sensitivity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        D) Correlation override (sensitivity)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#e-introspection-and-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        E) Introspection and validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#f-calendar-aware-visualization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        F) Calendar-aware visualization
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-design-decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key design decisions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Key design decisions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-lognormal-vs-normal-vs-bootstrap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Lognormal vs Normal vs Bootstrap
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-correlation-as-parameter-not-covariance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Correlation as parameter (not covariance)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-group-based-correlation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Group-based correlation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-precomputed-log-parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Precomputed log-parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-correlation-override-per-generate-call" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Correlation override per generate() call
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mathematical-results" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mathematical results
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#extensions-temporal-dependence-roadmap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Extensions: Temporal Dependence (Roadmap)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Extensions: Temporal Dependence (Roadmap)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#motivation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Motivation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#proposed-ar1-extension" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proposed AR(1) Extension
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#proposed-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proposed API
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#when-to-implement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to Implement
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exceptions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exceptions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="returns-stochastic-return-generation-for-finopt"><code>returns</code> — Stochastic Return Generation for FinOpt</h1>
+<blockquote>
+<p><strong>Purpose:</strong> Generate <strong>correlated stochastic returns</strong> under lognormal assumptions, providing the probabilistic foundation for Monte Carlo simulation and optimization under uncertainty.
+<code>returns.py</code> is the <strong>stochastic engine</strong>: it consumes account metadata (from <code>portfolio.py</code>) and produces vectorized return samples that drive wealth dynamics in <code>portfolio.simulate()</code>.</p>
+</blockquote>
+<hr />
+<h2 id="why-a-dedicated-returns-module">Why a dedicated returns module?</h2>
+<p>Financial planning under uncertainty requires <strong>explicit stochastic modeling</strong>:
+- <code>income.py</code> → cash flow uncertainty (seasonal + noise)
+- <code>returns.py</code> → <strong>market return uncertainty</strong> (correlated assets)
+- <code>portfolio.py</code> → wealth evolution executor
+- <code>optimization.py</code> → policy search under constraints</p>
+<p>This separation enables:
+- <strong>Loose coupling:</strong> Portfolio never generates returns (delegated to ReturnModel)
+- <strong>Correlation modeling:</strong> Cross-sectional dependence between accounts
+- <strong>Lognormal guarantee:</strong> <span class="arithmatex">\(R_t &gt; -1\)</span> (no catastrophic losses)
+- <strong>Dual temporal API:</strong> Seamless monthly ↔ annual parameter conversion
+- <strong>Flexible correlation:</strong> Matrix or group-based specification</p>
+<hr />
+<h2 id="mathematical-framework">Mathematical framework</h2>
+<h3 id="lognormal-return-model">Lognormal return model</h3>
+<p>Gross returns follow a <strong>correlated lognormal distribution</strong>:</p>
+<div class="arithmatex">\[
+1 + R_t^m \sim \text{LogNormal}(\mu_{\text{log}}^m, \Sigma)
+\]</div>
+<p>where the covariance matrix is constructed as:</p>
+<div class="arithmatex">\[
+\Sigma = D \rho D
+\]</div>
+<p>with:
+- <span class="arithmatex">\(D = \text{diag}(\sigma_{\text{log}}^1, \ldots, \sigma_{\text{log}}^M)\)</span> (log-volatilities)
+- <span class="arithmatex">\(\rho \in \mathbb{R}^{M \times M}\)</span> (correlation matrix, symmetric PSD with diagonal = 1)</p>
+<h3 id="parameter-conversion">Parameter conversion</h3>
+<p>Given <strong>arithmetic parameters</strong> <span class="arithmatex">\((\mu_{\text{arith}}, \sigma_{\text{arith}})\)</span>, convert to <strong>log-space</strong>:</p>
+<div class="arithmatex">\[
+\begin{aligned}
+\sigma_{\text{log}} &amp;= \sqrt{\log\left(1 + \frac{\sigma_{\text{arith}}^2}{(1 + \mu_{\text{arith}})^2}\right)} \\[8pt]
+\mu_{\text{log}} &amp;= \log(1 + \mu_{\text{arith}}) - \frac{\sigma_{\text{log}}^2}{2}
+\end{aligned}
+\]</div>
+<p><strong>Rationale:</strong> The adjustment <span class="arithmatex">\(-\sigma_{\text{log}}^2/2\)</span> ensures:</p>
+<div class="arithmatex">\[
+\mathbb{E}[1 + R_t^m] = \exp\left(\mu_{\text{log}} + \frac{\sigma_{\text{log}}^2}{2}\right) = 1 + \mu_{\text{arith}}
+\]</div>
+<h3 id="generation-algorithm">Generation algorithm</h3>
+<ol>
+<li>Sample log-returns: <span class="arithmatex">\(Z \sim \mathcal{N}(\mu_{\text{log}}, \Sigma)\)</span> with shape <span class="arithmatex">\((n_{\text{sims}}, T, M)\)</span></li>
+<li>Transform to arithmetic: <span class="arithmatex">\(R = \exp(Z) - 1\)</span></li>
+<li><strong>Guarantee:</strong> <span class="arithmatex">\(R_t^m &gt; -1\)</span> for all realizations (lognormal property)</li>
+</ol>
+<p><strong>Complexity:</strong> <span class="arithmatex">\(O(n_{\text{sims}} \cdot T \cdot M^3)\)</span> dominated by Cholesky decomposition of <span class="arithmatex">\(\Sigma\)</span> (one-time cost).</p>
+<hr />
+<h2 id="design-principles">Design principles</h2>
+<ol>
+<li><strong>Lognormal constraint</strong></li>
+<li>Ensures <span class="arithmatex">\(R_t &gt; -1\)</span> (realistic: no portfolio loses more than 100%)</li>
+<li>
+<p>Alternative to Normal (which allows <span class="arithmatex">\(R_t &lt; -1\)</span>) or Bootstrap (limited to historical support)</p>
+</li>
+<li>
+<p><strong>Correlation modeling</strong></p>
+</li>
+<li>Default: uncorrelated accounts (<span class="arithmatex">\(\rho = I\)</span>)</li>
+<li>Override per <code>generate()</code> call for sensitivity analysis</li>
+<li>Supports both matrix and group-based specification</li>
+<li>
+<p>Validation: symmetric, PSD, diagonal = 1</p>
+</li>
+<li>
+<p><strong>Dual temporal representation</strong></p>
+</li>
+<li>User-facing: annual parameters (intuitive)</li>
+<li>Internal: monthly log-space (canonical for sampling)</li>
+<li>
+<p>Properties provide views without conversion overhead</p>
+</li>
+<li>
+<p><strong>No portfolio dependency</strong></p>
+</li>
+<li>Consumes <code>Account</code> metadata (loose coupling)</li>
+<li>Never imports <code>Portfolio</code> (inverted dependency)</li>
+<li>
+<p>Testable in isolation</p>
+</li>
+<li>
+<p><strong>IID assumption</strong></p>
+</li>
+<li>Returns are independent across time (no GARCH/AR)</li>
+<li>Extension to time-series models is straightforward (see Extensions section)</li>
+</ol>
+<hr />
+<h2 id="the-core-surface-returnmodel">The core surface: <code>ReturnModel</code></h2>
+<h3 id="constructor">Constructor</h3>
+<p><strong>Signature:</strong>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">ReturnModel</span><span class="p">(</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">accounts</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Account</span><span class="p">],</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">default_correlation</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="nb">float</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="p">)</span>
+</span></code></pre></div></p>
+<p><strong>Parameters:</strong>
+- <code>accounts</code>: list of <code>Account</code> objects with <code>return_strategy</code> metadata
+- <code>default_correlation</code>: Correlation specification (see below)</p>
+<p><strong>Correlation specification options:</strong></p>
+<ol>
+<li>
+<p><strong>None (default):</strong> Identity matrix <span class="arithmatex">\(\rho = I_M\)</span> (uncorrelated)</p>
+</li>
+<li>
+<p><strong>Matrix (np.ndarray):</strong> Full <span class="arithmatex">\(M \times M\)</span> correlation matrix
+   <div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">rho</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">],</span> <span class="p">[</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">]])</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">returns</span> <span class="o">=</span> <span class="n">ReturnModel</span><span class="p">(</span><span class="n">accounts</span><span class="p">,</span> <span class="n">default_correlation</span><span class="o">=</span><span class="n">rho</span><span class="p">)</span>
+</span></code></pre></div></p>
+</li>
+<li>
+<p><strong>Groups (Dict):</strong> Account groups with shared correlation
+   <div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">groups</span> <span class="o">=</span> <span class="p">{</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="p">(</span><span class="s2">&quot;Emergency&quot;</span><span class="p">,</span> <span class="s2">&quot;Housing&quot;</span><span class="p">):</span> <span class="mf">0.3</span><span class="p">,</span>        <span class="c1"># Pair correlation</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="p">(</span><span class="s2">&quot;Stock1&quot;</span><span class="p">,</span> <span class="s2">&quot;Stock2&quot;</span><span class="p">,</span> <span class="s2">&quot;Stock3&quot;</span><span class="p">):</span> <span class="mf">0.6</span><span class="p">,</span>  <span class="c1"># Group correlation (all pairs)</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="p">}</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">returns</span> <span class="o">=</span> <span class="n">ReturnModel</span><span class="p">(</span><span class="n">accounts</span><span class="p">,</span> <span class="n">default_correlation</span><span class="o">=</span><span class="n">groups</span><span class="p">)</span>
+</span></code></pre></div></p>
+</li>
+</ol>
+<p><strong>Group semantics:</strong>
+- Tuple of 2 accounts: Single pair correlation
+- Tuple of 3+ accounts: All pairwise combinations get the same correlation
+- Unspecified pairs default to 0.0
+- Diagonal always 1.0</p>
+<p><strong>Initialization:</strong>
+1. Validate correlation matrix (symmetric, PSD, diagonal = 1)
+2. Extract arithmetic parameters from <code>accounts</code>
+3. Precompute log-space parameters <span class="arithmatex">\((\mu_{\text{log}}, \sigma_{\text{log}})\)</span></p>
+<hr />
+<h3 id="properties">Properties</h3>
+<p><strong>Dual temporal access:</strong></p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nd">@property</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">monthly_params</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="c1"># [{&quot;mu&quot;: float, &quot;sigma&quot;: float}, ...]</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="nd">@property</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="k">def</span><span class="w"> </span><span class="nf">annual_params</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    <span class="c1"># [{&quot;return&quot;: float, &quot;volatility&quot;: float}, ...]</span>
+</span></code></pre></div>
+<p><strong>Legacy properties (backward compatible):</strong>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nd">@property</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">mean_returns</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>   <span class="c1"># Expected arithmetic returns (monthly)</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="nd">@property</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="k">def</span><span class="w"> </span><span class="nf">volatilities</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>   <span class="c1"># Arithmetic volatilities (monthly)</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="nd">@property</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="k">def</span><span class="w"> </span><span class="nf">account_names</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>   <span class="c1"># Account names</span>
+</span></code></pre></div></p>
+<p><strong>Introspection:</strong>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">returns</span><span class="o">.</span><span class="n">params_table</span><span class="p">()</span>  <span class="c1"># DataFrame with monthly vs annual comparison</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="nb">print</span><span class="p">(</span><span class="n">returns</span><span class="p">)</span>          <span class="c1"># Human-readable summary</span>
+</span></code></pre></div></p>
+<p><strong>Example output:</strong>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>ReturnModel(M=2, ρ=eye, accounts=[&#39;Emergency&#39;: 4.0%/year, &#39;Growth&#39;: 12.0%/year])
+</span></code></pre></div></p>
+<hr />
+<h3 id="core-generation-method">Core generation method</h3>
+<p><strong>Signature:</strong>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">generate</span><span class="p">(</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>    <span class="bp">self</span><span class="p">,</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>    <span class="n">T</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>    <span class="n">n_sims</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>    <span class="n">correlation</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>    <span class="n">seed</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
+</span></code></pre></div></p>
+<p><strong>Parameters:</strong>
+- <code>T</code>: time horizon (months)
+- <code>n_sims</code>: number of Monte Carlo trajectories
+- <code>correlation</code>: override default correlation (sensitivity analysis)
+- <code>seed</code>: RNG seed for reproducibility</p>
+<p><strong>Returns:</strong>
+- <code>R</code>: shape <span class="arithmatex">\((n_{\text{sims}}, T, M)\)</span> with <span class="arithmatex">\(R_{i,t,m} &gt; -1\)</span> for all <span class="arithmatex">\((i,t,m)\)</span></p>
+<p><strong>Raises:</strong>
+- <code>ValidationError</code>: If <span class="arithmatex">\(T \leq 0\)</span>
+- <code>ValueError</code>: If correlation matrix is invalid</p>
+<p><strong>Algorithm:</strong>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># 1. Use correlation override or default</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">rho</span> <span class="o">=</span> <span class="n">correlation</span> <span class="k">if</span> <span class="n">correlation</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">default_correlation</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="c1"># 2. Build Σ = D @ ρ @ D</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="n">cov</span> <span class="o">=</span> <span class="n">diag</span><span class="p">(</span><span class="n">σ_log</span><span class="p">)</span> <span class="o">@</span> <span class="n">rho</span> <span class="o">@</span> <span class="n">diag</span><span class="p">(</span><span class="n">σ_log</span><span class="p">)</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="c1"># 3. Sample log-returns</span>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="n">rng</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">default_rng</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="n">Z</span> <span class="o">=</span> <span class="n">rng</span><span class="o">.</span><span class="n">multivariate_normal</span><span class="p">(</span><span class="n">μ_log</span><span class="p">,</span> <span class="n">cov</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="p">(</span><span class="n">n_sims</span><span class="p">,</span> <span class="n">T</span><span class="p">))</span>  <span class="c1"># (n_sims, T, M)</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="c1"># 4. Transform to arithmetic</span>
+</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="n">R</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">Z</span><span class="p">)</span> <span class="o">-</span> <span class="mf">1.0</span>
+</span></code></pre></div></p>
+<hr />
+<h2 id="visualization-methods">Visualization methods</h2>
+<h3 id="1-plot-distribution-analysis">1) <code>plot()</code> — Distribution analysis</h3>
+<p><strong>Signature:</strong>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">plot</span><span class="p">(</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>    <span class="bp">self</span><span class="p">,</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>    <span class="n">T</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">32</span><span class="p">,</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>    <span class="n">n_sims</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">300</span><span class="p">,</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>    <span class="n">correlation</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>    <span class="n">seed</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>    <span class="n">start</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">date</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>  <span class="c1"># Calendar-aware x-axis</span>
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>    <span class="n">figsize</span><span class="p">:</span> <span class="nb">tuple</span> <span class="o">=</span> <span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mi">8</span><span class="p">),</span>
+</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>    <span class="n">title</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>    <span class="n">save_path</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a>    <span class="n">return_fig_ax</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a>    <span class="n">show_trajectories</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a>    <span class="n">trajectory_alpha</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.05</span>
+</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="p">)</span>
+</span></code></pre></div></p>
+<p><strong>Panel layout:</strong>
+1. <strong>Top-left:</strong> Return trajectories (Monte Carlo paths)
+2. <strong>Top-right:</strong> Marginal histograms (monthly distribution)
+3. <strong>Bottom:</strong> Summary statistics table (monthly + annualized)</p>
+<p><strong>Calendar-aware plotting:</strong>
+When <code>start</code> is provided, the x-axis shows calendar dates instead of numeric month indices:
+<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">date</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">returns</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">T</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span> <span class="n">n_sims</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">42</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+</span></code></pre></div></p>
+<hr />
+<h3 id="2-plot_cumulative-wealth-evolution">2) <code>plot_cumulative()</code> — Wealth evolution</h3>
+<p><strong>Signature:</strong>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">plot_cumulative</span><span class="p">(</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>    <span class="bp">self</span><span class="p">,</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>    <span class="n">T</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">24</span><span class="p">,</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>    <span class="n">n_sims</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1000</span><span class="p">,</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>    <span class="n">correlation</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>    <span class="n">seed</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>    <span class="n">start</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">date</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>  <span class="c1"># Calendar-aware x-axis</span>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>    <span class="n">figsize</span><span class="p">:</span> <span class="nb">tuple</span> <span class="o">=</span> <span class="p">(</span><span class="mi">14</span><span class="p">,</span> <span class="mi">6</span><span class="p">),</span>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>    <span class="n">title</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a>    <span class="n">save_path</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a>    <span class="n">return_fig_ax</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a>    <span class="n">show_trajectories</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a>    <span class="n">trajectory_alpha</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.08</span><span class="p">,</span>
+</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a>    <span class="n">show_percentiles</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a>    <span class="n">percentiles</span><span class="p">:</span> <span class="nb">tuple</span> <span class="o">=</span> <span class="p">(</span><span class="mi">5</span><span class="p">,</span> <span class="mi">95</span><span class="p">),</span>
+</span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a>    <span class="n">hist_bins</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">40</span><span class="p">,</span>
+</span><span id="__span-11-17"><a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a>    <span class="n">hist_color</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;red&#39;</span>
+</span><span id="__span-11-18"><a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a><span class="p">)</span>
+</span></code></pre></div></p>
+<p><strong>Visualization:</strong>
+- Cumulative returns: <span class="arithmatex">\(\left(\prod_{s=0}^{t-1}(1+R_s^m)\right) - 1\)</span>
+- Lateral histogram of final returns
+- Percentile bands (default: 5th-95th)</p>
+<p><strong>Modes:</strong>
+- <strong>M=1:</strong> Single plot with lateral histogram
+- <strong>M&gt;1:</strong> Separate subplot per account</p>
+<p><strong>Theoretical validation (annotation box):</strong>
+- Simulation mean vs theoretical: <span class="arithmatex">\(\mathbb{E}[(1+\mu)^T - 1]\)</span>
+- Jensen's inequality: sample mean &gt; theoretical (convexity)</p>
+<hr />
+<h3 id="3-plot_horizon_analysis-time-diversification">3) <code>plot_horizon_analysis()</code> — Time diversification</h3>
+<p><strong>Signature:</strong>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">plot_horizon_analysis</span><span class="p">(</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>    <span class="bp">self</span><span class="p">,</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>    <span class="n">horizons</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">15</span><span class="p">,</span> <span class="mi">20</span><span class="p">]),</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>    <span class="n">figsize</span><span class="p">:</span> <span class="nb">tuple</span> <span class="o">=</span> <span class="p">(</span><span class="mi">15</span><span class="p">,</span> <span class="mi">5</span><span class="p">),</span>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>    <span class="n">title</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>    <span class="n">save_path</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>    <span class="n">return_fig_ax</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a>    <span class="n">show_table</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="p">)</span>
+</span></code></pre></div></p>
+<p><strong>Analysis across investment horizons</strong> (default: 1, 2, 3, 5, 10, 15, 20 years):</p>
+<p><strong>Panel 1: Return vs Volatility</strong>
+- Expected return: <span class="arithmatex">\((1+\mu_{\text{monthly}})^{T_{\text{months}}} - 1\)</span>
+- Volatility: <span class="arithmatex">\(\sigma_{\text{monthly}} \sqrt{T_{\text{months}}}\)</span> (time scaling)
+- Signal-to-noise ratio: <span class="arithmatex">\(\text{SNR} = \mathbb{E}[R] / \sigma[R]\)</span></p>
+<p><strong>Panel 2: Probability of Loss</strong>
+- <span class="arithmatex">\(P(R_T &lt; 0)\)</span> via Normal approximation
+- Risk reduction annotation</p>
+<p><strong>Printed table (when <code>show_table=True</code>):</strong>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>HORIZON ANALYSIS - Emergency
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>================================================================================
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>Horizon (years) | Expected Return (%) | Volatility (%) | P(Loss) (%) | SNR
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>--------------------------------------------------------------------------------
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>            1.0 |                 4.0 |            5.0 |        21.2 | 0.80
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>            5.0 |                21.7 |           11.2 |         2.6 | 1.94
+</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>           20.0 |               119.1 |           22.4 |         0.0 | 5.32
+</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>================================================================================
+</span></code></pre></div></p>
+<hr />
+<h2 id="integration-with-finopt-pipeline">Integration with FinOpt pipeline</h2>
+<h3 id="workflow">Workflow</h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">date</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="c1"># 1. Define accounts (annual parameters + display names)</span>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="n">accounts</span> <span class="o">=</span> <span class="p">[</span>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>    <span class="n">Account</span><span class="o">.</span><span class="n">from_annual</span><span class="p">(</span><span class="s2">&quot;EM&quot;</span><span class="p">,</span> <span class="n">annual_return</span><span class="o">=</span><span class="mf">0.04</span><span class="p">,</span> <span class="n">annual_volatility</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span>
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>                        <span class="n">display_name</span><span class="o">=</span><span class="s2">&quot;Emergency Fund&quot;</span><span class="p">),</span>
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a>    <span class="n">Account</span><span class="o">.</span><span class="n">from_annual</span><span class="p">(</span><span class="s2">&quot;HS&quot;</span><span class="p">,</span> <span class="n">annual_return</span><span class="o">=</span><span class="mf">0.07</span><span class="p">,</span> <span class="n">annual_volatility</span><span class="o">=</span><span class="mf">0.12</span><span class="p">,</span>
+</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a>                        <span class="n">display_name</span><span class="o">=</span><span class="s2">&quot;Housing Savings&quot;</span><span class="p">)</span>
+</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="p">]</span>
+</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a>
+</span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="c1"># 2. Create return generator with group correlation</span>
+</span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a><span class="n">groups</span> <span class="o">=</span> <span class="p">{(</span><span class="s2">&quot;EM&quot;</span><span class="p">,</span> <span class="s2">&quot;HS&quot;</span><span class="p">):</span> <span class="mf">0.3</span><span class="p">}</span>
+</span><span id="__span-14-13"><a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a><span class="n">returns</span> <span class="o">=</span> <span class="n">ReturnModel</span><span class="p">(</span><span class="n">accounts</span><span class="p">,</span> <span class="n">default_correlation</span><span class="o">=</span><span class="n">groups</span><span class="p">)</span>
+</span><span id="__span-14-14"><a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a>
+</span><span id="__span-14-15"><a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a><span class="c1"># 3. Generate samples</span>
+</span><span id="__span-14-16"><a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a><span class="n">R</span> <span class="o">=</span> <span class="n">returns</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span><span class="n">T</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span> <span class="n">n_sims</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">42</span><span class="p">)</span>  <span class="c1"># (500, 24, 2)</span>
+</span><span id="__span-14-17"><a id="__codelineno-14-17" name="__codelineno-14-17" href="#__codelineno-14-17"></a>
+</span><span id="__span-14-18"><a id="__codelineno-14-18" name="__codelineno-14-18" href="#__codelineno-14-18"></a><span class="c1"># 4. Feed to portfolio</span>
+</span><span id="__span-14-19"><a id="__codelineno-14-19" name="__codelineno-14-19" href="#__codelineno-14-19"></a><span class="n">result</span> <span class="o">=</span> <span class="n">portfolio</span><span class="o">.</span><span class="n">simulate</span><span class="p">(</span><span class="n">A</span><span class="o">=</span><span class="n">A</span><span class="p">,</span> <span class="n">R</span><span class="o">=</span><span class="n">R</span><span class="p">,</span> <span class="n">X</span><span class="o">=</span><span class="n">X</span><span class="p">)</span>
+</span></code></pre></div>
+<h3 id="data-flow">Data flow</h3>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>Account metadata → ReturnModel → R → Portfolio.simulate() → W
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>                        ↑
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>                   correlation
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>                   (matrix or groups)
+</span></code></pre></div>
+<h3 id="optimization-integration">Optimization integration</h3>
+<p><strong>Chance constraint evaluation:</strong>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Generate scenario ensemble</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="n">R_scenarios</span> <span class="o">=</span> <span class="n">returns</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span><span class="n">T</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span> <span class="n">n_sims</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">42</span><span class="p">)</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="c1"># Evaluate constraint: P(W_T^m &gt;= b) &gt;= 1-ε</span>
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="n">W</span> <span class="o">=</span> <span class="n">portfolio</span><span class="o">.</span><span class="n">simulate</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">R_scenarios</span><span class="p">,</span> <span class="n">X</span><span class="p">)[</span><span class="s2">&quot;wealth&quot;</span><span class="p">]</span>
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="n">W_T_m</span> <span class="o">=</span> <span class="n">W</span><span class="p">[:,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">m</span><span class="p">]</span>
+</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="n">violation_rate</span> <span class="o">=</span> <span class="p">(</span><span class="n">W_T_m</span> <span class="o">&lt;</span> <span class="n">b</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
+</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="n">feasible</span> <span class="o">=</span> <span class="p">(</span><span class="n">violation_rate</span> <span class="o">&lt;=</span> <span class="n">epsilon</span><span class="p">)</span>
+</span></code></pre></div></p>
+<p><strong>Sensitivity analysis:</strong>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Test correlation impact</span>
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="n">correlations</span> <span class="o">=</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="mi">2</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="mi">1</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">],</span> <span class="p">[</span><span class="mf">0.5</span><span class="p">,</span> <span class="mi">1</span><span class="p">]])]</span>
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>
+</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="k">for</span> <span class="n">rho</span> <span class="ow">in</span> <span class="n">correlations</span><span class="p">:</span>
+</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>    <span class="n">R</span> <span class="o">=</span> <span class="n">returns</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span><span class="n">T</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span> <span class="n">n_sims</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span> <span class="n">correlation</span><span class="o">=</span><span class="n">rho</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">42</span><span class="p">)</span>
+</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a>    <span class="n">result</span> <span class="o">=</span> <span class="n">portfolio</span><span class="o">.</span><span class="n">simulate</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">R</span><span class="p">,</span> <span class="n">X</span><span class="p">)</span>
+</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;ρ=</span><span class="si">{</span><span class="n">rho</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2">: mean W_T = </span><span class="si">{</span><span class="n">result</span><span class="p">[</span><span class="s1">&#39;total_wealth&#39;</span><span class="p">][:,</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="si">:</span><span class="s2">,.0f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span></code></pre></div></p>
+<hr />
+<h2 id="usage-patterns">Usage patterns</h2>
+<h3 id="a-basic-generation-uncorrelated">A) Basic generation (uncorrelated)</h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="n">accounts</span> <span class="o">=</span> <span class="p">[</span>
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>    <span class="n">Account</span><span class="o">.</span><span class="n">from_annual</span><span class="p">(</span><span class="s2">&quot;Conservative&quot;</span><span class="p">,</span> <span class="mf">0.04</span><span class="p">,</span> <span class="mf">0.05</span><span class="p">),</span>
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>    <span class="n">Account</span><span class="o">.</span><span class="n">from_annual</span><span class="p">(</span><span class="s2">&quot;Aggressive&quot;</span><span class="p">,</span> <span class="mf">0.12</span><span class="p">,</span> <span class="mf">0.20</span><span class="p">)</span>
+</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="p">]</span>
+</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="n">returns</span> <span class="o">=</span> <span class="n">ReturnModel</span><span class="p">(</span><span class="n">accounts</span><span class="p">)</span>  <span class="c1"># default: ρ = I</span>
+</span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a>
+</span><span id="__span-18-7"><a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a><span class="n">R</span> <span class="o">=</span> <span class="n">returns</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span><span class="n">T</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span> <span class="n">n_sims</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">42</span><span class="p">)</span>
+</span></code></pre></div>
+<h3 id="b-correlated-accounts-matrix">B) Correlated accounts (matrix)</h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="n">rho</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>    <span class="p">[</span><span class="mf">1.00</span><span class="p">,</span> <span class="mf">0.30</span><span class="p">],</span>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>    <span class="p">[</span><span class="mf">0.30</span><span class="p">,</span> <span class="mf">1.00</span><span class="p">]</span>
+</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="p">])</span>
+</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>
+</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a><span class="n">returns</span> <span class="o">=</span> <span class="n">ReturnModel</span><span class="p">(</span><span class="n">accounts</span><span class="p">,</span> <span class="n">default_correlation</span><span class="o">=</span><span class="n">rho</span><span class="p">)</span>
+</span><span id="__span-19-7"><a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="n">R</span> <span class="o">=</span> <span class="n">returns</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span><span class="n">T</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span> <span class="n">n_sims</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">42</span><span class="p">)</span>
+</span></code></pre></div>
+<h3 id="c-correlated-accounts-groups">C) Correlated accounts (groups)</h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Define accounts</span>
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="n">accounts</span> <span class="o">=</span> <span class="p">[</span>
+</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>    <span class="n">Account</span><span class="o">.</span><span class="n">from_annual</span><span class="p">(</span><span class="s2">&quot;Stock1&quot;</span><span class="p">,</span> <span class="mf">0.10</span><span class="p">,</span> <span class="mf">0.18</span><span class="p">),</span>
+</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a>    <span class="n">Account</span><span class="o">.</span><span class="n">from_annual</span><span class="p">(</span><span class="s2">&quot;Stock2&quot;</span><span class="p">,</span> <span class="mf">0.12</span><span class="p">,</span> <span class="mf">0.20</span><span class="p">),</span>
+</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a>    <span class="n">Account</span><span class="o">.</span><span class="n">from_annual</span><span class="p">(</span><span class="s2">&quot;Stock3&quot;</span><span class="p">,</span> <span class="mf">0.08</span><span class="p">,</span> <span class="mf">0.15</span><span class="p">),</span>
+</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a>    <span class="n">Account</span><span class="o">.</span><span class="n">from_annual</span><span class="p">(</span><span class="s2">&quot;Bond&quot;</span><span class="p">,</span> <span class="mf">0.04</span><span class="p">,</span> <span class="mf">0.05</span><span class="p">)</span>
+</span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="p">]</span>
+</span><span id="__span-20-8"><a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a>
+</span><span id="__span-20-9"><a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a><span class="c1"># Stocks are correlated with each other, bonds uncorrelated</span>
+</span><span id="__span-20-10"><a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a><span class="n">groups</span> <span class="o">=</span> <span class="p">{</span>
+</span><span id="__span-20-11"><a id="__codelineno-20-11" name="__codelineno-20-11" href="#__codelineno-20-11"></a>    <span class="p">(</span><span class="s2">&quot;Stock1&quot;</span><span class="p">,</span> <span class="s2">&quot;Stock2&quot;</span><span class="p">,</span> <span class="s2">&quot;Stock3&quot;</span><span class="p">):</span> <span class="mf">0.6</span><span class="p">,</span>  <span class="c1"># All stock pairs get 0.6</span>
+</span><span id="__span-20-12"><a id="__codelineno-20-12" name="__codelineno-20-12" href="#__codelineno-20-12"></a>    <span class="c1"># Bond not mentioned → 0 correlation with everything</span>
+</span><span id="__span-20-13"><a id="__codelineno-20-13" name="__codelineno-20-13" href="#__codelineno-20-13"></a><span class="p">}</span>
+</span><span id="__span-20-14"><a id="__codelineno-20-14" name="__codelineno-20-14" href="#__codelineno-20-14"></a>
+</span><span id="__span-20-15"><a id="__codelineno-20-15" name="__codelineno-20-15" href="#__codelineno-20-15"></a><span class="n">returns</span> <span class="o">=</span> <span class="n">ReturnModel</span><span class="p">(</span><span class="n">accounts</span><span class="p">,</span> <span class="n">default_correlation</span><span class="o">=</span><span class="n">groups</span><span class="p">)</span>
+</span></code></pre></div>
+<h3 id="d-correlation-override-sensitivity">D) Correlation override (sensitivity)</h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Default: ρ = 0.3</span>
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="n">returns</span> <span class="o">=</span> <span class="n">ReturnModel</span><span class="p">(</span><span class="n">accounts</span><span class="p">,</span> <span class="n">default_correlation</span><span class="o">=</span><span class="n">rho_low</span><span class="p">)</span>
+</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>
+</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="c1"># Test high correlation without recreating model</span>
+</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a><span class="n">rho_high</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.8</span><span class="p">],</span> <span class="p">[</span><span class="mf">0.8</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">]])</span>
+</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a><span class="n">R_high</span> <span class="o">=</span> <span class="n">returns</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span><span class="n">T</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span> <span class="n">n_sims</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span> <span class="n">correlation</span><span class="o">=</span><span class="n">rho_high</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">42</span><span class="p">)</span>
+</span></code></pre></div>
+<h3 id="e-introspection-and-validation">E) Introspection and validation</h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># Parameter table</span>
+</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="nb">print</span><span class="p">(</span><span class="n">returns</span><span class="o">.</span><span class="n">params_table</span><span class="p">())</span>
+</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="c1">#            μ (monthly)  μ (annual)  σ (monthly)  σ (annual)</span>
+</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="c1"># Emergency       0.0033       4.00%       0.0144       5.00%</span>
+</span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a><span class="c1"># Growth          0.0095      12.00%       0.0577      20.00%</span>
+</span><span id="__span-22-6"><a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a>
+</span><span id="__span-22-7"><a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a><span class="c1"># Generate and validate</span>
+</span><span id="__span-22-8"><a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a><span class="n">R</span> <span class="o">=</span> <span class="n">returns</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span><span class="n">T</span><span class="o">=</span><span class="mi">240</span><span class="p">,</span> <span class="n">n_sims</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">42</span><span class="p">)</span>
+</span><span id="__span-22-9"><a id="__codelineno-22-9" name="__codelineno-22-9" href="#__codelineno-22-9"></a>
+</span><span id="__span-22-10"><a id="__codelineno-22-10" name="__codelineno-22-10" href="#__codelineno-22-10"></a><span class="c1"># Check lognormal property</span>
+</span><span id="__span-22-11"><a id="__codelineno-22-11" name="__codelineno-22-11" href="#__codelineno-22-11"></a><span class="k">assert</span> <span class="n">np</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">R</span> <span class="o">&gt;</span> <span class="o">-</span><span class="mf">1.0</span><span class="p">)</span>  <span class="c1"># guaranteed by construction</span>
+</span><span id="__span-22-12"><a id="__codelineno-22-12" name="__codelineno-22-12" href="#__codelineno-22-12"></a>
+</span><span id="__span-22-13"><a id="__codelineno-22-13" name="__codelineno-22-13" href="#__codelineno-22-13"></a><span class="c1"># Check empirical moments</span>
+</span><span id="__span-22-14"><a id="__codelineno-22-14" name="__codelineno-22-14" href="#__codelineno-22-14"></a><span class="n">mu_empirical</span> <span class="o">=</span> <span class="n">R</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>  <span class="c1"># average over sims and time</span>
+</span><span id="__span-22-15"><a id="__codelineno-22-15" name="__codelineno-22-15" href="#__codelineno-22-15"></a><span class="n">mu_theoretical</span> <span class="o">=</span> <span class="n">returns</span><span class="o">.</span><span class="n">mean_returns</span>  <span class="c1"># from properties</span>
+</span><span id="__span-22-16"><a id="__codelineno-22-16" name="__codelineno-22-16" href="#__codelineno-22-16"></a><span class="n">np</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">assert_allclose</span><span class="p">(</span><span class="n">mu_empirical</span><span class="p">,</span> <span class="n">mu_theoretical</span><span class="p">,</span> <span class="n">rtol</span><span class="o">=</span><span class="mf">0.05</span><span class="p">)</span>
+</span></code></pre></div>
+<h3 id="f-calendar-aware-visualization">F) Calendar-aware visualization</h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">date</span>
+</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>
+</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="c1"># Plot with calendar dates on x-axis</span>
+</span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a><span class="n">returns</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">T</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span> <span class="n">n_sims</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">42</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+</span><span id="__span-23-5"><a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a><span class="n">returns</span><span class="o">.</span><span class="n">plot_cumulative</span><span class="p">(</span><span class="n">T</span><span class="o">=</span><span class="mi">36</span><span class="p">,</span> <span class="n">n_sims</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">42</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+</span></code></pre></div>
+<hr />
+<h2 id="key-design-decisions">Key design decisions</h2>
+<h3 id="1-lognormal-vs-normal-vs-bootstrap">1. Lognormal vs Normal vs Bootstrap</h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Pros</th>
+<th>Cons</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Lognormal</strong> (chosen)</td>
+<td>Guarantees <span class="arithmatex">\(R_t &gt; -1\)</span>, closed-form moments, positive skewness</td>
+<td>Assumes IID</td>
+</tr>
+<tr>
+<td>Normal</td>
+<td>Simpler mathematics</td>
+<td>Allows <span class="arithmatex">\(R_t &lt; -1\)</span> (unrealistic)</td>
+</tr>
+<tr>
+<td>Bootstrap</td>
+<td>Matches historical distribution</td>
+<td>Limited to observed range</td>
+</tr>
+</tbody>
+</table>
+<h3 id="2-correlation-as-parameter-not-covariance">2. Correlation as parameter (not covariance)</h3>
+<p><strong>Rationale:</strong>
+- Correlation is <strong>scale-invariant</strong> (easier to specify)
+- Natural interpretation: <span class="arithmatex">\(\rho_{12} = 0.5\)</span> means "moderate positive dependence"
+- Covariance mixes magnitude and correlation (confusing)</p>
+<p><strong>Construction:</strong> <span class="arithmatex">\(\Sigma = D\rho D\)</span> separates scale (volatility) from dependence (correlation).</p>
+<h3 id="3-group-based-correlation">3. Group-based correlation</h3>
+<p><strong>Rationale:</strong>
+- Financial intuition: "these three stocks are correlated"
+- Easier than building full matrix for many accounts
+- Automatic validation and symmetry</p>
+<h3 id="4-precomputed-log-parameters">4. Precomputed log-parameters</h3>
+<p><strong>Performance:</strong> Conversion formulas involve <code>log</code>, <code>sqrt</code> (expensive). Precompute once in <code>__init__</code>.</p>
+<h3 id="5-correlation-override-per-generate-call">5. Correlation override per <code>generate()</code> call</h3>
+<p><strong>Use case:</strong> Sensitivity analysis without recreating the model.</p>
+<hr />
+<h2 id="mathematical-results">Mathematical results</h2>
+<p><strong>Proposition 1 (Lognormal Moments):</strong>
+If <span class="arithmatex">\(1 + R \sim \text{LogNormal}(\mu_{\log}, \sigma_{\log}^2)\)</span>, then:</p>
+<div class="arithmatex">\[
+\begin{aligned}
+\mathbb{E}[R] &amp;= \exp\left(\mu_{\log} + \frac{\sigma_{\log}^2}{2}\right) - 1 \\[6pt]
+\text{Var}[R] &amp;= \left(\exp(\sigma_{\log}^2) - 1\right) \exp(2\mu_{\log} + \sigma_{\log}^2)
+\end{aligned}
+\]</div>
+<p><strong>Proposition 2 (Return Bound):</strong>
+For lognormal returns, <span class="arithmatex">\(R_t^m &gt; -1\)</span> almost surely.</p>
+<p><strong>Proof:</strong> <span class="arithmatex">\(1 + R_t^m = \exp(Z_t^m)\)</span> where <span class="arithmatex">\(Z_t^m \in \mathbb{R}\)</span>. Since <span class="arithmatex">\(\exp(z) &gt; 0\)</span> for all <span class="arithmatex">\(z \in \mathbb{R}\)</span>, we have <span class="arithmatex">\(R_t^m &gt; -1\)</span>. ∎</p>
+<p><strong>Proposition 3 (Correlation Preservation):</strong>
+If <span class="arithmatex">\((Z_1, Z_2)\)</span> are bivariate normal with correlation <span class="arithmatex">\(\rho\)</span>, then <span class="arithmatex">\(\text{Corr}(\exp(Z_1), \exp(Z_2))\)</span> is a monotone increasing function of <span class="arithmatex">\(\rho\)</span>.</p>
+<p><strong>Proposition 4 (Time Diversification):</strong>
+For IID returns with <span class="arithmatex">\(\mu &gt; 0\)</span>, the probability of loss decreases exponentially:</p>
+<div class="arithmatex">\[
+P\left(\prod_{t=1}^T (1+R_t) &lt; 1\right) \approx \Phi\left(-\frac{\mu \sqrt{T}}{\sigma}\right) \xrightarrow{T \to \infty} 0
+\]</div>
+<hr />
+<h2 id="extensions-temporal-dependence-roadmap">Extensions: Temporal Dependence (Roadmap)</h2>
+<blockquote>
+<p><strong>Note:</strong> This section describes potential future extensions. The current implementation only supports IID returns.</p>
+</blockquote>
+<h3 id="motivation">Motivation</h3>
+<p>The current IID assumption (<span class="arithmatex">\(R_t^m \perp R_s^m\)</span> for <span class="arithmatex">\(t \neq s\)</span>) is appropriate for monthly horizons and typical investment periods (<span class="arithmatex">\(T = 24-60\)</span> months), where empirical autocorrelation is weak (<span class="arithmatex">\(|\rho_1| &lt; 0.1\)</span>). However, temporal structure becomes relevant for:</p>
+<ol>
+<li><strong>Long horizons:</strong> <span class="arithmatex">\(T &gt; 120\)</span> months where autocorrelation accumulates</li>
+<li><strong>Momentum strategies:</strong> Assets with persistent trends (<span class="arithmatex">\(\phi &gt; 0.2\)</span>)</li>
+<li><strong>Volatility clustering:</strong> Crisis periods with persistent high volatility</li>
+</ol>
+<h3 id="proposed-ar1-extension">Proposed AR(1) Extension</h3>
+<div class="arithmatex">\[
+R_t^m = \phi^m R_{t-1}^m + \epsilon_t^m, \quad \epsilon_t^m \sim \text{LogNormal}(\mu_\epsilon, \sigma_\epsilon)
+\]</div>
+<p><strong>Key insight:</strong> Preserves <strong>affine wealth representation</strong> because returns remain exogenous (not dependent on policy <span class="arithmatex">\(X\)</span>).</p>
+<h3 id="proposed-api">Proposed API</h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">ReturnModel</span><span class="p">:</span>
+</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>        <span class="bp">self</span><span class="p">,</span>
+</span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a>        <span class="n">accounts</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Account</span><span class="p">],</span>
+</span><span id="__span-24-5"><a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a>        <span class="n">default_correlation</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-24-6"><a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a>        <span class="n">temporal_model</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;iid&quot;</span><span class="p">,</span> <span class="s2">&quot;ar1&quot;</span><span class="p">,</span> <span class="s2">&quot;garch&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;iid&quot;</span><span class="p">,</span>  <span class="c1"># Future</span>
+</span><span id="__span-24-7"><a id="__codelineno-24-7" name="__codelineno-24-7" href="#__codelineno-24-7"></a>        <span class="n">temporal_params</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>  <span class="c1"># {&quot;phi&quot;: [...], ...}</span>
+</span><span id="__span-24-8"><a id="__codelineno-24-8" name="__codelineno-24-8" href="#__codelineno-24-8"></a>    <span class="p">):</span>
+</span><span id="__span-24-9"><a id="__codelineno-24-9" name="__codelineno-24-9" href="#__codelineno-24-9"></a>        <span class="o">...</span>
+</span></code></pre></div>
+<p><strong>Backward compatibility:</strong> Default <code>temporal_model="iid"</code> preserves existing behavior.</p>
+<h3 id="when-to-implement">When to Implement</h3>
+<p><strong>Signals that temporal structure matters:</strong>
+1. Backtesting shows systematic bias
+2. Long-horizon planning (<span class="arithmatex">\(T &gt; 120\)</span> months)
+3. Ljung-Box test rejects IID at 5% significance</p>
+<hr />
+<h2 id="exceptions">Exceptions</h2>
+<p>The module raises <code>ValidationError</code> for invalid parameters:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">finopt.src.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">ValidationError</span>
+</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>
+</span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="k">try</span><span class="p">:</span>
+</span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a>    <span class="n">R</span> <span class="o">=</span> <span class="n">returns</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span><span class="n">T</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">n_sims</span><span class="o">=</span><span class="mi">500</span><span class="p">)</span>
+</span><span id="__span-25-5"><a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a><span class="k">except</span> <span class="n">ValidationError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+</span><span id="__span-25-6"><a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Invalid parameters: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span></code></pre></div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../javascripts/mathjax.js"></script>
+      
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>

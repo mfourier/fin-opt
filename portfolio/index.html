@@ -1,0 +1,1979 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Intelligent financial planning through stochastic simulation and convex optimization.">
+      
+      
+        <meta name="author" content="mfourier">
+      
+      
+        <link rel="canonical" href="https://mfourier.github.io/fin-opt/portfolio/">
+      
+      
+        <link rel="prev" href="../income/">
+      
+      
+        <link rel="next" href="../returns/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
+    
+    
+      
+        <title>Portfolio Dynamics - FinOpt</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://mfourier.github.io; script-src 'self' 'unsafe-inline' https://polyfill.io https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://mfourier.github.io; connect-src 'self';">
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="cyan">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#portfolio-philosophy-role-in-finopt" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="FinOpt" class="md-header__button md-logo" aria-label="FinOpt" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            FinOpt
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Portfolio Dynamics
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="cyan"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="cyan"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../framework/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Framework
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../income/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Income Model
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    <li class="md-tabs__item md-tabs__item--active">
+      <a href="./" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Portfolio Dynamics
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../returns/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Stochastic Returns
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../withdrawal/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Scheduled Withdrawals
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../goals/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Goals Framework
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../optimization/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Optimization
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../model/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Integration Model
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../exceptions/" class="md-tabs__link">
+          
+  
+  
+  Advanced
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="FinOpt" class="md-nav__button md-logo" aria-label="FinOpt" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    FinOpt
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../framework/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Framework
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../income/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Income Model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Portfolio Dynamics
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Portfolio Dynamics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#why-a-dedicated-portfolio-module" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why a dedicated portfolio module?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#design-principles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Design principles
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-two-core-surfaces" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The two core surfaces
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The two core surfaces">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-account" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1) Account
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-portfolio" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2) Portfolio
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#withdrawal-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Withdrawal Support
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#affine-wealth-representation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Affine wealth representation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Affine wealth representation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#closed-form-formula" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Closed-form formula
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mathematical-properties" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mathematical properties
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#accumulation-factors-computation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Accumulation factors computation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#initial-wealth-override" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Initial Wealth Override
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#integration-with-finopt-pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integration with FinOpt pipeline
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Integration with FinOpt pipeline">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Workflow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#data-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Data flow
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#visualization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Visualization
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#usage-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Usage patterns
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Usage patterns">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#a-basic-simulation-deterministic-contributions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A) Basic simulation (deterministic contributions)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#b-stochastic-contributions-returns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        B) Stochastic contributions + returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#c-with-withdrawals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        C) With withdrawals
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#d-time-varying-allocation-policy-glide-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        D) Time-varying allocation policy (glide path)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#e-optimization-ready-gradient-computation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        E) Optimization-ready gradient computation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#f-method-selection-heuristic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        F) Method selection heuristic
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exceptions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exceptions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mathematical-results" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mathematical results
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../returns/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stochastic Returns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../withdrawal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scheduled Withdrawals
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../goals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Goals Framework
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../optimization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Optimization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Integration Model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Advanced
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../exceptions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Exceptions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../serialization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Serialization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../utils/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Utilities
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#why-a-dedicated-portfolio-module" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why a dedicated portfolio module?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#design-principles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Design principles
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-two-core-surfaces" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The two core surfaces
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The two core surfaces">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-account" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1) Account
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-portfolio" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2) Portfolio
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#withdrawal-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Withdrawal Support
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#affine-wealth-representation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Affine wealth representation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Affine wealth representation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#closed-form-formula" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Closed-form formula
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mathematical-properties" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mathematical properties
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#accumulation-factors-computation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Accumulation factors computation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#initial-wealth-override" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Initial Wealth Override
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#integration-with-finopt-pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integration with FinOpt pipeline
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Integration with FinOpt pipeline">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Workflow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#data-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Data flow
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#visualization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Visualization
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#usage-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Usage patterns
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Usage patterns">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#a-basic-simulation-deterministic-contributions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A) Basic simulation (deterministic contributions)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#b-stochastic-contributions-returns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        B) Stochastic contributions + returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#c-with-withdrawals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        C) With withdrawals
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#d-time-varying-allocation-policy-glide-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        D) Time-varying allocation policy (glide path)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#e-optimization-ready-gradient-computation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        E) Optimization-ready gradient computation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#f-method-selection-heuristic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        F) Method selection heuristic
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exceptions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exceptions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mathematical-results" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mathematical results
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="portfolio-philosophy-role-in-finopt"><code>portfolio</code> — Philosophy &amp; Role in FinOpt</h1>
+<blockquote>
+<p><strong>Purpose:</strong> Execute <strong>wealth dynamics</strong> under allocation policies, providing the mathematical foundation for optimization-driven portfolio construction.
+<code>portfolio.py</code> is the <strong>executor layer</strong>: it receives pre-generated contributions <code>A</code> (from <code>income.py</code>), returns <code>R</code> (from <code>returns.py</code>), and withdrawals <code>D</code>, applies allocation policy <code>X</code>, and computes wealth trajectories <code>W</code> via recursive or closed-form methods.</p>
+</blockquote>
+<hr />
+<h2 id="why-a-dedicated-portfolio-module">Why a dedicated portfolio module?</h2>
+<p>Financial optimization requires <strong>separating concerns</strong>:
+- <code>income.py</code> → cash availability (contributions <code>A</code>)
+- <code>returns.py</code> → stochastic return generation (<code>R</code>)
+- <code>portfolio.py</code> → <strong>wealth evolution given allocations</strong> (<code>W</code>)
+- <code>goals.py</code> → goal specifications
+- <code>optimization.py</code> → policy search</p>
+<p>This separation enables:
+- <strong>Loose coupling:</strong> Portfolio never generates returns (delegated to <code>ReturnModel</code>)
+- <strong>Optimization-ready:</strong> Affine wealth representation exposes analytical gradients
+- <strong>Batch processing:</strong> Vectorized Monte Carlo execution (no Python loops)
+- <strong>Dual temporal API:</strong> Seamless monthly ↔ annual parameter conversion
+- <strong>Withdrawal support:</strong> Handles scheduled or stochastic withdrawals <code>D</code></p>
+<hr />
+<h2 id="design-principles">Design principles</h2>
+<ol>
+<li><strong>Separation of concerns</strong></li>
+<li>Portfolio executes dynamics, does NOT generate stochastic processes</li>
+<li>
+<p>Returns/contributions/withdrawals are <strong>external inputs</strong> (not embedded models)</p>
+</li>
+<li>
+<p><strong>Vectorized computation</strong></p>
+</li>
+<li>Full batch processing: <code>(n_sims, T, M)</code> arrays without Python-level loops</li>
+<li>
+<p>Matches <code>income.py</code> pattern: <code>n_sims</code> parameter for Monte Carlo generation</p>
+</li>
+<li>
+<p><strong>Optimization-first design</strong></p>
+</li>
+<li>Affine wealth formula enables <strong>analytical gradients</strong>: <span class="arithmatex">\(\frac{\partial W_t^m}{\partial x_s^m} = A_s F_{s,t}^m\)</span></li>
+<li>
+<p>Direct integration with convex solvers (CVXPY)</p>
+</li>
+<li>
+<p><strong>Annual parameters by default</strong></p>
+</li>
+<li>User-facing API uses intuitive annual returns/volatility</li>
+<li>Internal storage in monthly space (canonical form)</li>
+<li>
+<p>Properties provide dual temporal views without conversions</p>
+</li>
+<li>
+<p><strong>Flexible naming</strong></p>
+</li>
+<li>Short <code>name</code> for goal specification (e.g., "RN", "CC")</li>
+<li>Optional <code>display_name</code> for plots (e.g., "Risky Norris (Fintual)")</li>
+<li><code>label</code> property returns display_name if set, otherwise name</li>
+</ol>
+<hr />
+<h2 id="the-two-core-surfaces">The two core surfaces</h2>
+<h3 id="1-account">1) <code>Account</code></h3>
+<p>Frozen dataclass metadata container for investment account with <strong>dual temporal parameter access</strong> and <strong>flexible naming</strong>.</p>
+<p><strong>Parameters:</strong>
+- <code>name</code>: Short account identifier for goal references (e.g., "RN", "CC", "SLV")
+- <code>initial_wealth</code>: Starting balance <span class="arithmatex">\(W_0^m\)</span> (non-negative)
+- <code>return_strategy</code>: dict with <strong>monthly</strong> parameters <code>{"mu": float, "sigma": float}</code>
+- <code>display_name</code>: Optional long descriptive name for plots (e.g., "Risky Norris (Fintual)")</p>
+<p><strong>Constructor methods (recommended):</strong>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># With display_name (recommended for clarity)</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">Account</span><span class="o">.</span><span class="n">from_annual</span><span class="p">(</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;RN&quot;</span><span class="p">,</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">annual_return</span><span class="o">=</span><span class="mf">0.12</span><span class="p">,</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">annual_volatility</span><span class="o">=</span><span class="mf">0.15</span><span class="p">,</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">initial_wealth</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">display_name</span><span class="o">=</span><span class="s2">&quot;Risky Norris (Fintual)&quot;</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="p">)</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="c1"># Without display_name (backward compatible)</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="n">Account</span><span class="o">.</span><span class="n">from_annual</span><span class="p">(</span><span class="s2">&quot;Emergency&quot;</span><span class="p">,</span> <span class="n">annual_return</span><span class="o">=</span><span class="mf">0.04</span><span class="p">,</span> <span class="n">annual_volatility</span><span class="o">=</span><span class="mf">0.05</span><span class="p">)</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="c1"># From monthly parameters (advanced)</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="n">Account</span><span class="o">.</span><span class="n">from_monthly</span><span class="p">(</span><span class="s2">&quot;TAC&quot;</span><span class="p">,</span> <span class="n">monthly_mu</span><span class="o">=</span><span class="mf">0.0058</span><span class="p">,</span> <span class="n">monthly_sigma</span><span class="o">=</span><span class="mf">0.0347</span><span class="p">)</span>
+</span></code></pre></div></p>
+<p><strong>Properties:</strong>
+- <code>label</code>: Display name for plots (returns <code>display_name</code> if set, otherwise <code>name</code>)
+- <code>monthly_params</code>: Canonical storage format <code>{"mu": float, "sigma": float}</code>
+- <code>annual_params</code>: User-friendly view <code>{"return": float, "volatility": float}</code></p>
+<p><strong>Parameter conversion:</strong>
+$$
+\begin{aligned}
+\mu_{\text{monthly}} &amp;= (1 + r_{\text{annual}})^{1/12} - 1 \quad \text{[geometric compounding]} \
+\sigma_{\text{monthly}} &amp;= \frac{\sigma_{\text{annual}}}{\sqrt{12}} \quad \text{[time scaling]}
+\end{aligned}
+$$</p>
+<p><strong>Example with display_name:</strong>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Short name for goal specification</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">risky</span> <span class="o">=</span> <span class="n">Account</span><span class="o">.</span><span class="n">from_annual</span><span class="p">(</span><span class="s2">&quot;RN&quot;</span><span class="p">,</span> <span class="n">annual_return</span><span class="o">=</span><span class="mf">0.12</span><span class="p">,</span> <span class="n">annual_volatility</span><span class="o">=</span><span class="mf">0.15</span><span class="p">,</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>                            <span class="n">display_name</span><span class="o">=</span><span class="s2">&quot;Risky Norris (Fintual)&quot;</span><span class="p">)</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="nb">print</span><span class="p">(</span><span class="n">risky</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>   <span class="c1"># &#39;RN&#39; - used in goals</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="nb">print</span><span class="p">(</span><span class="n">risky</span><span class="o">.</span><span class="n">label</span><span class="p">)</span>  <span class="c1"># &#39;Risky Norris (Fintual)&#39; - shown in plots</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="c1"># Goal uses short name</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="n">goal</span> <span class="o">=</span> <span class="n">TerminalGoal</span><span class="p">(</span><span class="n">account</span><span class="o">=</span><span class="s2">&quot;RN&quot;</span><span class="p">,</span> <span class="n">threshold</span><span class="o">=</span><span class="mi">5_000_000</span><span class="p">,</span> <span class="n">confidence</span><span class="o">=</span><span class="mf">0.8</span><span class="p">)</span>
+</span></code></pre></div></p>
+<hr />
+<h3 id="2-portfolio">2) <code>Portfolio</code></h3>
+<p>Multi-account wealth dynamics executor with allocation policy and withdrawal support.</p>
+<p><strong>Parameters:</strong>
+- <code>accounts</code>: list of <code>Account</code> objects (metadata only, no return models)</p>
+<p><strong>Properties:</strong>
+- <code>M</code>: Number of accounts
+- <code>account_names</code>: List of account names
+- <code>initial_wealth_vector</code>: Initial wealth array <code>W0</code> from accounts</p>
+<p><strong>Method signature:</strong>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">simulate</span><span class="p">(</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="bp">self</span><span class="p">,</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="n">A</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>      <span class="c1"># Contributions: (T,) or (n_sims, T)</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">R</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>      <span class="c1"># Returns: (n_sims, T, M)</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">X</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>      <span class="c1"># Allocations: (T, M)</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="n">D</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>  <span class="c1"># Withdrawals: (T, M) or (n_sims, T, M)</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>    <span class="n">method</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;recursive&quot;</span><span class="p">,</span> <span class="s2">&quot;affine&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;recursive&quot;</span><span class="p">,</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>    <span class="n">initial_wealth</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span> <span class="o">=</span> <span class="kc">None</span>  <span class="c1"># Override W0</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span>
+</span></code></pre></div></p>
+<p><strong>Core wealth dynamics (with withdrawals):</strong>
+$$
+W_{t+1}^m = \big(W_t^m + A_t^m - D_t^m\big)(1 + R_t^m)
+$$
+where:
+- <span class="arithmatex">\(A_t^m = x_t^m \cdot A_t\)</span> (allocated contribution)
+- <span class="arithmatex">\(D_t^m\)</span> = withdrawal from account <span class="arithmatex">\(m\)</span> at time <span class="arithmatex">\(t\)</span>
+- <span class="arithmatex">\(\sum_{m=1}^M x_t^m = 1\)</span>, <span class="arithmatex">\(x_t^m \geq 0\)</span> (budget constraint)</p>
+<p><strong>Returns:</strong>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="p">{</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>    <span class="s2">&quot;wealth&quot;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>        <span class="c1"># (n_sims, T+1, M)</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="s2">&quot;total_wealth&quot;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>   <span class="c1"># (n_sims, T+1)</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="p">}</span>
+</span></code></pre></div></p>
+<p><strong>Computation methods:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Default</th>
+<th>Time</th>
+<th>Memory</th>
+<th>Use Case</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>"recursive"</code></td>
+<td>✓</td>
+<td><span class="arithmatex">\(O(n \cdot T \cdot M)\)</span></td>
+<td><span class="arithmatex">\(O(n \cdot T \cdot M)\)</span></td>
+<td>Simulation, large T</td>
+</tr>
+<tr>
+<td><code>"affine"</code></td>
+<td></td>
+<td><span class="arithmatex">\(O(T^2 \cdot M \cdot n)\)</span></td>
+<td><span class="arithmatex">\(O(n \cdot T^2 \cdot M)\)</span></td>
+<td>Optimization, gradients</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="withdrawal-support">Withdrawal Support</h2>
+<p>Withdrawals <code>D</code> can be provided as:
+- <strong>Deterministic:</strong> Shape <code>(T, M)</code> — same withdrawal schedule across all scenarios
+- <strong>Stochastic:</strong> Shape <code>(n_sims, T, M)</code> — per-scenario withdrawals
+- <strong>None:</strong> No withdrawals (default)</p>
+<p><strong>Example:</strong>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Deterministic: $500K from Housing account at month 12</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">D</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">T</span><span class="p">,</span> <span class="n">M</span><span class="p">))</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">D</span><span class="p">[</span><span class="mi">12</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="mi">500_000</span>  <span class="c1"># Account 1 = Housing</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="n">result</span> <span class="o">=</span> <span class="n">portfolio</span><span class="o">.</span><span class="n">simulate</span><span class="p">(</span><span class="n">A</span><span class="o">=</span><span class="n">A</span><span class="p">,</span> <span class="n">R</span><span class="o">=</span><span class="n">R</span><span class="p">,</span> <span class="n">X</span><span class="o">=</span><span class="n">X</span><span class="p">,</span> <span class="n">D</span><span class="o">=</span><span class="n">D</span><span class="p">)</span>
+</span></code></pre></div></p>
+<p><strong>In optimization:</strong>
+Withdrawals are treated as <strong>parameters</strong> (not decision variables), preserving convexity:
+$$
+W_t^m(X) = W_0^m F_{0,t}^m + \sum_{s=0}^{t-1} \big(A_s x_s^m - D_s^m\big) F_{s,t}^m
+$$</p>
+<hr />
+<h2 id="affine-wealth-representation">Affine wealth representation</h2>
+<h3 id="closed-form-formula">Closed-form formula</h3>
+<p>The recursive dynamics admit a <strong>closed-form solution</strong>:</p>
+<div class="arithmatex">\[
+\boxed{
+W_t^m(X) = W_0^m \cdot F_{0,t}^m + \sum_{s=0}^{t-1} \big(A_s \, x_s^m - D_s^m\big) \, F_{s,t}^m
+}
+\]</div>
+<p>where the <strong>accumulation factor</strong> from month <span class="arithmatex">\(s\)</span> to <span class="arithmatex">\(t\)</span> is:</p>
+<div class="arithmatex">\[
+F_{s,t}^m := \prod_{r=s}^{t-1} (1 + R_r^m)
+\]</div>
+<p><strong>Convention:</strong> <span class="arithmatex">\(F_{s,s}^m = 1\)</span> (no accumulation over empty interval).</p>
+<h3 id="mathematical-properties">Mathematical properties</h3>
+<ol>
+<li>
+<p><strong>Affine in <span class="arithmatex">\(X\)</span>:</strong>
+   Since <span class="arithmatex">\(D\)</span> is a parameter (not decision variable), wealth remains affine in <span class="arithmatex">\(X\)</span>:
+   $$
+   W_t^m(\alpha X + \beta Y) = \alpha W_t^m(X) + \beta W_t^m(Y) + \text{const}
+   $$</p>
+</li>
+<li>
+<p><strong>Analytical gradient:</strong>
+   $$
+   \frac{\partial W_t^m}{\partial x_s^m} = A_s \, F_{s,t}^m, \quad s &lt; t
+   $$
+   Enables gradient-based optimization without numerical differentiation.</p>
+</li>
+<li>
+<p><strong>Monotonicity:</strong>
+   If <span class="arithmatex">\(F_{s,t}^m &gt; 0\)</span> (positive returns), then <span class="arithmatex">\(W_t^m\)</span> is strictly increasing in <span class="arithmatex">\(x_s^m\)</span>.</p>
+</li>
+</ol>
+<h3 id="accumulation-factors-computation">Accumulation factors computation</h3>
+<p><strong>Method signature:</strong>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">compute_accumulation_factors</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">R</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
+</span></code></pre></div></p>
+<p><strong>Input:</strong> Returns matrix <code>R</code> of shape <code>(n_sims, T, M)</code>
+<strong>Output:</strong> Factors tensor <code>F</code> of shape <code>(n_sims, T+1, T+1, M)</code></p>
+<p><strong>Memory estimates:</strong>
+- <code>n_sims=500, T=24, M=2</code>: ~115 MB
+- <code>n_sims=500, T=120, M=5</code>: ~14 GB
+- <code>n_sims=1000, T=240, M=10</code>: ~221 GB (infeasible)</p>
+<p><strong>For <span class="arithmatex">\(T &gt; 100\)</span>, consider:</strong>
+- Using <code>method="recursive"</code> (no <span class="arithmatex">\(F\)</span> precomputation)
+- Batching simulations (chunking <code>n_sims</code>)
+- On-the-fly gradient computation</p>
+<hr />
+<h2 id="initial-wealth-override">Initial Wealth Override</h2>
+<p>The <code>initial_wealth</code> parameter allows overriding the initial wealth vector without creating temporary Account objects:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Accounts have initial_wealth=0, but optimization needs non-zero W0</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">accounts</span> <span class="o">=</span> <span class="p">[</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>    <span class="n">Account</span><span class="o">.</span><span class="n">from_annual</span><span class="p">(</span><span class="s2">&quot;Emergency&quot;</span><span class="p">,</span> <span class="mf">0.04</span><span class="p">,</span> <span class="mf">0.05</span><span class="p">,</span> <span class="n">initial_wealth</span><span class="o">=</span><span class="mi">0</span><span class="p">),</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>    <span class="n">Account</span><span class="o">.</span><span class="n">from_annual</span><span class="p">(</span><span class="s2">&quot;Housing&quot;</span><span class="p">,</span> <span class="mf">0.07</span><span class="p">,</span> <span class="mf">0.12</span><span class="p">,</span> <span class="n">initial_wealth</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="p">]</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="n">portfolio</span> <span class="o">=</span> <span class="n">Portfolio</span><span class="p">(</span><span class="n">accounts</span><span class="p">)</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="c1"># Override W0 for optimization scenario</span>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="n">W0_scenario</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">5_000_000</span><span class="p">,</span> <span class="mi">2_000_000</span><span class="p">])</span>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="n">result</span> <span class="o">=</span> <span class="n">portfolio</span><span class="o">.</span><span class="n">simulate</span><span class="p">(</span><span class="n">A</span><span class="o">=</span><span class="n">A</span><span class="p">,</span> <span class="n">R</span><span class="o">=</span><span class="n">R</span><span class="p">,</span> <span class="n">X</span><span class="o">=</span><span class="n">X</span><span class="p">,</span> <span class="n">initial_wealth</span><span class="o">=</span><span class="n">W0_scenario</span><span class="p">)</span>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>
+</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="c1"># Verify override</span>
+</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="k">assert</span> <span class="n">np</span><span class="o">.</span><span class="n">allclose</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s2">&quot;wealth&quot;</span><span class="p">][:,</span> <span class="mi">0</span><span class="p">,</span> <span class="p">:],</span> <span class="n">W0_scenario</span><span class="p">)</span>
+</span></code></pre></div>
+<hr />
+<h2 id="integration-with-finopt-pipeline">Integration with FinOpt pipeline</h2>
+<h3 id="workflow">Workflow</h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">date</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">finopt.src.portfolio</span><span class="w"> </span><span class="kn">import</span> <span class="n">Account</span><span class="p">,</span> <span class="n">Portfolio</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">finopt.src.returns</span><span class="w"> </span><span class="kn">import</span> <span class="n">ReturnModel</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="kn">from</span><span class="w"> </span><span class="nn">finopt.src.income</span><span class="w"> </span><span class="kn">import</span> <span class="n">IncomeModel</span><span class="p">,</span> <span class="n">FixedIncome</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="c1"># 1. Define accounts (annual parameters + display names)</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="n">accounts</span> <span class="o">=</span> <span class="p">[</span>
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>    <span class="n">Account</span><span class="o">.</span><span class="n">from_annual</span><span class="p">(</span><span class="s2">&quot;EM&quot;</span><span class="p">,</span> <span class="n">annual_return</span><span class="o">=</span><span class="mf">0.04</span><span class="p">,</span> <span class="n">annual_volatility</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>                        <span class="n">display_name</span><span class="o">=</span><span class="s2">&quot;Emergency Fund&quot;</span><span class="p">),</span>
+</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>    <span class="n">Account</span><span class="o">.</span><span class="n">from_annual</span><span class="p">(</span><span class="s2">&quot;HS&quot;</span><span class="p">,</span> <span class="n">annual_return</span><span class="o">=</span><span class="mf">0.07</span><span class="p">,</span> <span class="n">annual_volatility</span><span class="o">=</span><span class="mf">0.12</span><span class="p">,</span>
+</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a>                        <span class="n">display_name</span><span class="o">=</span><span class="s2">&quot;Housing Savings&quot;</span><span class="p">)</span>
+</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="p">]</span>
+</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>
+</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="c1"># 2. Create portfolio executor</span>
+</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="n">portfolio</span> <span class="o">=</span> <span class="n">Portfolio</span><span class="p">(</span><span class="n">accounts</span><span class="p">)</span>
+</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a>
+</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="c1"># 3. Generate stochastic inputs externally</span>
+</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="n">income</span> <span class="o">=</span> <span class="n">IncomeModel</span><span class="p">(</span><span class="n">fixed</span><span class="o">=</span><span class="n">FixedIncome</span><span class="p">(</span><span class="n">base</span><span class="o">=</span><span class="mi">1_400_000</span><span class="p">,</span> <span class="n">annual_growth</span><span class="o">=</span><span class="mf">0.03</span><span class="p">))</span>
+</span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a><span class="n">returns</span> <span class="o">=</span> <span class="n">ReturnModel</span><span class="p">(</span><span class="n">accounts</span><span class="p">,</span> <span class="n">default_correlation</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="mi">2</span><span class="p">))</span>
+</span><span id="__span-7-21"><a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a>
+</span><span id="__span-7-22"><a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a><span class="n">T</span><span class="p">,</span> <span class="n">n_sims</span> <span class="o">=</span> <span class="mi">24</span><span class="p">,</span> <span class="mi">500</span>
+</span><span id="__span-7-23"><a id="__codelineno-7-23" name="__codelineno-7-23" href="#__codelineno-7-23"></a><span class="n">A</span> <span class="o">=</span> <span class="n">income</span><span class="o">.</span><span class="n">contributions</span><span class="p">(</span><span class="n">T</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">n_sims</span><span class="o">=</span><span class="n">n_sims</span><span class="p">)</span>  <span class="c1"># (500, 24)</span>
+</span><span id="__span-7-24"><a id="__codelineno-7-24" name="__codelineno-7-24" href="#__codelineno-7-24"></a><span class="n">R</span> <span class="o">=</span> <span class="n">returns</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span><span class="n">T</span><span class="p">,</span> <span class="n">n_sims</span><span class="o">=</span><span class="n">n_sims</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">42</span><span class="p">)</span>                      <span class="c1"># (500, 24, 2)</span>
+</span><span id="__span-7-25"><a id="__codelineno-7-25" name="__codelineno-7-25" href="#__codelineno-7-25"></a>
+</span><span id="__span-7-26"><a id="__codelineno-7-26" name="__codelineno-7-26" href="#__codelineno-7-26"></a><span class="c1"># 4. Define allocation policy</span>
+</span><span id="__span-7-27"><a id="__codelineno-7-27" name="__codelineno-7-27" href="#__codelineno-7-27"></a><span class="n">X</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tile</span><span class="p">([</span><span class="mf">0.6</span><span class="p">,</span> <span class="mf">0.4</span><span class="p">],</span> <span class="p">(</span><span class="n">T</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>  <span class="c1"># 60-40 split</span>
+</span><span id="__span-7-28"><a id="__codelineno-7-28" name="__codelineno-7-28" href="#__codelineno-7-28"></a>
+</span><span id="__span-7-29"><a id="__codelineno-7-29" name="__codelineno-7-29" href="#__codelineno-7-29"></a><span class="c1"># 5. Execute wealth dynamics (with optional withdrawals)</span>
+</span><span id="__span-7-30"><a id="__codelineno-7-30" name="__codelineno-7-30" href="#__codelineno-7-30"></a><span class="n">D</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">T</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
+</span><span id="__span-7-31"><a id="__codelineno-7-31" name="__codelineno-7-31" href="#__codelineno-7-31"></a><span class="n">D</span><span class="p">[</span><span class="mi">12</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">500_000</span>  <span class="c1"># $500K withdrawal from Emergency at month 12</span>
+</span><span id="__span-7-32"><a id="__codelineno-7-32" name="__codelineno-7-32" href="#__codelineno-7-32"></a>
+</span><span id="__span-7-33"><a id="__codelineno-7-33" name="__codelineno-7-33" href="#__codelineno-7-33"></a><span class="n">result</span> <span class="o">=</span> <span class="n">portfolio</span><span class="o">.</span><span class="n">simulate</span><span class="p">(</span><span class="n">A</span><span class="o">=</span><span class="n">A</span><span class="p">,</span> <span class="n">R</span><span class="o">=</span><span class="n">R</span><span class="p">,</span> <span class="n">X</span><span class="o">=</span><span class="n">X</span><span class="p">,</span> <span class="n">D</span><span class="o">=</span><span class="n">D</span><span class="p">)</span>
+</span><span id="__span-7-34"><a id="__codelineno-7-34" name="__codelineno-7-34" href="#__codelineno-7-34"></a><span class="n">W</span> <span class="o">=</span> <span class="n">result</span><span class="p">[</span><span class="s2">&quot;wealth&quot;</span><span class="p">]</span>              <span class="c1"># (500, 25, 2)</span>
+</span><span id="__span-7-35"><a id="__codelineno-7-35" name="__codelineno-7-35" href="#__codelineno-7-35"></a><span class="n">W_total</span> <span class="o">=</span> <span class="n">result</span><span class="p">[</span><span class="s2">&quot;total_wealth&quot;</span><span class="p">]</span>  <span class="c1"># (500, 25)</span>
+</span><span id="__span-7-36"><a id="__codelineno-7-36" name="__codelineno-7-36" href="#__codelineno-7-36"></a>
+</span><span id="__span-7-37"><a id="__codelineno-7-37" name="__codelineno-7-37" href="#__codelineno-7-37"></a><span class="c1"># 6. Visualize with goals</span>
+</span><span id="__span-7-38"><a id="__codelineno-7-38" name="__codelineno-7-38" href="#__codelineno-7-38"></a><span class="kn">from</span><span class="w"> </span><span class="nn">finopt.src.goals</span><span class="w"> </span><span class="kn">import</span> <span class="n">TerminalGoal</span><span class="p">,</span> <span class="n">IntermediateGoal</span>
+</span><span id="__span-7-39"><a id="__codelineno-7-39" name="__codelineno-7-39" href="#__codelineno-7-39"></a>
+</span><span id="__span-7-40"><a id="__codelineno-7-40" name="__codelineno-7-40" href="#__codelineno-7-40"></a><span class="n">goals</span> <span class="o">=</span> <span class="p">[</span>
+</span><span id="__span-7-41"><a id="__codelineno-7-41" name="__codelineno-7-41" href="#__codelineno-7-41"></a>    <span class="n">IntermediateGoal</span><span class="p">(</span><span class="n">date</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2026</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">account</span><span class="o">=</span><span class="s2">&quot;EM&quot;</span><span class="p">,</span>
+</span><span id="__span-7-42"><a id="__codelineno-7-42" name="__codelineno-7-42" href="#__codelineno-7-42"></a>                     <span class="n">threshold</span><span class="o">=</span><span class="mi">5_000_000</span><span class="p">,</span> <span class="n">confidence</span><span class="o">=</span><span class="mf">0.95</span><span class="p">),</span>
+</span><span id="__span-7-43"><a id="__codelineno-7-43" name="__codelineno-7-43" href="#__codelineno-7-43"></a>    <span class="n">TerminalGoal</span><span class="p">(</span><span class="n">account</span><span class="o">=</span><span class="s2">&quot;HS&quot;</span><span class="p">,</span> <span class="n">threshold</span><span class="o">=</span><span class="mi">20_000_000</span><span class="p">,</span> <span class="n">confidence</span><span class="o">=</span><span class="mf">0.90</span><span class="p">)</span>
+</span><span id="__span-7-44"><a id="__codelineno-7-44" name="__codelineno-7-44" href="#__codelineno-7-44"></a><span class="p">]</span>
+</span><span id="__span-7-45"><a id="__codelineno-7-45" name="__codelineno-7-45" href="#__codelineno-7-45"></a>
+</span><span id="__span-7-46"><a id="__codelineno-7-46" name="__codelineno-7-46" href="#__codelineno-7-46"></a><span class="n">portfolio</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">result</span><span class="o">=</span><span class="n">result</span><span class="p">,</span> <span class="n">X</span><span class="o">=</span><span class="n">X</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">goals</span><span class="o">=</span><span class="n">goals</span><span class="p">)</span>
+</span></code></pre></div>
+<h3 id="data-flow">Data flow</h3>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>income.py          returns.py
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>    ↓                  ↓
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>    A                  R          (external generation)
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>    ↓                  ↓
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>    └──► portfolio.simulate(A, R, X, D) ──► W
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>                       ↑        ↑
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>                       X        D    (from user or optimizer)
+</span></code></pre></div>
+<hr />
+<h2 id="visualization">Visualization</h2>
+<p><strong>Method signature:</strong>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">plot</span><span class="p">(</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>    <span class="bp">self</span><span class="p">,</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>    <span class="n">result</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span>           <span class="c1"># from simulate()</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>    <span class="n">X</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>          <span class="c1"># allocation policy</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>    <span class="n">start</span><span class="p">:</span> <span class="n">date</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>     <span class="c1"># calendar start date</span>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>    <span class="n">goals</span><span class="p">:</span> <span class="nb">list</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>     <span class="c1"># Goal objects to visualize</span>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>    <span class="n">figsize</span><span class="p">:</span> <span class="nb">tuple</span> <span class="o">=</span> <span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mi">10</span><span class="p">),</span>
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>    <span class="n">title</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>    <span class="n">save_path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>    <span class="n">return_fig_ax</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a>    <span class="n">show_trajectories</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a>    <span class="n">trajectory_alpha</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.05</span><span class="p">,</span>
+</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a>    <span class="n">colors</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a>    <span class="n">hist_bins</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">30</span><span class="p">,</span>
+</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a>    <span class="n">hist_color</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;mediumseagreen&#39;</span>
+</span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="p">)</span>
+</span></code></pre></div></p>
+<p><strong>Panel layout:</strong>
+1. <strong>Top-left:</strong> Wealth per account (time series with Monte Carlo trajectories + goal markers)
+2. <strong>Top-right:</strong> Total portfolio wealth + lateral histogram of final wealth distribution
+3. <strong>Bottom-left:</strong> Portfolio composition (stacked area chart)
+4. <strong>Bottom-right:</strong> Allocation policy (stacked bar chart)</p>
+<p><strong>Goal visualization:</strong>
+- <strong>TerminalGoal:</strong> Horizontal dashed line at threshold across entire horizon
+- <strong>IntermediateGoal:</strong> Dotted line up to goal month with diamond marker</p>
+<p><strong>Calendar-aware x-axis:</strong>
+When <code>start</code> is provided, the x-axis shows calendar dates instead of month indices.</p>
+<hr />
+<h2 id="usage-patterns">Usage patterns</h2>
+<h3 id="a-basic-simulation-deterministic-contributions">A) Basic simulation (deterministic contributions)</h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">A</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">full</span><span class="p">(</span><span class="mi">24</span><span class="p">,</span> <span class="mf">100_000.0</span><span class="p">)</span>                      <span class="c1"># (24,)</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">R</span> <span class="o">=</span> <span class="n">returns</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span><span class="n">T</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span> <span class="n">n_sims</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">42</span><span class="p">)</span> <span class="c1"># (500, 24, 2)</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="n">X</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tile</span><span class="p">([</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">],</span> <span class="p">(</span><span class="mi">24</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>                <span class="c1"># equal split</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="n">result</span> <span class="o">=</span> <span class="n">portfolio</span><span class="o">.</span><span class="n">simulate</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">R</span><span class="p">,</span> <span class="n">X</span><span class="p">)</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="n">W</span> <span class="o">=</span> <span class="n">result</span><span class="p">[</span><span class="s2">&quot;wealth&quot;</span><span class="p">]</span>  <span class="c1"># (500, 25, 2)</span>
+</span></code></pre></div>
+<h3 id="b-stochastic-contributions-returns">B) Stochastic contributions + returns</h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">A</span> <span class="o">=</span> <span class="n">income</span><span class="o">.</span><span class="n">contributions</span><span class="p">(</span><span class="mi">24</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">n_sims</span><span class="o">=</span><span class="mi">500</span><span class="p">)</span>  <span class="c1"># (500, 24)</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">R</span> <span class="o">=</span> <span class="n">returns</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span><span class="n">T</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span> <span class="n">n_sims</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">42</span><span class="p">)</span>                    <span class="c1"># (500, 24, 2)</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="n">X</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tile</span><span class="p">([</span><span class="mf">0.7</span><span class="p">,</span> <span class="mf">0.3</span><span class="p">],</span> <span class="p">(</span><span class="mi">24</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="n">result</span> <span class="o">=</span> <span class="n">portfolio</span><span class="o">.</span><span class="n">simulate</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">R</span><span class="p">,</span> <span class="n">X</span><span class="p">)</span>
+</span></code></pre></div>
+<h3 id="c-with-withdrawals">C) With withdrawals</h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># $1M withdrawal from Housing at month 18</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">D</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">T</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="n">D</span><span class="p">[</span><span class="mi">18</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1_000_000</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="n">result</span> <span class="o">=</span> <span class="n">portfolio</span><span class="o">.</span><span class="n">simulate</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">R</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">D</span><span class="o">=</span><span class="n">D</span><span class="p">)</span>
+</span></code></pre></div>
+<h3 id="d-time-varying-allocation-policy-glide-path">D) Time-varying allocation policy (glide path)</h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="n">T</span> <span class="o">=</span> <span class="mi">60</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">equity_fractions</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mf">0.8</span><span class="p">,</span> <span class="mf">0.4</span><span class="p">,</span> <span class="n">T</span><span class="p">)</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="n">X</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">column_stack</span><span class="p">([</span><span class="n">equity_fractions</span><span class="p">,</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">equity_fractions</span><span class="p">])</span>  <span class="c1"># (60, 2)</span>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="n">result</span> <span class="o">=</span> <span class="n">portfolio</span><span class="o">.</span><span class="n">simulate</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">R</span><span class="p">,</span> <span class="n">X</span><span class="p">)</span>
+</span></code></pre></div>
+<h3 id="e-optimization-ready-gradient-computation">E) Optimization-ready gradient computation</h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Compute accumulation factors once</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">F</span> <span class="o">=</span> <span class="n">portfolio</span><span class="o">.</span><span class="n">compute_accumulation_factors</span><span class="p">(</span><span class="n">R</span><span class="p">)</span>  <span class="c1"># (n_sims, T+1, T+1, M)</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="c1"># Gradient of E[W_24^0] w.r.t. X[10, 0]</span>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="n">t_goal</span><span class="p">,</span> <span class="n">s_contrib</span><span class="p">,</span> <span class="n">m_account</span> <span class="o">=</span> <span class="mi">24</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">0</span>
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="n">A_val</span> <span class="o">=</span> <span class="n">A</span><span class="p">[:,</span> <span class="mi">10</span><span class="p">]</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span> <span class="k">if</span> <span class="n">A</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">2</span> <span class="k">else</span> <span class="n">A</span><span class="p">[</span><span class="mi">10</span><span class="p">]</span>
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="n">grad</span> <span class="o">=</span> <span class="n">A_val</span> <span class="o">*</span> <span class="n">F</span><span class="p">[:,</span> <span class="n">s_contrib</span><span class="p">,</span> <span class="n">t_goal</span><span class="p">,</span> <span class="n">m_account</span><span class="p">]</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
+</span></code></pre></div>
+<h3 id="f-method-selection-heuristic">F) Method selection heuristic</h3>
+<p><strong>Use <code>method="recursive"</code> (default) when:</strong>
+- Pure simulation (no optimization)
+- Large horizons (<span class="arithmatex">\(T &gt; 100\)</span>)
+- Memory-constrained environments
+- No need for gradients</p>
+<p><strong>Use <code>method="affine"</code> when:</strong>
+- Integrating with optimizer
+- Need analytical gradients
+- Moderate horizons (<span class="arithmatex">\(T \leq 100\)</span>)
+- Sufficient RAM for <span class="arithmatex">\(O(n_{\text{sims}} \cdot T^2 \cdot M)\)</span> storage</p>
+<hr />
+<h2 id="exceptions">Exceptions</h2>
+<p>The module raises <code>AllocationConstraintError</code> when allocation policy violates constraints:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">finopt.src.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">AllocationConstraintError</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="k">try</span><span class="p">:</span>
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>    <span class="n">result</span> <span class="o">=</span> <span class="n">portfolio</span><span class="o">.</span><span class="n">simulate</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">R</span><span class="p">,</span> <span class="n">X</span><span class="p">)</span>
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="k">except</span> <span class="n">AllocationConstraintError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Invalid allocation: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a>    <span class="c1"># Fix: ensure X[t, :].sum() == 1 and X &gt;= 0</span>
+</span></code></pre></div>
+<hr />
+<h2 id="mathematical-results">Mathematical results</h2>
+<p><strong>Proposition 1 (Affine Wealth):</strong>
+For any allocation policy <span class="arithmatex">\(X \in \mathcal{X}_T\)</span>, return realization <span class="arithmatex">\(\{R_t^m\}\)</span>, and withdrawal schedule <span class="arithmatex">\(\{D_t^m\}\)</span>:
+$$
+W_t^m(X) = W_0^m F_{0,t}^m + \sum_{s=0}^{t-1} (A_s x_s^m - D_s^m) F_{s,t}^m
+$$
+is affine in <span class="arithmatex">\(X\)</span> (since <span class="arithmatex">\(D\)</span> is a parameter).</p>
+<p><strong>Corollary 1 (Linear Constraints):</strong>
+If goals are specified as <span class="arithmatex">\(W_t^m(X) \geq b_t^m\)</span> (deterministic), the feasible allocation set is a convex polytope.</p>
+<p><strong>Proposition 2 (Gradient):</strong>
+The sensitivity of wealth to allocation at month <span class="arithmatex">\(s\)</span> is:
+$$
+\frac{\partial W_t^m}{\partial x_s^m} = A_s F_{s,t}^m, \quad s &lt; t
+$$</p>
+<p><strong>Corollary 2 (Monotonicity):</strong>
+If <span class="arithmatex">\(F_{s,t}^m &gt; 0\)</span> (positive returns), then <span class="arithmatex">\(W_t^m(X)\)</span> is strictly increasing in <span class="arithmatex">\(x_s^m\)</span>.</p>
+<p><strong>Proposition 3 (Withdrawal Independence):</strong>
+Withdrawals <span class="arithmatex">\(D\)</span> do not affect gradients <span class="arithmatex">\(\frac{\partial W_t^m}{\partial x_s^m}\)</span> since they are parameters, not decision variables. This preserves convexity for CVaR optimization.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../javascripts/mathjax.js"></script>
+      
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>
