@@ -2,13 +2,13 @@
 
 > **Tagline:** Intelligent financial planning through stochastic simulation and convex optimization under uncertainty.
 
-This document describes the **theoretical and technical framework** of **FinOpt**, a modular system that connects **user objectives** (emergency funds, housing, retirement) with **optimal investment strategies** under stochastic income and returns via chance-constrained optimization.
+This document describes the **theoretical and technical framework** of **FinOpt**, a modular system that connects **user objectives** (emergency funds, housing, retirement) with **optimal investment strategies** under stochastic income, returns, and withdrawals via chance-constrained optimization.
 
 ---
 
 ## 0. System Architecture
 
-FinOpt is composed of **six core modules**:
+FinOpt is composed of **nine core modules**:
 
 | Module | Purpose | Key Abstractions |
 |--------|---------|------------------|
@@ -16,8 +16,19 @@ FinOpt is composed of **six core modules**:
 | **`portfolio.py`** | Wealth dynamics | `Account`, `Portfolio` (affine wealth executor) |
 | **`returns.py`** | Stochastic returns | `ReturnModel` (correlated lognormal) |
 | **`goals.py`** | Goal specification | `IntermediateGoal`, `TerminalGoal`, `GoalSet` |
-| **`optimization.py`** | Solvers | `SAAOptimizer`, `CVaROptimizer`, `GoalSeeker` |
+| **`withdrawal.py`** | Cash outflows | `WithdrawalEvent`, `StochasticWithdrawal`, `WithdrawalModel` |
+| **`optimization.py`** | Solvers | `CVaROptimizer`, `GoalSeeker` |
 | **`model.py`** | Orchestration | `FinancialModel` (unified facade) |
+| **`serialization.py`** | Persistence | `save_model`, `load_model`, `save_scenario` |
+| **`config.py`** | Configuration | Pydantic configs for type-safe parameters |
+
+**Supporting modules:**
+
+| Module | Purpose |
+|--------|---------|
+| **`utils.py`** | Rate conversions, formatters, metrics |
+| **`exceptions.py`** | Error hierarchy (`FinOptError`, `InfeasibleError`, etc.) |
+| **`types.py`** | Type definitions (`MonthlyContributionDict`, etc.) |
 
 **Dependency graph:**
 ```
@@ -25,9 +36,17 @@ model.py (FinancialModel)
     ├─→ income.py (IncomeModel)
     ├─→ portfolio.py (Portfolio)
     ├─→ returns.py (ReturnModel)
+    ├─→ withdrawal.py (WithdrawalModel)
     └─→ optimization.py (GoalSeeker)
             ├─→ goals.py (GoalSet)
-            └─→ AllocationOptimizer (SAAOptimizer)
+            └─→ CVaROptimizer
+
+serialization.py ←→ config.py
+         ↓
+    All modules (to_dict/from_dict)
+
+utils.py ←── All modules
+exceptions.py ←── All modules
 ```
 
 **Design principles:**
@@ -35,6 +54,7 @@ model.py (FinancialModel)
 - **Lazy imports**: Optimization only loaded when needed (TYPE_CHECKING)
 - **Separation of concerns**: Portfolio executes dynamics, doesn't generate returns
 - **Reproducibility**: Explicit seed management with automatic propagation
+- **Convexity**: CVaR reformulation preserves convexity for global optimality
 
 ---
 
@@ -42,65 +62,57 @@ model.py (FinancialModel)
 
 Total monthly income at time $t$ is composed of fixed and variable parts:
 
-
 $$
 Y_t = y_t^{\text{fixed}} + Y_t^{\text{variable}}
 $$
 
+**Note:** Either component can be `None` (at least one required).
+
 ### 1.1 Fixed Income
 
-The fixed component, $y_t^{\text{fixed}}$, reflects baseline salary subject to compounded annual growth $g$ and scheduled raises $\{(d_k, \Delta_k)\}$:
-
+The fixed component reflects baseline salary subject to compounded annual growth $g$ and scheduled raises:
 
 $$
 y_t^{\text{fixed}} = \text{current\_salary}(t) \cdot (1+m)^{\Delta t}
 $$
 
-where $m = (1 + g)^{1/12} - 1$ is the **monthly compounded rate**, and $\Delta t$ represents time since the last raise.
+where $m = (1 + g)^{1/12} - 1$ is the **monthly compounded rate**.
 
 **API:**
 ```python
 fixed = FixedIncome(
-    base=1_400_000,           # Current monthly salary
-    annual_growth=0.03,       # 3% annual raises
-    raises=[(12, 100_000)]    # +100k at month 12
+    base=1_400_000,                    # Current monthly salary
+    annual_growth=0.03,                # 3% annual growth
+    salary_raises={                    # Date-based raises
+        date(2025, 7, 1): 200_000,
+        date(2026, 1, 1): 150_000
+    }
 )
 ```
 
 ### 1.2 Variable Income
 
-The variable component, $Y_t^{\text{variable}}$, models irregular income (freelance, bonuses) with:
+The variable component models irregular income with:
 
 - **Seasonality**: $s \in \mathbb{R}^{12}$ (multiplicative monthly factors)
 - **Noise**: $\epsilon_t \sim \mathcal{N}(0, \sigma^2)$ (Gaussian shocks)
-- **Growth**: same compounded rate $m$ applied to base income
+- **Growth**: compounded rate $m$ applied to base income
 - **Boundaries**: optional floor and cap constraints
-
-The underlying stochastic projection:
-
 
 $$
 \tilde{Y}_t = \max(\text{floor},\ \mu_t (1 + \epsilon_t)), \quad \text{where } \mu_t = \text{base} \cdot (1 + m)^t \cdot s_{(t \bmod 12)}
 $$
 
-Then, guardrails:
-
-
-$$
-Y_t^{\text{variable}} = \begin{cases}
-0 & \text{if } \tilde{Y}_t < 0 \\
-\tilde{Y}_t & \text{if } 0 \leq \tilde{Y}_t \leq \text{cap} \\
-\text{cap} & \text{if } \tilde{Y}_t > \text{cap}
-\end{cases}
-$$
-
 **API:**
 ```python
 variable = VariableIncome(
-    base=200_000,                   # Average monthly variable income
-    sigma=0.10,                     # 10% volatility
-    seasonality=[1.2, 0.8, ...],   # 12-month cycle
-    seed=42                         # Reproducibility
+    base=200_000,
+    sigma=0.15,
+    seasonality=[1.0, 0.95, 1.05, ...],  # 12-month cycle
+    floor=50_000,
+    cap=400_000,
+    annual_growth=0.02,
+    seed=42
 )
 ```
 
@@ -108,49 +120,53 @@ variable = VariableIncome(
 
 A fraction of income is allocated monthly via calendar-rotating schedules:
 
-
 $$
 A_t = \alpha_{(t \bmod 12)}^{f} \cdot y_t^{\text{fixed}} + \alpha_{(t \bmod 12)}^{v} \cdot Y_t^{\text{variable}}
 $$
 
-where $\alpha^f, \alpha^v \in [0,1]^{12}$ control fixed/variable contribution rates, rotated according to `start` date.
+where $\alpha^f, \alpha^v \in [0,1]^{12}$ control fixed/variable contribution rates (default: 30% fixed, 100% variable).
 
-**API:**
+**Vectorized API:**
 ```python
 income = IncomeModel(fixed=fixed, variable=variable)
-A = income.contributions(
-    months=24,
-    start=date(2025, 1, 1),
-    n_sims=500,
-    seed=42
-)  # → (500, 24) array
+income.monthly_contribution = {"fixed": [0.35]*12, "variable": [1.0]*12}
+
+# Single realization
+A = income.contributions(months=24, start=date(2025, 1, 1))
+
+# Monte Carlo (vectorized)
+A = income.contributions(months=24, start=date(2025, 1, 1), n_sims=500, output="array")
+# → shape: (500, 24)
 ```
 
 ---
 
 ## 2. Portfolio Dynamics
 
-### 2.1 Wealth Evolution
+### 2.1 Wealth Evolution with Withdrawals
 
 Multiple accounts $m \in \mathcal{M} = \{1,\dots,M\}$ evolve via:
 
-
 $$
-W_{t+1}^m = \big(W_t^m + A_t x_t^m\big)(1 + R_t^m)
+\boxed{W_{t+1}^m = \big(W_t^m + A_t x_t^m - D_t^m\big)(1 + R_t^m)}
 $$
 
 where:
-- $W_t^m$ = wealth in account $m$ at month $t$
-- $A_t x_t^m$ = allocated contribution ($x_t^m$ fraction of total contribution $A_t$)
+- $W_t^m$ = wealth in account $m$ at start of month $t$
+- $A_t x_t^m$ = allocated contribution ($x_t^m$ fraction of total $A_t$)
+- $D_t^m$ = withdrawal from account $m$ during month $t$
 - $R_t^m$ = stochastic return of account $m$
+
+**Timing convention:** Withdrawal occurs at **start of month** (before returns applied).
 
 **API:**
 ```python
 accounts = [
-    Account.from_annual("Emergency", annual_return=0.04, 
-                        annual_volatility=0.05, initial_wealth=0),
-    Account.from_annual("Housing", annual_return=0.07, 
-                        annual_volatility=0.12, initial_wealth=0)
+    Account.from_annual("Conservador", annual_return=0.06,
+                        annual_volatility=0.08, initial_wealth=1_000_000,
+                        display_name="Fondo Conservador"),
+    Account.from_annual("Agresivo", annual_return=0.12,
+                        annual_volatility=0.15, initial_wealth=500_000)
 ]
 portfolio = Portfolio(accounts)
 ```
@@ -159,80 +175,104 @@ portfolio = Portfolio(accounts)
 
 Contributions allocated via decision variables $x_t^m \in [0,1]$ satisfying:
 
-
 $$
 \sum_{m=1}^M x_t^m = 1, \quad x_t^m \ge 0, \quad \forall t
 $$
 
-The **allocation simplex** at horizon $T$ is:
-
-
-$$
-\mathcal{X}_T = \left\{ X \in \mathbb{R}^{T \times M} : 
-\begin{aligned}
-& x_t^m \ge 0 && \text{(non-negativity)} \\
-& \sum_{m=1}^M x_t^m = 1 && \text{(budget constraint)} \\
-& \forall t = 0, \dots, T-1
-\end{aligned}
-\right\}
-$$
-
-representing all **budget-feasible allocation policies** (full contribution deployment each month).
-
-**Geometric interpretation:** $\mathcal{X}_T$ is the Cartesian product of $T$ probability simplices:
+The **allocation simplex** at horizon $T$:
 
 $$
-\mathcal{X}_T = \underbrace{\Delta^{M-1} \times \cdots \times \Delta^{M-1}}_{T \text{ times}}, \quad \Delta^{M-1} = \left\{x \in \mathbb{R}_+^M : \sum_{m=1}^M x^m = 1\right\}
+\mathcal{X}_T = \left\{ X \in \mathbb{R}^{T \times M} : x_t^m \ge 0,\ \sum_{m=1}^M x_t^m = 1,\ \forall t \right\}
 $$
-
-**API:**
-```python
-X = np.tile([0.6, 0.4], (T, 1))  # 60-40 split ∈ 𝒳_T
-```
 
 ### 2.3 Affine Wealth Representation
 
 Recursive wealth can be expressed in **closed-form**:
 
 $$
-\boxed{
-W_t^m(X) = W_0^m F_{0,t}^m + \sum_{s=0}^{t-1} A_s \, x_s^m \, F_{s,t}^m
-}
+\boxed{W_t^m(X) = W_0^m F_{0,t}^m + \sum_{s=0}^{t-1} \big(A_s x_s^m - D_s^m\big) F_{s,t}^m}
 $$
 
 where the **accumulation factor** from month $s$ to $t$ is:
-
 
 $$
 F_{s,t}^m := \prod_{r=s}^{t-1} (1 + R_r^m)
 $$
 
-**Key properties:**
-1. $W_t^m(X)$ is **affine** in allocation policy $X$ (linearity immediately visible)
-2. Gradient: $\frac{\partial W_t^m}{\partial x_s^m} = A_s F_{s,t}^m$ (analytical!)
-3. Enables gradient-based convex optimization
+**Key insight:** Withdrawals $D$ are **parameters** (not decision variables), so wealth remains **affine in $X$**, preserving convexity for optimization.
 
 **Implementation:**
 ```python
-result = portfolio.simulate(A=A, R=R, X=X, method="affine")
-W = result["wealth"]  # (n_sims, T+1, M)
+result = portfolio.simulate(A=A, R=R, X=X, D=D, method="affine")
+W = result.wealth  # (n_sims, T+1, M)
 ```
 
 ---
 
-## 3. Goals Framework
+## 3. Withdrawal Module
 
-### 3.1 Goal Types
+### 3.1 Withdrawal Types
 
-FinOpt supports two goal primitives:
+**Scheduled Withdrawals** (deterministic):
+```python
+event = WithdrawalEvent(
+    account="Conservador",
+    amount=400_000,
+    date=date(2025, 6, 1),
+    description="Compra bicicleta"
+)
+schedule = WithdrawalSchedule(events=[event, ...])
+```
 
-**Intermediate Goal** (fixed time):
+**Stochastic Withdrawals** (uncertain):
+```python
+stochastic = StochasticWithdrawal(
+    account="Conservador",
+    base_amount=300_000,
+    sigma=50_000,
+    date=date(2025, 9, 1),
+    floor=200_000,
+    cap=500_000,
+    seed=42
+)
+```
+
+**Unified Model:**
+```python
+withdrawals = WithdrawalModel(
+    scheduled=schedule,
+    stochastic=[stochastic]
+)
+
+# Generate withdrawal scenarios
+D = withdrawals.to_array(T=36, start_date=date(2025, 1, 1),
+                         accounts=accounts, n_sims=500, seed=42)
+# → shape: (500, 36, 2)
+```
+
+### 3.2 Withdrawal Feasibility
+
+The optimizer adds CVaR constraints to ensure sufficient wealth:
+
+$$
+\mathbb{P}(W_t^m \geq D_t^m) \geq 1 - \epsilon
+$$
+
+Default: `withdrawal_epsilon=0.05` (95% confidence).
+
+---
+
+## 4. Goals Framework
+
+### 4.1 Goal Types
+
+**Intermediate Goal** (fixed calendar date):
 ```python
 IntermediateGoal(
-    month=12,                    # Or date(2026, 1, 1)
-    account="Emergency",
-    threshold=5_500_000,         # 5.5M CLP
-    confidence=0.90              # 90% probability
+    account="Conservador",
+    threshold=5_500_000,
+    confidence=0.90,
+    date=date(2026, 1, 1)  # Calendar date (not month offset)
 )
 ```
 
@@ -242,12 +282,12 @@ $$
 \mathbb{P}\big(W_{t}^m \ge b\big) \ge 1-\varepsilon
 $$
 
-**Terminal Goal** (variable time):
+**Terminal Goal** (variable horizon):
 ```python
 TerminalGoal(
-    account="Housing",
-    threshold=20_000_000,        # 20M CLP
-    confidence=0.90
+    account="Agresivo",
+    threshold=30_000_000,
+    confidence=0.85
 )
 ```
 
@@ -259,7 +299,7 @@ $$
 
 where $T$ is the optimization horizon (decision variable).
 
-### 3.2 Goal Set
+### 4.2 Goal Set
 
 The **goal set** $\mathcal{G}$ is partitioned into:
 
@@ -267,260 +307,148 @@ $$
 \mathcal{G} = \mathcal{G}_{\text{int}} \cup \mathcal{G}_{\text{term}}
 $$
 
-where:
-- $\mathcal{G}_{\text{int}}$: intermediate goals (constrain $T_{\min}$)
-- $\mathcal{G}_{\text{term}}$: terminal goals (determine $T^*$)
-
 **Properties:**
+1. **Minimum horizon:** $T \geq T_{\min} := \max_{g \in \mathcal{G}_{\text{int}}} t_g$
+2. **Calendar resolution:** Dates → month offsets via `resolve_month(start_date)`
+3. **Account mapping:** Names → indices via `GoalSet`
 
-1. **Minimum horizon constraint:**
-   
-$$
-T \geq T_{\min} := \max_{g \in \mathcal{G}_{\text{int}}} t_g
-$$
-
-2. **Goal resolution:** Month indices resolved via `start` date for calendar alignment
-
-3. **Account mapping:** Names → indices via `account_names` parameter
-
-**API:**
+**Utility functions:**
 ```python
-from datetime import date
+from finopt.goals import check_goals, goal_progress, print_goal_status
 
-goals = [
-    IntermediateGoal(date=date(2026, 1, 1), account="Emergency",
-                    threshold=5_500_000, confidence=0.90),
-    TerminalGoal(account="Housing",
-                threshold=20_000_000, confidence=0.90)
-]
+# Validate goal satisfaction
+metrics = check_goals(result, goals, accounts, start_date)
 
-goal_set = GoalSet(goals, account_names=["Emergency", "Housing"],
-                   start_date=date(2025, 1, 1))
+# Compute VaR-based progress
+progress = goal_progress(result, goals, accounts, start_date)
+
+# Pretty-print status
+print_goal_status(result, goals, accounts, start_date)
 ```
-
-### 3.3 Horizon Estimation Heuristic
-
-For **terminal-only goals** ($\mathcal{G}_{\text{int}} = \emptyset$), naive linear search starts at $T=1$, wasting iterations. Instead, FinOpt uses a **conservative heuristic**:
-
-
-$$
-T_{\text{start}} = \max_{g \in \mathcal{G}_{\text{term}}} \left\lceil \frac{b_g - W_0^m \cdot (1 + \mu)^{T_{\min}}}{A_{\text{avg}} \cdot x_{\min}^m \cdot (1 + \mu - \sigma)} \right\rceil
-$$
-
-where:
-- $A_{\text{avg}}$: average monthly contribution (sampled)
-- $\mu, \sigma$: expected return and volatility of account $m$
-- $x_{\min}^m$: minimum allocation fraction (conservative: 0.1)
-- Safety margin: multiply by 0.8 to start early
-
-**Implementation:** `GoalSet.estimate_minimum_horizon()`
 
 ---
 
-## 4. Optimization Framework
+## 5. Optimization Framework
 
-### 4.1 Bilevel Problem
+### 5.1 Bilevel Problem
 
-Find the **minimum time** $T^*$ to achieve all goals while optimizing an objective $f(X)$:
+Find the **minimum time** $T^*$ to achieve all goals:
 
 $$
-\boxed{
-\min_{T \in \mathbb{N}} \;\; T \quad \text{s.t.} \quad \max_{X \in \mathcal{F}_T} f(X) > -\infty
-}
+\boxed{\min_{T \in \mathbb{N}} \;\; T \quad \text{s.t.} \quad \mathcal{F}_T \neq \emptyset}
 $$
 
 where the **goal-feasible set** at horizon $T$ is:
 
-
 $$
 \mathcal{F}_T := \left\{ X \in \mathcal{X}_T : \begin{aligned}
-& \mathbb{P}\big(W_t^m(X) \ge b_t^m\big) \ge 1-\varepsilon_t^m, \; \forall g \in \mathcal{G}_{\text{int}}, \\
-& \mathbb{P}\big(W_T^m(X) \ge b^m\big) \ge 1-\varepsilon^m, \; \forall g \in \mathcal{G}_{\text{term}}
+& \text{CVaR}_{\varepsilon}(b_t^m - W_t^m(X)) \leq 0, \; \forall g \in \mathcal{G}_{\text{int}} \\
+& \text{CVaR}_{\varepsilon}(b^m - W_T^m(X)) \leq 0, \; \forall g \in \mathcal{G}_{\text{term}} \\
+& \text{CVaR}_{\epsilon_w}(D_t^m - W_t^m(X)) \leq 0, \; \forall \text{withdrawals}
 \end{aligned} \right\}
 $$
 
-**Equivalent decomposition:**
+### 5.2 CVaR Reformulation
 
-- **Outer problem:** Find minimum horizon $T \in [T_{\text{start}}, T_{\max}]$ with non-empty feasible set
-- **Inner problem:** For fixed $T$, solve:
-$$
-\begin{aligned}
-\max_{X \in \mathcal{X}_T} \;\; & f(X) \\[0.5em]
-\text{s.t.} \;\; & X \in \mathcal{F}_T
-\end{aligned}
-$$
+**Challenge:** Chance constraint $\mathbb{P}(W \geq b) \geq 1-\varepsilon$ is non-convex.
 
-### 4.2 Inner Problem (Fixed Horizon)
-
-For given horizon $T$, solve:
-
+**Solution:** CVaR reformulation (Rockafellar & Uryasev 2000):
 
 $$
-\begin{aligned}
-\max_{X \in \mathcal{X}_T} \;\; & f(X) \\[0.5em]
-\text{s.t.} \;\; & \mathbb{P}\big(W_t^m(X) \ge b_t^m\big) \ge 1-\varepsilon_t^m, \quad \forall g \in \mathcal{G}_{\text{int}} \\
-& \mathbb{P}\big(W_T^m(X) \ge b^m\big) \ge 1-\varepsilon^m, \quad \forall g \in \mathcal{G}_{\text{term}}
-\end{aligned}
+\mathbb{P}(W \geq b) \geq 1-\varepsilon \quad \Longleftrightarrow \quad \text{CVaR}_\varepsilon(b - W) \leq 0
 $$
 
-**Objective functions:**
-- `"terminal_wealth"`: $f(X) = \mathbb{E}\big[\sum_m W_T^m(X)\big]$ (default)
-- `"low_turnover"`: $f(X) = \mathbb{E}[W_T] - \lambda \sum_{t,m} |x_{t+1,m} - x_t^m|$
-- `"risk_adjusted"`: $f(X) = \mathbb{E}[W_T] - \lambda \cdot \text{Std}(W_T)$
-- Custom: user-provided callable
-
-### 4.3 Chance Constraint Reformulation
-
-**Challenge:** Indicator function $\mathbb{1}\{W \geq b\}$ is discontinuous.
-
-#### Sample Average Approximation (SAA)
-
-Discrete approximation with $N$ scenarios $\omega^{(i)}$:
-
+**Epigraphic form (LP-compatible):**
 
 $$
-\frac{1}{N}\sum_{i=1}^N \mathbb{1}\{W_t^m(X; \omega^{(i)}) \ge b_t^m\} \ge 1-\varepsilon_t^m
+\gamma + \frac{1}{\varepsilon N}\sum_{i=1}^N z_i \leq 0, \quad z_i \geq b - W^{(i)} - \gamma, \quad z_i \geq 0
 $$
 
-**Issue:** Non-smooth, no gradient.
+**Key property:** Preserves **convexity** because $W(X)$ is affine in $X$.
 
-#### Sigmoid Smoothing (SAAOptimizer)
+### 5.3 CVaROptimizer
 
-Replace indicator with **sigmoid** $\sigma(z) = 1/(1 + e^{-z})$:
-
-
-$$
-\boxed{
-\frac{1}{N} \sum_{i=1}^N \sigma\left(\frac{W_t^m(X; \omega^{(i)}) - b_t^m}{\tau}\right) \ge 1-\varepsilon_t^m
-}
-$$
-
-**Properties:**
-1. **Differentiability**: $\sigma'(z) = \sigma(z)(1 - \sigma(z))$ → analytical gradient
-2. **Approximation quality**: controlled by temperature $\tau$
-   - Small $\tau$ (0.01): $\sigma \approx \mathbb{1}$ (sharp, harder to optimize)
-   - Large $\tau$ (1.0): $\sigma \approx 0.5$ (smooth, loose approximation)
-   - **Balanced** $\tau$ (0.1): trade-off for practical optimization
-3. **Convexity**: smoothed constraint is convex in $X$ (via affine wealth)
-
-**Gradient computation:**
-
-$$
-\frac{\partial}{\partial x_s^m} \left[\frac{1}{N} \sum_{i=1}^N \sigma\left(\frac{W_t^m(X; \omega^{(i)}) - b}{\tau}\right)\right] = \frac{1}{N\tau} \sum_{i=1}^N \sigma'(z^{(i)}) \cdot A_s^{(i)} \cdot F_{s,t}^{m,(i)}
-$$
-
-where $z^{(i)} = (W_t^m(X; \omega^{(i)}) - b)/\tau$.
-
-**API:**
 ```python
-from finopt.src.optimization import SAAOptimizer
+from finopt.optimization import CVaROptimizer
 
-optimizer = SAAOptimizer(
+optimizer = CVaROptimizer(
     n_accounts=2,
-    tau=0.1,                      # Sigmoid temperature
-    objective="terminal_wealth",
-    account_names=["Emergency", "Housing"]
+    objective="balanced",     # "risky", "balanced", "conservative", "risky_turnover"
+    solver="CLARABEL",        # Default solver (or "ECOS", "SCS", "MOSEK")
+    verbose=True
 )
 ```
 
-#### CVaR Reformulation (CVaROptimizer - Stub)
+**Objectives:**
 
-Risk-adjusted objective via **Conditional Value-at-Risk**:
+| Objective | Formula | Type |
+|-----------|---------|------|
+| `"risky"` | $\mathbb{E}[\sum_m W_T^m]$ | LP |
+| `"balanced"` | $-\sum_{t,m}(\Delta x_{t,m})^2$ | QP (turnover penalty) |
+| `"conservative"` | $\mathbb{E}[W_T] - \lambda \cdot \text{Std}(W_T)$ | QP |
+| `"risky_turnover"` | $\mathbb{E}[W_T] - \lambda \sum(\Delta x)^2$ | QP |
 
-
-$$
-\max \; \mathbb{E}[W_T] - \lambda \cdot \text{CVaR}_{ \alpha }(-W_T)
-$$
-
-subject to goal constraints. Requires CVXPY for implementation.
-
-### 4.4 Solution Strategy (GoalSeeker)
-
-**Bilevel solver** with linear search and warm start:
+### 5.4 GoalSeeker (Bilevel Solver)
 
 ```python
-class GoalSeeker:
-    def seek(goals, A_generator, R_generator, W0, ...):
-        # Estimate intelligent starting horizon
-        T_start = estimate_horizon(goals, A_generator, W0)
-        
-        X_prev = None  # Warm start
-        for T in range(T_start, T_max + 1):
-            # Generate scenarios for current horizon
-            A = A_generator(T, n_sims, seed)
-            R = R_generator(T, n_sims, seed+1)
-            
-            # Solve inner problem
-            result = optimizer.solve(T, A, R, W0, goals, X_init=X_prev)
-            
-            # Check feasibility (exact SAA validation)
-            if result.feasible:
-                return result  # Found T*
-            
-            # Warm start: extend X for next iteration
-            X_prev = extend_policy(result.X)
-        
-        raise ValueError("No feasible solution in [T_start, T_max]")
+from finopt.optimization import GoalSeeker
+
+seeker = GoalSeeker(
+    optimizer,
+    T_max=120,
+    search_method="binary",  # or "linear"
+    verbose=True
+)
+
+result = seeker.seek(
+    goals=goals,
+    A_generator=A_gen,
+    R_generator=R_gen,
+    initial_wealth=W0,
+    accounts=accounts,
+    start_date=date(2025, 1, 1),
+    n_sims=500,
+    seed=42,
+    D_generator=D_gen,           # Optional withdrawals
+    withdrawal_epsilon=0.05
+)
 ```
 
-**Key features:**
-1. **Intelligent start**: Skips infeasible horizons via heuristic
-2. **Warm start**: Extends previous $X$ policy for faster convergence
-3. **Exact validation**: Final feasibility check uses non-smoothed SAA
-
-**API:**
-```python
-from finopt.src.optimization import GoalSeeker
-
-seeker = GoalSeeker(optimizer, T_max=240, verbose=True)
-result = seeker.seek(goals, A_generator, R_generator, W0, 
-                    start_date=date(2025,1,1), n_sims=500, seed=42)
-```
+**Search methods:**
+- `"binary"`: Binary search over $[T_{\min}, T_{\max}]$ — faster for large ranges
+- `"linear"`: Linear search from $T_{\min}$ — finds exact minimum
 
 ---
 
-## 5. Integration: FinancialModel
+## 6. Integration: FinancialModel
 
-### 5.1 Unified Facade
-
-`FinancialModel` orchestrates all components:
+### 6.1 Unified Facade
 
 ```python
-from finopt.src.model import FinancialModel
+from finopt.model import FinancialModel
 
 model = FinancialModel(
-    income=income,              # IncomeModel
-    accounts=accounts,          # List[Account]
-    default_correlation=None,   # Return correlation matrix
-    enable_cache=True           # Simulation caching
+    income=income,
+    accounts=accounts,
+    default_correlation=None,  # Return correlation matrix
+    enable_cache=True
 )
 ```
 
-**Attributes:**
-- `model.income`: IncomeModel instance
-- `model.returns`: ReturnModel instance (auto-created)
-- `model.portfolio`: Portfolio instance (auto-created)
-- `model.M`: Number of accounts
-
-### 5.2 Core Methods
+### 6.2 Core Methods
 
 #### Simulation
 ```python
 result = model.simulate(
-    T=24,
-    X=X,                        # (24, 2) allocation policy
+    T=36,
+    X=X,
     n_sims=500,
     seed=42,
     start=date(2025, 1, 1),
-    use_cache=True
+    withdrawals=withdrawals  # Optional WithdrawalModel
 )
-# Returns: SimulationResult with wealth, contributions, returns
+# Returns: SimulationResult
 ```
-
-**Features:**
-- Automatic seed propagation (income: seed, returns: seed+1)
-- SHA256 cache keying for instant re-runs
-- Affine wealth computation for optimization readiness
 
 #### Optimization
 ```python
@@ -531,374 +459,222 @@ result = model.optimize(
     n_sims=500,
     seed=42,
     start=date(2025, 1, 1),
-    verbose=True
+    withdrawals=withdrawals,
+    search_method="binary"
 )
-# Returns: OptimizationResult with X*, T*, feasibility, diagnostics
+# Returns: OptimizationResult
 ```
 
-**Features:**
-- Lazy import of optimization module (TYPE_CHECKING)
-- Duck typing validation of optimizer interface
-- Automatic generator construction for income/returns
-- Extracts `W0` from portfolio automatically
+#### Re-simulation from Optimization
+```python
+sim_result = model.simulate_from_optimization(
+    opt_result,
+    n_sims=1000,
+    seed=999
+)
+```
 
 #### Validation
 ```python
 status = model.verify_goals(result, goals)
-# Returns: dict mapping each goal to violation metrics
 ```
 
-**Features:**
-- Handles both `SimulationResult` and `OptimizationResult`
-- Auto-converts `OptimizationResult` → `SimulationResult` (500 fresh scenarios)
-- Computes empirical violation rates
+### 6.3 Seed Propagation
 
-#### Visualization
-```python
-model.plot("wealth", T=24, X=X, n_sims=500, seed=42, 
-          start=date(2025,1,1))
-```
-
-**Modes:**
-- Pre-simulation: `"income"`, `"contributions"`, `"returns"`
-- Simulation-based: `"wealth"`, `"comparison"`
-
-### 5.3 Workflow Example
-
-```python
-# 1. Setup
-income = IncomeModel(
-    fixed=FixedIncome(base=1_400_000, annual_growth=0.03),
-    variable=VariableIncome(base=200_000, sigma=0.10)
-)
-accounts = [
-    Account.from_annual("Emergency", 0.04, 0.05),
-    Account.from_annual("Housing", 0.07, 0.12)
-]
-model = FinancialModel(income, accounts)
-
-# 2. Define goals
-goals = [
-    IntermediateGoal(date=date(2026, 1, 1), account="Emergency",
-                    threshold=5_500_000, confidence=0.90),
-    TerminalGoal(account="Housing",
-                threshold=20_000_000, confidence=0.90)
-]
-
-# 3. Optimize
-optimizer = SAAOptimizer(n_accounts=2, tau=0.1)
-opt_result = model.optimize(goals, optimizer, T_max=120, seed=42)
-
-print(f"Optimal horizon: T*={opt_result.T} months")
-print(f"Feasible: {opt_result.feasible}")
-
-# 4. Validate with fresh scenarios
-sim_result = model.simulate_from_optimization(opt_result, n_sims=1000, seed=999)
-status = model.verify_goals(sim_result, goals)
-
-for goal, metrics in status.items():
-    print(f"{goal}: {metrics['satisfied']} "
-          f"(violation rate: {metrics['violation_rate']:.2%})")
-
-# 5. Visualize
-model.plot("wealth", result=sim_result, show_trajectories=True)
-```
-
----
-
-## 6. Implementation Details
-
-### 6.1 Calendar Alignment
-
-All projections use `start: date` parameter:
-- Seasonality rotates via offset $= (\text{start.month} - 1)$
-- Salary raises applied at specific dates relative to start
-- Contribution fractions rotate cyclically to match fiscal year
-- Temporal index: `month_index(start, T)` → DatetimeIndex
-
-### 6.2 Seed Management
-
-**Reproducibility architecture:**
 ```
 User seed
     ├─→ Income: seed
-    └─→ Returns: seed + 1
+    ├─→ Returns: seed + 1
+    └─→ Withdrawals: seed + 2
 ```
 
-**Rationale:** Statistical independence between income and return shocks.
+**Rationale:** Statistical independence between income, return, and withdrawal shocks.
 
-**Implementation:**
+---
+
+## 7. Serialization
+
+### 7.1 Model Persistence
+
 ```python
-A = income.contributions(months=T, seed=seed)
-R = returns.generate(T, seed=None if seed is None else seed + 1)
+from finopt.serialization import save_model, load_model
+from pathlib import Path
+
+# Save
+save_model(model, Path("config.json"))
+
+# Load
+model = load_model(Path("config.json"))
 ```
 
-### 6.3 Memory Management
+### 7.2 Scenario Persistence
 
-**Accumulation factors:** $F \in \mathbb{R}^{N \times (T+1) \times (T+1) \times M}$
-
-Memory usage: $N \cdot T^2 \cdot M \cdot 8$ bytes
-
-**Estimates:**
-- $N=500, T=24, M=2$: ~115 MB
-- $N=500, T=120, M=5$: ~14 GB ⚠️
-- $N=1000, T=240, M=10$: ~221 GB (infeasible)
-
-**Mitigation strategies:**
-- Use `method="recursive"` for large $T$ (no $F$ precomputation)
-- Process simulations in batches (chunk $N$)
-- Compute gradients on-the-fly (store only needed $F_{s,t}$ pairs)
-- Use sparse storage for intermediate-goal-only problems
-
-### 6.4 Output Formats
-
-All methods support flexible output:
-- `output="array"`: NumPy arrays (computational efficiency)
-- `output="series"`: Pandas Series with calendar index (reporting)
-- `output="dataframe"`: Component breakdown (analysis)
-
-### 6.5 Type Safety
-
-**Lazy imports for optimization:**
 ```python
-from typing import TYPE_CHECKING
+from finopt.serialization import save_scenario, load_scenario
 
-if TYPE_CHECKING:
-    from .optimization import AllocationOptimizer, OptimizationResult
-```
+save_scenario(
+    scenario_name="Plan de Retiro",
+    goals=goals,
+    path=Path("scenarios/retirement.json"),
+    model=model,
+    withdrawals=withdrawals,
+    start_date=date(2025, 1, 1),
+    n_sims=1000,
+    seed=42,
+    T_max=120
+)
 
-**Runtime validation:**
-```python
-# Duck typing (no import needed at runtime)
-if not hasattr(optimizer, 'solve') or not callable(optimizer.solve):
-    raise TypeError("optimizer must implement .solve() method")
+scenario = load_scenario(Path("scenarios/retirement.json"))
 ```
 
 ---
 
-## 7. Key Mathematical Results
-
-**Proposition 1 (Affine Wealth):**  
-For any allocation policy $X \in \mathcal{X}_T$ and return realization $\{R_t^m\}$:
-$$
-W_t^m(X) = W_0^m F_{0,t}^m + \sum_{s=0}^{t-1} A_s x_s^m F_{s,t}^m
-$$
-is affine in $X$.
-
-**Corollary 1 (Convex Feasible Set):**  
-For deterministic constraints $W_t^m(X) \ge b_t^m$, the feasible allocation set is a convex polytope.
-
-**Proposition 2 (Analytical Gradient):**  
-The sensitivity of wealth to allocation at month $s$ is:
-$$
-\frac{\partial W_t^m}{\partial x_s^m} = A_s F_{s,t}^m, \quad s < t
-$$
-
-**Corollary 2 (Monotonicity):**  
-If $F_{s,t}^m > 0$ (positive returns), then $W_t^m(X)$ is strictly increasing in $x_s^m$.
-
-**Proposition 3 (Sigmoid Approximation Error):**  
-For temperature $\tau > 0$:
-$$
-\left|\sigma\left(\frac{z}{\tau}\right) - \mathbb{1}\{z \geq 0\}\right| \le \frac{1}{2}
-$$
-with error decaying exponentially in $|z|/\tau$.
-
-**Proposition 4 (SAA Consistency):**  
-Under mild regularity conditions, as $N \to \infty$:
-$$
-\frac{1}{N}\sum_{i=1}^N \mathbb{1}\{W_t^m(X; \omega^{(i)}) \ge b\} \xrightarrow{a.s.} \mathbb{P}(W_t^m(X) \ge b)
-$$
-
----
-
-## 8. Usage Examples
-
-### 8.1 Basic Simulation
+## 8. Complete Workflow Example
 
 ```python
 from datetime import date
-from finopt.src.income import FixedIncome, VariableIncome, IncomeModel
-from finopt.src.portfolio import Account
-from finopt.src.model import FinancialModel
-import numpy as np
+from finopt.model import FinancialModel
+from finopt.income import FixedIncome, VariableIncome, IncomeModel
+from finopt.portfolio import Account
+from finopt.goals import IntermediateGoal, TerminalGoal
+from finopt.withdrawal import WithdrawalModel, WithdrawalSchedule, WithdrawalEvent
+from finopt.optimization import CVaROptimizer
 
-# Setup
+# 1. Define income
 income = IncomeModel(
     fixed=FixedIncome(base=1_400_000, annual_growth=0.03),
-    variable=VariableIncome(base=200_000, sigma=0.10, seed=42)
+    variable=VariableIncome(base=200_000, sigma=0.15, seed=42)
 )
+
+# 2. Define accounts
 accounts = [
-    Account.from_annual("Emergency", 0.04, 0.05),
-    Account.from_annual("Housing", 0.07, 0.12)
+    Account.from_annual("Conservador", 0.06, 0.08, initial_wealth=1_000_000),
+    Account.from_annual("Agresivo", 0.12, 0.15, initial_wealth=500_000)
 ]
+
+# 3. Define withdrawals
+withdrawals = WithdrawalModel(
+    scheduled=WithdrawalSchedule([
+        WithdrawalEvent("Conservador", 5_000_000, date(2027, 1, 1), "Pie departamento")
+    ])
+)
+
+# 4. Define goals
+goals = [
+    IntermediateGoal(account="Conservador", threshold=8_000_000,
+                     confidence=0.90, date=date(2026, 6, 1)),
+    TerminalGoal(account="Agresivo", threshold=30_000_000, confidence=0.85)
+]
+
+# 5. Create model
 model = FinancialModel(income, accounts)
 
-# Simulate with 60-40 allocation
-X = np.tile([0.6, 0.4], (24, 1))
-result = model.simulate(T=24, X=X, n_sims=500, seed=42,
-                       start=date(2025, 1, 1))
-
-# Analyze
-print(result.summary(confidence=0.95))
-metrics = result.metrics(account="Emergency")
-print(f"Mean Sharpe: {metrics['sharpe'].mean():.3f}")
-```
-
-### 8.2 Goal-Driven Optimization
-
-```python
-from finopt.src.optimization import SAAOptimizer
-from finopt.src.goals import IntermediateGoal, TerminalGoal
-
-# Define goals
-goals = [
-    IntermediateGoal(
-        month=12, 
-        account="Emergency",
-        threshold=5_500_000,
-        confidence=0.90
-    ),
-    TerminalGoal(
-        account="Housing",
-        threshold=20_000_000,
-        confidence=0.90
-    )
-]
-
-# Create optimizer
-optimizer = SAAOptimizer(
-    n_accounts=model.M,
-    tau=0.1,
-    objective="terminal_wealth"
-)
-
-# Optimize
-result = model.optimize(
+# 6. Optimize
+optimizer = CVaROptimizer(n_accounts=2, objective="balanced")
+opt_result = model.optimize(
     goals=goals,
     optimizer=optimizer,
     T_max=120,
     n_sims=500,
     seed=42,
     start=date(2025, 1, 1),
-    verbose=True
+    withdrawals=withdrawals,
+    search_method="binary"
 )
 
-print(f"Optimal horizon: T*={result.T} months")
-print(f"Feasible: {result.feasible}")
-print(result.summary())
-```
+print(f"Optimal horizon: T*={opt_result.T} months")
+print(f"Feasible: {opt_result.feasible}")
 
-### 8.3 Multi-Goal Validation
-
-```python
-# Simulate with optimal policy (fresh scenarios)
-sim_result = model.simulate_from_optimization(
-    result, 
-    n_sims=1000, 
-    seed=999
-)
-
-# Verify goal satisfaction
+# 7. Validate with fresh scenarios
+sim_result = model.simulate_from_optimization(opt_result, n_sims=1000, seed=999)
 status = model.verify_goals(sim_result, goals)
 
-for goal, metrics in status.items():
-    print(f"\nGoal: {goal}")
-    print(f"  Satisfied: {metrics['satisfied']}")
-    print(f"  Violation rate: {metrics['violation_rate']:.2%}")
-    print(f"  Required rate: {metrics['required_rate']:.2%}")
-    print(f"  Margin: {metrics['margin']:.4f}")
-    if not metrics['satisfied']:
-        print(f"  Median shortfall: ${metrics['median_shortfall']:,.0f}")
-```
-
-### 8.4 Strategy Comparison
-
-```python
-# Define multiple strategies
-X_conservative = np.tile([0.9, 0.1], (24, 1))  # 90% emergency
-X_balanced = np.tile([0.6, 0.4], (24, 1))      # 60-40
-X_aggressive = np.tile([0.3, 0.7], (24, 1))    # 30% emergency
-
-# Simulate each
-r1 = model.simulate(T=24, X=X_conservative, n_sims=500, seed=42)
-r2 = model.simulate(T=24, X=X_balanced, n_sims=500, seed=42)
-r3 = model.simulate(T=24, X=X_aggressive, n_sims=500, seed=42)
-
-# Compare
-model.plot("comparison", results={
-    "Conservative": r1,
-    "Balanced": r2,
-    "Aggressive": r3
-})
+# 8. Visualize
+model.plot("wealth", result=sim_result, goals=goals,
+           start=date(2025, 1, 1), show_trajectories=True)
 ```
 
 ---
 
-## 9. Extensions and Future Work
+## 9. Key Mathematical Results
 
-### 9.1 Implemented Features
+**Proposition 1 (Affine Wealth):**
+For any allocation policy $X \in \mathcal{X}_T$:
 
-✅ **Multi-account portfolios** with correlated returns  
-✅ **Intermediate and terminal goals** with chance constraints  
-✅ **Sigmoid-smoothed SAA** for gradient-based optimization  
-✅ **Intelligent horizon estimation** for terminal-only goals  
-✅ **Warm start** for faster bilevel convergence  
-✅ **Affine wealth** for analytical gradients  
-✅ **Calendar alignment** for seasonality and raises  
-✅ **Seed propagation** for reproducibility  
+$$
+W_t^m(X) = W_0^m F_{0,t}^m + \sum_{s=0}^{t-1} (A_s x_s^m - D_s^m) F_{s,t}^m
+$$
 
-### 9.2 Potential Extensions
+is affine in $X$ (withdrawals $D$ are parameters).
 
-**Optimization:**
-- 🔄 **CVaR implementation** (CVXPY-based, convex formulation)
-- 🔄 **Robust optimization** (worst-case performance over scenarios)
-- 🔄 **Multi-period rebalancing** (time-varying $x_t^m$ with turnover penalty)
-- 🔄 **Dynamic programming** (Bellman recursion for complex constraints)
+**Proposition 2 (CVaR Convexity):**
+The constraint $\text{CVaR}_\varepsilon(b - W(X)) \leq 0$ is convex in $X$ when $W(X)$ is affine.
 
-**Portfolio features:**
-- 🔄 **Transaction costs** ($\kappa \|\Delta x_t\|_1$ friction terms)
-- 🔄 **Tax-aware optimization** (capital gains, withdrawal timing)
-- 🔄 **Minimum balance constraints** ($W_t^m \geq W_{\min}^m$)
-- 🔄 **Leverage constraints** (short-selling, margin limits)
+**Proposition 3 (Analytical Gradient):**
 
-**Income modeling:**
-- 🔄 **Multi-source income** (multiple jobs, rental, dividends)
-- 🔄 **Income shocks** (unemployment, health events)
-- 🔄 **Non-Gaussian noise** (fat tails, asymmetry)
+$$
+\frac{\partial W_t^m}{\partial x_s^m} = A_s F_{s,t}^m, \quad s < t
+$$
 
-**Risk management:**
-- 🔄 **Downside protection** (VaR/CVaR constraints)
-- 🔄 **Path-dependent goals** (average wealth, peak wealth)
-- 🔄 **Correlation uncertainty** (robust correlation estimation)
-
-**Performance:**
-- 🔄 **GPU acceleration** (CuPy for large-scale Monte Carlo)
-- 🔄 **Sparse factorization** (memory-efficient $F$ storage)
-- 🔄 **Parallel simulation** (multi-process scenario generation)
+**Proposition 4 (Global Optimality):**
+CVaR reformulation with affine wealth yields a convex program → global optimum guaranteed.
 
 ---
 
-## 10. References and Resources
+## 10. Implementation Details
 
-### Mathematical Foundations
-- Rockafellar & Uryasev (2000), "Optimization of conditional value-at-risk"
-- Luedtke & Ahmed (2008), "A sample approximation approach for optimization with probabilistic constraints"
-- Nemirovski & Shapiro (2006), "Convex approximations of chance constrained programs"
+### 10.1 Wealth Array Indexing
 
-### Implementation
-- GitHub: `github.com/maxliionel/finopt`
-- Documentation: Full API docs in module docstrings
-- Tests: Comprehensive unit and integration tests
+Shape: `(n_sims, T+1, M)` using **start-of-period** semantics:
+- `wealth[i, 0, m]` = $W_0^m$ (initial wealth)
+- `wealth[i, t, m]` = $W_t^m$ (wealth at start of period $t$)
+- `wealth[i, T, m]` = terminal wealth
 
-### Related Tools
-- CVXPY: Convex optimization modeling language
-- Scipy: Scientific computing (optimize.minimize with SLSQP)
-- NumPy/Pandas: Numerical computing and data analysis
+### 10.2 Month Resolution
+
+Goals and withdrawals use **1-indexed** months:
+- `resolve_month(date(2025, 6, 1), start=date(2025, 1, 1))` → 6
+- Array index = month - 1 = 5
+
+### 10.3 Memory Management
+
+Accumulation factors: $F \in \mathbb{R}^{N \times (T+1) \times (T+1) \times M}$
+
+**Estimates:**
+- $N=500, T=24, M=2$: ~115 MB
+- $N=500, T=120, M=5$: ~14 GB
+
+**Mitigation:**
+- Use `method="recursive"` for large $T$
+- Process in batches
 
 ---
 
-**End of Framework Document**
+## 11. Extensions and Future Work
+
+### Implemented
+- Multi-account portfolios with correlated returns
+- Intermediate and terminal goals with CVaR constraints
+- Withdrawal support (scheduled + stochastic)
+- Binary/linear search for horizon optimization
+- Calendar alignment for seasonality
+- Seed propagation for reproducibility
+- JSON serialization for persistence
+
+### Roadmap
+- AR(1) temporal dependence in returns
+- Transaction costs
+- Tax-aware optimization
+- GPU acceleration
+- Multi-period rebalancing
+
+---
+
+## References
+
+- **CVaR reformulation**: Rockafellar & Uryasev (2000), "Optimization of Conditional Value-at-Risk"
+- **Affine wealth dynamics**: Standard MPC technique exploiting linearity
+- **Bilevel optimization**: Outer search + inner convex program
 
 ---
 
@@ -907,25 +683,37 @@ model.plot("comparison", results={
 ### Class Hierarchy
 ```
 IncomeModel
-    ├─ FixedIncome
-    └─ VariableIncome
+    ├─ FixedIncome (frozen dataclass)
+    └─ VariableIncome (frozen dataclass)
 
 Portfolio
     └─ Account
 
-ReturnModel (uses Account metadata)
+ReturnModel
+
+WithdrawalModel
+    ├─ WithdrawalSchedule
+    │   └─ WithdrawalEvent (frozen dataclass)
+    └─ StochasticWithdrawal (frozen dataclass)
+
+GoalSet
+    ├─ IntermediateGoal (frozen dataclass)
+    └─ TerminalGoal (frozen dataclass)
+
+CVaROptimizer
+GoalSeeker
 
 FinancialModel (facade)
-    ├─ income: IncomeModel
-    ├─ portfolio: Portfolio
-    └─ returns: ReturnModel
 
-AllocationOptimizer (abstract)
-    ├─ SAAOptimizer (sigmoid-smoothed)
-    └─ CVaROptimizer (stub)
-
-GoalSeeker (bilevel solver)
-    └─ optimizer: AllocationOptimizer
+Exceptions:
+    FinOptError
+    ├─ ConfigurationError
+    ├─ ValidationError
+    │   ├─ TimeIndexError
+    │   └─ AllocationConstraintError
+    ├─ OptimizationError
+    │   └─ InfeasibleError
+    └─ MemoryLimitError
 ```
 
 ### Key Type Signatures
@@ -933,46 +721,28 @@ GoalSeeker (bilevel solver)
 # Simulation
 SimulationResult = model.simulate(
     T: int,
-    X: np.ndarray,  # (T, M)
+    X: np.ndarray,           # (T, M)
     n_sims: int,
     seed: Optional[int],
-    start: Optional[date]
-) -> SimulationResult
+    start: Optional[date],
+    withdrawals: Optional[WithdrawalModel]
+)
 
 # Optimization
 OptimizationResult = model.optimize(
-    goals: List[Union[IntermediateGoal, TerminalGoal]],
-    optimizer: AllocationOptimizer,
+    goals: List[IntermediateGoal | TerminalGoal],
+    optimizer: CVaROptimizer,
     T_max: int,
     n_sims: int,
     seed: Optional[int],
-    start: Optional[date]
-) -> OptimizationResult
+    start: Optional[date],
+    withdrawals: Optional[WithdrawalModel],
+    search_method: Literal["binary", "linear"]
+)
 
 # Validation
 Dict[Goal, Dict[str, float]] = model.verify_goals(
-    result: Union[SimulationResult, OptimizationResult],
-    goals: List[Union[IntermediateGoal, TerminalGoal]],
-    start: Optional[date]
+    result: SimulationResult | OptimizationResult,
+    goals: List[IntermediateGoal | TerminalGoal]
 )
-```
-
-### Common Patterns
-```python
-# Pattern 1: Simulation-only workflow
-model = FinancialModel(income, accounts)
-X = define_allocation_policy(T, M)
-result = model.simulate(T, X, n_sims=500, seed=42)
-model.plot("wealth", result=result)
-
-# Pattern 2: Optimization workflow
-goals = define_goals()
-optimizer = SAAOptimizer(n_accounts=M, tau=0.1)
-opt_result = model.optimize(goals, optimizer, T_max=120, seed=42)
-sim_result = model.simulate_from_optimization(opt_result, n_sims=1000)
-status = model.verify_goals(sim_result, goals)
-
-# Pattern 3: Comparison workflow
-results = {name: model.simulate(T, X_i, ...) for name, X_i in strategies.items()}
-model.plot("comparison", results=results)
 ```
