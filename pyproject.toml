@@ -126,6 +126,9 @@ filterwarnings = [
 # Coverage configuration
 [tool.coverage.run]
 source = ["src"]
+branch = true
+parallel = false
+data_file = ".coverage"
 omit = [
     "*/tests/*",
     "*/__init__.py",
