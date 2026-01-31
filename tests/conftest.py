@@ -5,12 +5,27 @@ This module provides reusable fixtures for testing all FinOpt components.
 Fixtures follow the principle of "arrange-act-assert" with clear separation.
 """
 
+import sqlite3
 from datetime import date
+from pathlib import Path
 from typing import List
 
 import numpy as np
 import pandas as pd
 import pytest
+
+
+def pytest_configure(config):
+    """Clean up corrupted coverage file before test session."""
+    coverage_file = Path(".coverage")
+    if coverage_file.exists():
+        try:
+            conn = sqlite3.connect(str(coverage_file))
+            conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            conn.close()
+        except sqlite3.DatabaseError:
+            coverage_file.unlink()
+            print("Removed corrupted .coverage file")
 
 from src.income import FixedIncome, VariableIncome, IncomeModel
 from src.portfolio import Account, Portfolio
