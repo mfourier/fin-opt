@@ -3,6 +3,10 @@ site_description: Intelligent financial planning through stochastic simulation a
 site_author: mfourier
 site_url: https://mfourier.github.io/fin-opt/
 
+repo_url: https://github.com/mfourier/fin-opt
+repo_name: mfourier/fin-opt
+edit_uri: edit/main/docs/
+
 theme:
   name: material
   custom_dir: docs/overrides
@@ -23,14 +27,28 @@ theme:
         icon: material/brightness-4
         name: Switch to light mode
   features:
+    - navigation.instant
+    - navigation.tracking
     - navigation.tabs
     - navigation.sections
     - navigation.expand
     - navigation.top
+    - navigation.indexes
+    - toc.follow
     - search.suggest
     - search.highlight
     - content.code.copy
     - content.code.annotate
+    - content.tabs.link
+
+plugins:
+  - search:
+      lang: en
+  - git-revision-date-localized:
+      enable_creation_date: true
+      type: date
+  - minify:
+      minify_html: true
 
 markdown_extensions:
   - admonition
@@ -51,22 +69,36 @@ markdown_extensions:
   - pymdownx.keys
   - pymdownx.tabbed:
       alternate_style: true
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
 
 extra_javascript:
   - javascripts/mathjax.js
   - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
 
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/mfourier/fin-opt
+
 nav:
   - Home: index.md
-  - Framework: framework.md
-  - Income Model: income.md
-  - Portfolio Dynamics: portfolio.md
-  - Stochastic Returns: returns.md
-  - Scheduled Withdrawals: withdrawal.md
-  - Goals Framework: goals.md
-  - Optimization: optimization.md
-  - Integration Model: model.md
-  - Advanced:
+  - Getting Started:
+      - Quick Start: quickstart.md
+  - Core Concepts:
+      - Framework: framework.md
+      - Income Model: income.md
+      - Portfolio Dynamics: portfolio.md
+      - Stochastic Returns: returns.md
+  - Goals & Optimization:
+      - Goals Framework: goals.md
+      - Optimization: optimization.md
+      - Scheduled Withdrawals: withdrawal.md
+  - Reference:
+      - Integration Model: model.md
       - Exceptions: exceptions.md
       - Serialization: serialization.md
       - Utilities: utils.md
