@@ -2,50 +2,54 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://mfourier.github.io/fin-opt/</loc>
-         <lastmod>2026-01-30</lastmod>
+         <lastmod>2026-01-31</lastmod>
     </url>
     <url>
          <loc>https://mfourier.github.io/fin-opt/exceptions/</loc>
-         <lastmod>2026-01-30</lastmod>
+         <lastmod>2026-01-31</lastmod>
     </url>
     <url>
          <loc>https://mfourier.github.io/fin-opt/framework/</loc>
-         <lastmod>2026-01-30</lastmod>
+         <lastmod>2026-01-31</lastmod>
     </url>
     <url>
          <loc>https://mfourier.github.io/fin-opt/goals/</loc>
-         <lastmod>2026-01-30</lastmod>
+         <lastmod>2026-01-31</lastmod>
     </url>
     <url>
          <loc>https://mfourier.github.io/fin-opt/income/</loc>
-         <lastmod>2026-01-30</lastmod>
+         <lastmod>2026-01-31</lastmod>
     </url>
     <url>
          <loc>https://mfourier.github.io/fin-opt/model/</loc>
-         <lastmod>2026-01-30</lastmod>
+         <lastmod>2026-01-31</lastmod>
     </url>
     <url>
          <loc>https://mfourier.github.io/fin-opt/optimization/</loc>
-         <lastmod>2026-01-30</lastmod>
+         <lastmod>2026-01-31</lastmod>
     </url>
     <url>
          <loc>https://mfourier.github.io/fin-opt/portfolio/</loc>
-         <lastmod>2026-01-30</lastmod>
+         <lastmod>2026-01-31</lastmod>
+    </url>
+    <url>
+         <loc>https://mfourier.github.io/fin-opt/quickstart/</loc>
+         <lastmod>2026-01-31</lastmod>
     </url>
     <url>
          <loc>https://mfourier.github.io/fin-opt/returns/</loc>
-         <lastmod>2026-01-30</lastmod>
+         <lastmod>2026-01-31</lastmod>
     </url>
     <url>
          <loc>https://mfourier.github.io/fin-opt/serialization/</loc>
-         <lastmod>2026-01-30</lastmod>
+         <lastmod>2026-01-31</lastmod>
     </url>
     <url>
          <loc>https://mfourier.github.io/fin-opt/utils/</loc>
-         <lastmod>2026-01-30</lastmod>
+         <lastmod>2026-01-31</lastmod>
     </url>
     <url>
          <loc>https://mfourier.github.io/fin-opt/withdrawal/</loc>
-         <lastmod>2026-01-30</lastmod>
+         <lastmod>2026-01-31</lastmod>
     </url>
 </urlset>
