@@ -484,6 +484,8 @@ class StochasticWithdrawal:
         Maximum withdrawal amount (truncation upper bound). None = no cap.
     seed : int, optional
         Random seed for reproducibility.
+    description : str, optional
+        Human-readable description (e.g., "Gastos médicos variables").
 
     Notes
     -----
@@ -516,6 +518,7 @@ class StochasticWithdrawal:
     floor: float = 0.0
     cap: Optional[float] = None
     seed: Optional[int] = None
+    description: str = ""
 
     def __post_init__(self):
         """Validate stochastic withdrawal parameters."""
@@ -610,9 +613,10 @@ class StochasticWithdrawal:
     def __repr__(self) -> str:
         """Readable representation."""
         timing = f"month={self.month}" if self.month is not None else f"date={self.date.isoformat()}"
+        desc = f", {self.description!r}" if self.description else ""
         return (
             f"StochasticWithdrawal(account={self.account!r}, "
-            f"base={self.base_amount:,.0f}, sigma={self.sigma:,.0f}, {timing})"
+            f"base={self.base_amount:,.0f}, sigma={self.sigma:,.0f}, {timing}{desc})"
         )
 
 
@@ -788,7 +792,8 @@ class WithdrawalModel:
                     month=month,  # 1-indexed
                     floor=withdrawal.floor,
                     cap=withdrawal.cap,
-                    seed=effective_seed
+                    seed=effective_seed,
+                    description=withdrawal.description
                 )
                 samples = temp_withdrawal.sample(n_sims, start_date)
 
@@ -883,7 +888,8 @@ class WithdrawalModel:
                     "date": w.date.isoformat() if w.date is not None else None,
                     "floor": w.floor,
                     "cap": w.cap,
-                    "seed": w.seed
+                    "seed": w.seed,
+                    "description": w.description
                 }
                 for w in self.stochastic
             ]
@@ -921,7 +927,8 @@ class WithdrawalModel:
                     date=date.fromisoformat(w["date"]) if w.get("date") else None,
                     floor=float(w.get("floor", 0.0)),
                     cap=float(w["cap"]) if w.get("cap") is not None else None,
-                    seed=w.get("seed")
+                    seed=w.get("seed"),
+                    description=w.get("description", "")
                 ))
 
         return cls(scheduled=scheduled, stochastic=stochastic)

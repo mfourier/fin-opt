@@ -417,6 +417,31 @@ class TestStochasticWithdrawal:
         )
         assert withdrawal.resolve_month(start_date) == 9  # September = month 9 (1-indexed)
 
+    def test_description_field(self):
+        """Test that description field works like WithdrawalEvent."""
+        withdrawal = StochasticWithdrawal(
+            account="Conservador",
+            base_amount=300_000,
+            sigma=50_000,
+            month=6,
+            description="Gastos médicos variables"
+        )
+        assert withdrawal.description == "Gastos médicos variables"
+
+    def test_repr_with_description(self):
+        """Test string representation includes description."""
+        withdrawal = StochasticWithdrawal(
+            account="Conservador",
+            base_amount=300_000,
+            sigma=50_000,
+            month=6,
+            description="Gastos médicos"
+        )
+        repr_str = repr(withdrawal)
+        assert "StochasticWithdrawal" in repr_str
+        assert "300,000" in repr_str
+        assert "Gastos médicos" in repr_str
+
 
 # ---------------------------------------------------------------------------
 # WithdrawalModel Tests
@@ -526,27 +551,29 @@ class TestWithdrawalModel:
                     date=date(2025, 9, 1),
                     floor=200_000,
                     cap=400_000,
-                    seed=42
+                    seed=42,
+                    description="Gastos médicos variables"
                 )
             ]
         )
-        
+
         # Serialize
         payload = model.to_dict()
-        
+
         # Deserialize
         restored = WithdrawalModel.from_dict(payload)
-        
+
         # Verify scheduled
         assert len(restored.scheduled.events) == 1
         assert restored.scheduled.events[0].amount == 400_000
-        
+
         # Verify stochastic
         assert len(restored.stochastic) == 1
         assert restored.stochastic[0].base_amount == 300_000
         assert restored.stochastic[0].sigma == 50_000
         assert restored.stochastic[0].floor == 200_000
         assert restored.stochastic[0].cap == 400_000
+        assert restored.stochastic[0].description == "Gastos médicos variables"
 
 
 # ---------------------------------------------------------------------------
