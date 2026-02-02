@@ -7,8 +7,8 @@ Tests ReturnModel class for correlated lognormal return generation.
 import pytest
 import numpy as np
 
-from src.portfolio import Account
-from src.returns import ReturnModel
+from finopt.portfolio import Account
+from finopt.returns import ReturnModel
 
 
 # ============================================================================
@@ -655,14 +655,14 @@ class TestReturnModelGenerateValidation:
 
     def test_T_must_be_positive(self, return_model):
         """Test generate raises for T <= 0."""
-        from src.exceptions import ValidationError
+        from finopt.exceptions import ValidationError
 
         with pytest.raises(ValidationError, match="T must be positive"):
             return_model.generate(T=0, n_sims=100, seed=42)
 
     def test_T_negative_raises(self, return_model):
         """Test generate raises for negative T."""
-        from src.exceptions import ValidationError
+        from finopt.exceptions import ValidationError
 
         with pytest.raises(ValidationError, match="T must be positive"):
             return_model.generate(T=-5, n_sims=100, seed=42)

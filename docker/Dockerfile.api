@@ -1,0 +1,70 @@
+# ============================================================================
+# FinOpt API Dockerfile
+# Multi-stage build for smaller production image
+# ============================================================================
+
+# ---------------------------------------------------------------------------
+# Stage 1: Build stage
+# ---------------------------------------------------------------------------
+FROM python:3.11-slim as builder
+
+WORKDIR /app
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    g++ \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create virtual environment
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Install Python dependencies
+COPY pyproject.toml .
+COPY src/ ./src/
+
+# Install the package with web dependencies
+RUN pip install --upgrade pip && \
+    pip install -e ".[web]"
+
+# ---------------------------------------------------------------------------
+# Stage 2: Production stage
+# ---------------------------------------------------------------------------
+FROM python:3.11-slim as production
+
+WORKDIR /app
+
+# Install runtime dependencies only
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy virtual environment from builder
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Copy application code
+COPY src/ ./src/
+COPY api/ ./api/
+COPY pyproject.toml .
+
+# Create non-root user for security
+RUN useradd --create-home --shell /bin/bash appuser
+USER appuser
+
+# Environment variables
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV ENVIRONMENT=production
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+
+# Start command
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]

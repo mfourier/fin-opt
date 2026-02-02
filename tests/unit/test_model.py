@@ -9,12 +9,12 @@ import numpy as np
 import pandas as pd
 from datetime import date
 
-from src.income import IncomeModel, FixedIncome, VariableIncome
-from src.portfolio import Account
-from src.model import FinancialModel, SimulationResult
-from src.goals import TerminalGoal, IntermediateGoal
-from src.optimization import CVaROptimizer, OptimizationResult
-from src.withdrawal import WithdrawalModel, WithdrawalSchedule, WithdrawalEvent
+from finopt.income import IncomeModel, FixedIncome, VariableIncome
+from finopt.portfolio import Account
+from finopt.model import FinancialModel, SimulationResult
+from finopt.goals import TerminalGoal, IntermediateGoal
+from finopt.optimization import CVaROptimizer, OptimizationResult
+from finopt.withdrawal import WithdrawalModel, WithdrawalSchedule, WithdrawalEvent
 
 
 # ============================================================================

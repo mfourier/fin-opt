@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from datetime import date
 
-from src.income import (
+from finopt.income import (
     FixedIncome,
     VariableIncome,
     IncomeModel,

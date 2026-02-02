@@ -1,0 +1,52 @@
+# Docker Compose for local development
+# Usage: docker-compose up
+#
+# Note: You still need a Supabase project (local or cloud)
+# For local Supabase: https://supabase.com/docs/guides/self-hosting/docker
+
+version: '3.8'
+
+services:
+  # -------------------------------------------------------------------------
+  # FinOpt API Service
+  # -------------------------------------------------------------------------
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=development
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:5173
+      - LOG_LEVEL=DEBUG
+      - DEBUG=true
+    volumes:
+      # Mount source code for hot reload in development
+      - ./src:/app/src:ro
+      - ./api:/app/api:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # -------------------------------------------------------------------------
+  # Frontend (uncomment when ready)
+  # -------------------------------------------------------------------------
+  # web:
+  #   build:
+  #     context: .
+  #     dockerfile: docker/Dockerfile.web
+  #   ports:
+  #     - "3000:80"
+  #   environment:
+  #     - VITE_SUPABASE_URL=${SUPABASE_URL}
+  #     - VITE_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+  #     - VITE_API_URL=http://localhost:8000
+  #   depends_on:
+  #     - api

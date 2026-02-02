@@ -9,10 +9,10 @@ import pytest
 import numpy as np
 from datetime import date
 
-from src.income import IncomeModel, FixedIncome, VariableIncome
-from src.portfolio import Account, Portfolio
-from src.model import FinancialModel
-from src.goals import IntermediateGoal, TerminalGoal, GoalSet
+from finopt.income import IncomeModel, FixedIncome, VariableIncome
+from finopt.portfolio import Account, Portfolio
+from finopt.model import FinancialModel
+from finopt.goals import IntermediateGoal, TerminalGoal, GoalSet
 
 
 @pytest.mark.integration
@@ -111,7 +111,7 @@ class TestOptimizationIntegration:
     def test_cvar_optimizer_solve(self):
         """Test CVaROptimizer solve with simple scenario."""
         try:
-            from src.optimization import CVaROptimizer
+            from finopt.optimization import CVaROptimizer
 
             accounts = [
                 Account.from_annual("Conservative", 0.04, 0.05),

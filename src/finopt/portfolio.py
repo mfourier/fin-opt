@@ -93,7 +93,7 @@ from matplotlib.ticker import FuncFormatter
 
 from .utils import check_non_negative, annual_to_monthly, monthly_to_annual, millions_formatter
 from .exceptions import AllocationConstraintError
-from .types import ReturnStrategyDict, AnnualParamsDict, SimulationResultDict
+from .finopt_types import ReturnStrategyDict, AnnualParamsDict, SimulationResultDict
 
 __all__ = [
     "Account",

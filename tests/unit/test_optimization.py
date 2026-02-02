@@ -9,12 +9,12 @@ import numpy as np
 from datetime import date
 from unittest.mock import Mock, patch
 
-from src.portfolio import Account, Portfolio
-from src.goals import IntermediateGoal, TerminalGoal, GoalSet
-from src.optimization import OptimizationResult, CVaROptimizer, GoalSeeker, AllocationOptimizer
-from src.exceptions import InfeasibleError
-from src.income import FixedIncome, IncomeModel
-from src.model import FinancialModel
+from finopt.portfolio import Account, Portfolio
+from finopt.goals import IntermediateGoal, TerminalGoal, GoalSet
+from finopt.optimization import OptimizationResult, CVaROptimizer, GoalSeeker, AllocationOptimizer
+from finopt.exceptions import InfeasibleError
+from finopt.income import FixedIncome, IncomeModel
+from finopt.model import FinancialModel
 
 
 # ============================================================================

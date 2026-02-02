@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from datetime import date
 
-from src.utils import (
+from finopt.utils import (
     check_non_negative,
     annual_to_monthly,
     monthly_to_annual,

@@ -1,0 +1,83 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.egg-info
+.eggs
+dist
+build
+*.egg
+.venv
+venv
+env
+.env
+
+# Testing
+.pytest_cache
+.coverage
+htmlcov
+.tox
+coverage.xml
+*.cover
+.hypothesis
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Documentation
+docs
+site
+*.md
+!README.md
+
+# Notebooks
+notebooks
+*.ipynb
+.ipynb_checkpoints
+
+# Data files
+data
+*.csv
+*.xlsx
+*.pkl
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Cache
+.cache
+*.log
+.mypy_cache
+.ruff_cache
+
+# Local config
+.env.local
+.env.*.local
+
+# Docker
+docker-compose*.yml
+Dockerfile*
+
+# Render config (not needed in container)
+render.yaml
+
+# Tests (not needed in production)
+tests
+
+# Examples and scenarios
+examples
+scenarios
+profiles
+
+# Frontend (built separately)
+web

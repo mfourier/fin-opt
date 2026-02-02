@@ -7,7 +7,7 @@ Tests validation, defaults, and serialization of configuration classes.
 import pytest
 from pathlib import Path
 
-from src.config import (
+from finopt.config import (
     SimulationConfig,
     OptimizationConfig,
     FixedIncomeConfig,

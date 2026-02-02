@@ -27,10 +27,10 @@ def pytest_configure(config):
             coverage_file.unlink()
             print("Removed corrupted .coverage file")
 
-from src.income import FixedIncome, VariableIncome, IncomeModel
-from src.portfolio import Account, Portfolio
-from src.returns import ReturnModel
-from src.goals import IntermediateGoal, TerminalGoal
+from finopt.income import FixedIncome, VariableIncome, IncomeModel
+from finopt.portfolio import Account, Portfolio
+from finopt.returns import ReturnModel
+from finopt.goals import IntermediateGoal, TerminalGoal
 
 
 # ---------------------------------------------------------------------------
@@ -352,3 +352,126 @@ def assert_simplex():
             f"Row sums not equal to 1: {row_sums}"
 
     return _assert
+
+
+# ---------------------------------------------------------------------------
+# API Testing Fixtures
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def mock_env_vars(monkeypatch):
+    """
+    Configure environment variables for API testing.
+    
+    Sets required Supabase credentials and clears settings cache
+    to ensure tests use fresh configuration.
+    """
+    monkeypatch.setenv("SUPABASE_URL", "https://test.supabase.co")
+    monkeypatch.setenv("SUPABASE_ANON_KEY", "test-anon-key")
+    monkeypatch.setenv("SUPABASE_SERVICE_KEY", "test-service-key")
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    monkeypatch.setenv("CORS_ORIGINS_STR", "http://localhost:3000,http://localhost:5173")
+    
+    # Clear settings cache to force reload with test env vars
+    from api.config import get_settings
+    get_settings.cache_clear()
+    
+    yield
+    
+    # Clean up cache after test
+    get_settings.cache_clear()
+
+
+@pytest.fixture
+def sample_profile_data():
+    """
+    Sample profile data matching Supabase schema.
+    
+    Includes income configuration, accounts, and optional correlation matrix.
+    """
+    return {
+        "income_config": {
+            "fixed": {
+                "base": 1_500_000,
+                "annual_growth": 0.03,
+            },
+            "variable": {
+                "base": 200_000,
+                "sigma": 0.10,
+                "seasonality": None,
+                "floor": None,
+                "cap": None,
+                "seed": 42,
+            },
+            "contribution_rate_fixed": 0.3,
+            "contribution_rate_variable": 1.0,
+        },
+        "accounts_config": [
+            {
+                "name": "Conservative",
+                "annual_return": 0.04,
+                "annual_volatility": 0.05,
+                "initial_wealth": 0,
+            },
+            {
+                "name": "Aggressive",
+                "annual_return": 0.10,
+                "annual_volatility": 0.15,
+                "initial_wealth": 0,
+            },
+        ],
+        "correlation_matrix": None,
+    }
+
+
+@pytest.fixture
+def sample_scenario_data(sample_profile_data):
+    """
+    Sample scenario data with embedded profile.
+    
+    Matches the structure returned by Supabase with JOIN on profiles table.
+    """
+    return {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "profile_id": "660e8400-e29b-41d4-a716-446655440000",
+        "profiles": sample_profile_data,
+        "name": "Test Scenario",
+        "description": "Test scenario for API testing",
+        "intermediate_goals": [
+            {
+                "account": "Conservative",
+                "threshold": 5_000_000,
+                "confidence": 0.8,
+                "date": "2025-07-01",
+            }
+        ],
+        "terminal_goals": [
+            {
+                "account": "Aggressive",
+                "threshold": 30_000_000,
+                "confidence": 0.8,
+            }
+        ],
+        "withdrawals": None,
+        "start_date": "2025-01-01",
+        "n_sims": 500,
+        "seed": 42,
+        "t_max": 240,
+        "t_min": 12,
+        "solver": "ECOS",
+        "objective": "balanced",
+    }
+
+
+@pytest.fixture
+def fastapi_test_client(mock_env_vars):
+    """
+    FastAPI TestClient for testing API endpoints.
+    
+    Uses mock environment variables and provides isolated test client.
+    Does not require a running server.
+    """
+    from fastapi.testclient import TestClient
+    from api.main import app
+    
+    return TestClient(app)

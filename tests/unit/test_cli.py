@@ -9,7 +9,7 @@ import pytest
 from pathlib import Path
 from click.testing import CliRunner
 
-from src.cli import main, __version__
+from finopt.cli import main, __version__
 
 
 # ============================================================================

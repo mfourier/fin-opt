@@ -18,9 +18,9 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-from src.income import IncomeModel, FixedIncome, VariableIncome
-from src.portfolio import Account
-from src.model import FinancialModel, SimulationResult
+from finopt.income import IncomeModel, FixedIncome, VariableIncome
+from finopt.portfolio import Account
+from finopt.model import FinancialModel, SimulationResult
 
 
 # ============================================================================

@@ -60,7 +60,7 @@ import pandas as pd
 from matplotlib.ticker import FuncFormatter
 
 from .exceptions import ValidationError
-from .types import MonthlyContributionDict, PlotColorsDict
+from .finopt_types import MonthlyContributionDict, PlotColorsDict
 # Reuse common utilities
 from .utils import (
     check_non_negative,

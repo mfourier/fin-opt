@@ -12,13 +12,13 @@ import pytest
 import numpy as np
 from datetime import date
 
-from src.withdrawal import (
+from finopt.withdrawal import (
     WithdrawalEvent,
     WithdrawalSchedule,
     StochasticWithdrawal,
     WithdrawalModel
 )
-from src.portfolio import Account
+from finopt.portfolio import Account
 
 
 # ---------------------------------------------------------------------------
@@ -559,8 +559,8 @@ class TestFinancialModelWithdrawalIntegration:
     @pytest.fixture
     def financial_model(self):
         """Create a FinancialModel for integration tests."""
-        from src.income import IncomeModel, FixedIncome
-        from src.model import FinancialModel
+        from finopt.income import IncomeModel, FixedIncome
+        from finopt.model import FinancialModel
 
         income = IncomeModel(
             fixed=FixedIncome(base=500_000, annual_growth=0.0)
@@ -728,8 +728,8 @@ class TestPortfolioWithdrawalIntegration:
 
     def test_portfolio_simulate_with_D_deterministic(self, accounts, start_date):
         """Test Portfolio.simulate() with deterministic D array."""
-        from src.portfolio import Portfolio
-        from src.returns import ReturnModel
+        from finopt.portfolio import Portfolio
+        from finopt.returns import ReturnModel
 
         portfolio = Portfolio(accounts)
         returns = ReturnModel(accounts)
@@ -754,8 +754,8 @@ class TestPortfolioWithdrawalIntegration:
 
     def test_portfolio_simulate_with_D_stochastic(self, accounts, start_date):
         """Test Portfolio.simulate() with stochastic D array."""
-        from src.portfolio import Portfolio
-        from src.returns import ReturnModel
+        from finopt.portfolio import Portfolio
+        from finopt.returns import ReturnModel
 
         portfolio = Portfolio(accounts)
         returns = ReturnModel(accounts)

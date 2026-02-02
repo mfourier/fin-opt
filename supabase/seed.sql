@@ -1,0 +1,52 @@
+-- ============================================================================
+-- FinOpt Seed Data
+-- Example data for development and testing
+-- NOTE: Run this AFTER creating a test user in Supabase Auth
+-- Replace 'YOUR_TEST_USER_UUID' with actual user ID
+-- ============================================================================
+
+-- Example profile (you need to replace user_id with a real auth.users id)
+-- INSERT INTO profiles (user_id, name, description, income_config, accounts_config, correlation_matrix)
+-- VALUES (
+--     'YOUR_TEST_USER_UUID'::uuid,
+--     'Example Profile',
+--     'A sample investment profile for testing',
+--     '{
+--         "fixed": {
+--             "base": 1500000,
+--             "annual_growth": 0.03,
+--             "salary_raises": null
+--         },
+--         "variable": {
+--             "base": 200000,
+--             "sigma": 0.15,
+--             "annual_growth": 0.02,
+--             "seasonality": null,
+--             "floor": 0,
+--             "cap": null
+--         },
+--         "contribution_rate_fixed": 0.3,
+--         "contribution_rate_variable": 1.0
+--     }'::jsonb,
+--     '[
+--         {
+--             "name": "Emergency",
+--             "annual_return": 0.04,
+--             "annual_volatility": 0.05,
+--             "initial_wealth": 1000000
+--         },
+--         {
+--             "name": "Retirement",
+--             "annual_return": 0.10,
+--             "annual_volatility": 0.12,
+--             "initial_wealth": 5000000
+--         }
+--     ]'::jsonb,
+--     '[[1.0, 0.3], [0.3, 1.0]]'::jsonb
+-- );
+
+-- To create test data:
+-- 1. Create a user in Supabase Auth (Dashboard > Authentication > Users)
+-- 2. Copy the user's UUID
+-- 3. Uncomment the INSERT above and replace YOUR_TEST_USER_UUID
+-- 4. Run this file in Supabase SQL Editor

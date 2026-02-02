@@ -93,7 +93,7 @@ from .serialization import (
 from . import utils
 
 # Type definitions
-from .types import (
+from .finopt_types import (
     ReturnStrategyDict,
     AnnualParamsDict,
     MonthlyContributionDict,

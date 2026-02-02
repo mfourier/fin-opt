@@ -1,0 +1,83 @@
+# Render Blueprint
+# Deploy with: Connect GitHub repo to Render and select "Blueprint"
+# https://render.com/docs/blueprint-spec
+
+services:
+  # -------------------------------------------------------------------------
+  # Python API Service (Compute)
+  # -------------------------------------------------------------------------
+  - type: web
+    name: finopt-api
+    runtime: python
+    region: oregon  # or your preferred region
+
+    # Build configuration
+    buildCommand: |
+      pip install --upgrade pip
+      pip install -e ".[web]"
+
+    # Start command
+    startCommand: uvicorn api.main:app --host 0.0.0.0 --port $PORT
+
+    # Health check
+    healthCheckPath: /health
+
+    # Environment variables (set values in Render dashboard)
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: SUPABASE_URL
+        sync: false  # Set manually in dashboard
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false  # Set to your frontend URL
+      - key: LOG_LEVEL
+        value: INFO
+      - key: PYTHON_VERSION
+        value: "3.11"
+
+    # Auto-scaling (adjust based on needs)
+    plan: starter  # free, starter, standard, pro
+    numInstances: 1
+
+    # Auto-deploy on push to main
+    autoDeploy: true
+    branch: main
+
+  # -------------------------------------------------------------------------
+  # React Frontend (Static Site)
+  # Uncomment when frontend is ready
+  # -------------------------------------------------------------------------
+  # - type: web
+  #   name: finopt-web
+  #   runtime: static
+  #   region: oregon
+  #
+  #   # Build configuration
+  #   buildCommand: cd web && npm ci && npm run build
+  #   staticPublishPath: web/dist
+  #
+  #   # Environment variables for build
+  #   envVars:
+  #     - key: VITE_SUPABASE_URL
+  #       sync: false
+  #     - key: VITE_SUPABASE_ANON_KEY
+  #       sync: false
+  #     - key: VITE_API_URL
+  #       fromService:
+  #         type: web
+  #         name: finopt-api
+  #         property: host
+  #
+  #   # Routing for SPA
+  #   routes:
+  #     - type: rewrite
+  #       source: /*
+  #       destination: /index.html
+  #
+  #   plan: starter
+  #   autoDeploy: true
+  #   branch: main

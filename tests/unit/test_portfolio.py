@@ -8,7 +8,7 @@ import pytest
 import numpy as np
 from datetime import date
 
-from src.portfolio import Account, Portfolio
+from finopt.portfolio import Account, Portfolio
 
 
 # ============================================================================

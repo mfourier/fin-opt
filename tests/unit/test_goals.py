@@ -8,8 +8,8 @@ import pytest
 import numpy as np
 from datetime import date
 
-from src.portfolio import Account
-from src.goals import IntermediateGoal, TerminalGoal, GoalSet
+from finopt.portfolio import Account
+from finopt.goals import IntermediateGoal, TerminalGoal, GoalSet
 
 
 # ============================================================================

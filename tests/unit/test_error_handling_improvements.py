@@ -2,11 +2,11 @@
 import pytest
 import numpy as np
 from datetime import date
-from src.exceptions import ValidationError, AllocationConstraintError, ConfigurationError, InfeasibleError
-from src.returns import ReturnModel
-from src.income import FixedIncome
-from src.portfolio import Account, Portfolio, AllocationConstraintError as PortfolioAllocError
-from src.optimization import GoalSeeker
+from finopt.exceptions import ValidationError, AllocationConstraintError, ConfigurationError, InfeasibleError
+from finopt.returns import ReturnModel
+from finopt.income import FixedIncome
+from finopt.portfolio import Account, Portfolio, AllocationConstraintError as PortfolioAllocError
+from finopt.optimization import GoalSeeker
 
 # Note: AllocationConstraintError might be imported from portfolio if it exposes it,
 # or directly from exceptions. The plan said implement in portfolio.py to raise it.

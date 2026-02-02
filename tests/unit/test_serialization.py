@@ -12,12 +12,12 @@ from pathlib import Path
 from datetime import date
 import tempfile
 
-from src.income import IncomeModel, FixedIncome, VariableIncome
-from src.portfolio import Account
-from src.model import FinancialModel
-from src.goals import IntermediateGoal, TerminalGoal
-from src.withdrawal import WithdrawalModel, WithdrawalSchedule, WithdrawalEvent, StochasticWithdrawal
-from src.serialization import (
+from finopt.income import IncomeModel, FixedIncome, VariableIncome
+from finopt.portfolio import Account
+from finopt.model import FinancialModel
+from finopt.goals import IntermediateGoal, TerminalGoal
+from finopt.withdrawal import WithdrawalModel, WithdrawalSchedule, WithdrawalEvent, StochasticWithdrawal
+from finopt.serialization import (
     SCHEMA_VERSION,
     account_to_dict,
     account_from_dict,
@@ -851,8 +851,8 @@ class TestOptimizationResultSerialization:
     @pytest.fixture
     def mock_optimization_result(self):
         """Create a mock optimization result."""
-        from src.optimization import OptimizationResult
-        from src.goals import GoalSet
+        from finopt.optimization import OptimizationResult
+        from finopt.goals import GoalSet
 
         accounts = [
             Account.from_annual("Conservative", 0.04, 0.05),
