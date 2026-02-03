@@ -114,7 +114,7 @@ export default function ScenariosPage() {
       t_max: 120,
       solver: 'ECOS',
       objective: 'balanced',
-      terminal_goals: [{ account: 0, threshold: 50000000, confidence: 0.80 }],
+      terminal_goals: [{ account: 'Conservative', threshold: 50000000, confidence: 0.80 }],
       intermediate_goals: [],
     })
   }
@@ -271,13 +271,13 @@ export default function ScenariosPage() {
                       <div>
                         <label className="block text-sm text-gray-600">Account</label>
                         <select
-                          value={goal.account as number}
-                          onChange={(e) => updateTerminalGoal(index, 'account', Number(e.target.value))}
+                          value={goal.account as string}
+                          onChange={(e) => updateTerminalGoal(index, 'account', e.target.value)}
                           className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                         >
-                          {selectedProfile?.accounts_config.map((acc, i) => (
-                            <option key={i} value={i}>{acc.name}</option>
-                          )) ?? <option value={0}>Account 0</option>}
+                          {selectedProfile?.accounts_config.map((acc) => (
+                            <option key={acc.name} value={acc.name}>{acc.name}</option>
+                          )) ?? <option value="Conservative">Conservative</option>}
                         </select>
                       </div>
                       <div>
