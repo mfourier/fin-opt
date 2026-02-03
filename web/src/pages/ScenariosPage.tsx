@@ -170,7 +170,16 @@ export default function ScenariosPage() {
                   <label className="block text-sm font-medium text-gray-700">Profile</label>
                   <select
                     value={formData.profile_id}
-                    onChange={(e) => setFormData({ ...formData, profile_id: e.target.value })}
+                    onChange={(e) => {
+                      const profileId = e.target.value
+                      const profile = profiles?.find(p => p.id === profileId)
+                      const firstAccountName = profile?.accounts_config[0]?.name ?? 'Account'
+                      setFormData({
+                        ...formData,
+                        profile_id: profileId,
+                        terminal_goals: [{ account: firstAccountName, threshold: 50000000, confidence: 0.80 }],
+                      })
+                    }}
                     required
                     className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                   >
