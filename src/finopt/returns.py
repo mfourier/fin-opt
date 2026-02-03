@@ -29,6 +29,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
+from datetime import date
 
 from .exceptions import ValidationError
 from .portfolio import Account

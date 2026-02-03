@@ -158,21 +158,23 @@ export default function ResultsPage() {
                   <div key={index} className="flex items-center justify-between py-3">
                     <div>
                       <p className="font-medium text-gray-900">
-                        {goal.goal_type} - {goal.account}
+                        {goal.type} - {goal.account}
                       </p>
                       <p className="text-sm text-gray-500">
-                        Target: ${goal.threshold.toLocaleString()} at {(goal.confidence * 100).toFixed(0)}% confidence
+                        Target: ${goal.threshold.toLocaleString()} at {(goal.required_confidence * 100).toFixed(0)}% confidence
                       </p>
                     </div>
                     <div className="text-right">
                       <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                        goal.achieved ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        goal.satisfied ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                       }`}>
-                        {goal.achieved ? 'Achieved' : 'Not Met'}
+                        {goal.satisfied ? 'Achieved' : 'Not Met'}
                       </span>
-                      <p className="mt-1 text-sm text-gray-500">
-                        Actual: {(goal.actual_probability * 100).toFixed(1)}%
-                      </p>
+                      {goal.actual_probability !== undefined && (
+                        <p className="mt-1 text-sm text-gray-500">
+                          Actual: {(goal.actual_probability * 100).toFixed(1)}%
+                        </p>
+                      )}
                     </div>
                   </div>
                 ))}
