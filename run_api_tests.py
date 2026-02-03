@@ -26,7 +26,7 @@ def run_tests():
         print('=' * 70)
         
         result = subprocess.run(
-            ["pytest", test_file, "-v", "--tb=short"],
+            ["pytest", test_file, "-v", "--tb=short", "--no-cov"],
             capture_output=True,
             text=True
         )

@@ -49,35 +49,34 @@ services:
 
   # -------------------------------------------------------------------------
   # React Frontend (Static Site)
-  # Uncomment when frontend is ready
   # -------------------------------------------------------------------------
-  # - type: web
-  #   name: finopt-web
-  #   runtime: static
-  #   region: oregon
-  #
-  #   # Build configuration
-  #   buildCommand: cd web && npm ci && npm run build
-  #   staticPublishPath: web/dist
-  #
-  #   # Environment variables for build
-  #   envVars:
-  #     - key: VITE_SUPABASE_URL
-  #       sync: false
-  #     - key: VITE_SUPABASE_ANON_KEY
-  #       sync: false
-  #     - key: VITE_API_URL
-  #       fromService:
-  #         type: web
-  #         name: finopt-api
-  #         property: host
-  #
-  #   # Routing for SPA
-  #   routes:
-  #     - type: rewrite
-  #       source: /*
-  #       destination: /index.html
-  #
-  #   plan: starter
-  #   autoDeploy: true
-  #   branch: main
+  - type: web
+    name: finopt-web
+    runtime: static
+    region: oregon
+
+    # Build configuration
+    buildCommand: cd web && npm ci && npm run build
+    staticPublishPath: web/dist
+
+    # Environment variables for build
+    envVars:
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: finopt-api
+          property: host
+
+    # Routing for SPA
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+    plan: starter
+    autoDeploy: true
+    branch: main
