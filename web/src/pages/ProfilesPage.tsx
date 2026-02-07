@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
+import { useToast } from '../components/Toast'
 import type {
   Profile,
   ProfileInsert,
@@ -33,6 +34,7 @@ const defaultAccounts: AccountConfig[] = [
 export default function ProfilesPage() {
   const queryClient = useQueryClient()
   const user = useAuthStore((state) => state.user)
+  const toast = useToast()
   const [showForm, setShowForm] = useState(false)
   const [editingProfile, setEditingProfile] = useState<Profile | null>(null)
 
@@ -40,9 +42,13 @@ export default function ProfilesPage() {
   const [showVariableIncome, setShowVariableIncome] = useState(false)
   const [showSeasonality, setShowSeasonality] = useState(false)
   const [showAdvancedContributions, setShowAdvancedContributions] = useState(false)
+  const [showCorrelationMatrix, setShowCorrelationMatrix] = useState(false)
 
   // Salary raises management
   const [salaryRaises, setSalaryRaises] = useState<SalaryRaise[]>([])
+
+  // Correlation matrix (NxN where N = number of accounts)
+  const [correlationMatrix, setCorrelationMatrix] = useState<number[][] | null>(null)
 
   const [formData, setFormData] = useState({
     name: '',
@@ -77,6 +83,10 @@ export default function ProfilesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profiles'] })
       resetForm()
+      toast.success('Profile created', 'Your profile has been created successfully.')
+    },
+    onError: (error: Error) => {
+      toast.error('Failed to create profile', error.message)
     },
   })
 
@@ -94,6 +104,10 @@ export default function ProfilesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profiles'] })
       resetForm()
+      toast.success('Profile updated', 'Your changes have been saved.')
+    },
+    onError: (error: Error) => {
+      toast.error('Failed to update profile', error.message)
     },
   })
 
@@ -104,6 +118,10 @@ export default function ProfilesPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profiles'] })
+      toast.success('Profile deleted', 'The profile has been removed.')
+    },
+    onError: (error: Error) => {
+      toast.error('Failed to delete profile', error.message)
     },
   })
 
@@ -113,7 +131,9 @@ export default function ProfilesPage() {
     setShowVariableIncome(false)
     setShowSeasonality(false)
     setShowAdvancedContributions(false)
+    setShowCorrelationMatrix(false)
     setSalaryRaises([])
+    setCorrelationMatrix(null)
     setFormData({
       name: '',
       description: '',
@@ -143,6 +163,10 @@ export default function ProfilesPage() {
       Array.isArray(profile.income_config.contribution_rate_fixed) ||
       Array.isArray(profile.income_config.contribution_rate_variable)
     setShowAdvancedContributions(hasArrayContributions)
+
+    // Load correlation matrix
+    setCorrelationMatrix(profile.correlation_matrix)
+    setShowCorrelationMatrix(profile.correlation_matrix !== null)
 
     setFormData({
       name: profile.name,
@@ -185,13 +209,16 @@ export default function ProfilesPage() {
       income_config: incomeConfig,
     }
 
+    // Build correlation matrix if enabled
+    const finalCorrelationMatrix = showCorrelationMatrix ? correlationMatrix : null
+
     if (editingProfile) {
-      updateMutation.mutate({ id: editingProfile.id, ...finalFormData })
+      updateMutation.mutate({ id: editingProfile.id, ...finalFormData, correlation_matrix: finalCorrelationMatrix })
     } else {
       createMutation.mutate({
         user_id: user!.id,
         ...finalFormData,
-        correlation_matrix: null,
+        correlation_matrix: finalCorrelationMatrix,
       })
     }
   }
@@ -349,6 +376,52 @@ export default function ProfilesPage() {
       ...formData,
       accounts_config: formData.accounts_config.filter((_, i) => i !== index),
     })
+  }
+
+  // Correlation matrix helpers
+  const initializeCorrelationMatrix = () => {
+    const n = formData.accounts_config.length
+    // Create identity matrix (all correlations = 0 except diagonal = 1)
+    const matrix: number[][] = []
+    for (let i = 0; i < n; i++) {
+      matrix[i] = []
+      for (let j = 0; j < n; j++) {
+        matrix[i][j] = i === j ? 1.0 : 0.0
+      }
+    }
+    setCorrelationMatrix(matrix)
+    setShowCorrelationMatrix(true)
+  }
+
+  const updateCorrelation = (i: number, j: number, value: number) => {
+    if (!correlationMatrix) return
+    // Clamp value to valid correlation range
+    const clampedValue = Math.max(-1, Math.min(1, value))
+    const newMatrix = correlationMatrix.map(row => [...row])
+    // Symmetric matrix: update both (i,j) and (j,i)
+    newMatrix[i][j] = clampedValue
+    newMatrix[j][i] = clampedValue
+    setCorrelationMatrix(newMatrix)
+  }
+
+  // Get correlation pairs for display (upper triangle only, excluding diagonal)
+  const getCorrelationPairs = () => {
+    const pairs: { i: number; j: number; name1: string; name2: string; value: number }[] = []
+    const accounts = formData.accounts_config
+    if (!correlationMatrix || correlationMatrix.length !== accounts.length) return pairs
+
+    for (let i = 0; i < accounts.length; i++) {
+      for (let j = i + 1; j < accounts.length; j++) {
+        pairs.push({
+          i,
+          j,
+          name1: accounts[i].display_name || accounts[i].name,
+          name2: accounts[j].display_name || accounts[j].name,
+          value: correlationMatrix[i][j],
+        })
+      }
+    }
+    return pairs
   }
 
   return (
@@ -768,6 +841,78 @@ export default function ProfilesPage() {
                   ))}
                 </div>
               </div>
+
+              {/* Correlation Matrix */}
+              {formData.accounts_config.length >= 2 && (
+                <div className="rounded-lg border border-gray-200 p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-medium text-gray-900">Account Correlations</h3>
+                      <p className="text-xs text-gray-500">Define return correlations between accounts (optional)</p>
+                    </div>
+                    {!showCorrelationMatrix ? (
+                      <button
+                        type="button"
+                        onClick={initializeCorrelationMatrix}
+                        className="text-sm text-primary-600 hover:text-primary-500"
+                      >
+                        + Enable
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowCorrelationMatrix(false)
+                          setCorrelationMatrix(null)
+                        }}
+                        className="text-sm text-red-600 hover:text-red-500"
+                      >
+                        Disable
+                      </button>
+                    )}
+                  </div>
+
+                  {showCorrelationMatrix && correlationMatrix && (
+                    <div className="mt-4 space-y-3">
+                      {getCorrelationPairs().length === 0 ? (
+                        <p className="text-sm text-gray-500">Add at least 2 accounts to configure correlations.</p>
+                      ) : (
+                        getCorrelationPairs().map(({ i, j, name1, name2, value }) => (
+                          <div key={`${i}-${j}`} className="flex items-center gap-4">
+                            <span className="w-48 text-sm text-gray-700">
+                              {name1} ↔ {name2}
+                            </span>
+                            <input
+                              type="range"
+                              min="-1"
+                              max="1"
+                              step="0.05"
+                              value={value}
+                              onChange={(e) => updateCorrelation(i, j, Number(e.target.value))}
+                              className="h-2 w-32 cursor-pointer appearance-none rounded-lg bg-gray-200"
+                            />
+                            <input
+                              type="number"
+                              min="-1"
+                              max="1"
+                              step="0.05"
+                              value={value}
+                              onChange={(e) => updateCorrelation(i, j, Number(e.target.value))}
+                              className="w-20 rounded-md border border-gray-300 px-2 py-1 text-sm"
+                            />
+                            <span className="text-xs text-gray-400">
+                              {value > 0.5 ? '(high +)' : value < -0.5 ? '(high -)' : value === 0 ? '(independent)' : ''}
+                            </span>
+                          </div>
+                        ))
+                      )}
+                      <p className="text-xs text-gray-500">
+                        -1 = perfectly inverse, 0 = independent, +1 = perfectly correlated
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Form Actions */}
               <div className="flex justify-end gap-3">

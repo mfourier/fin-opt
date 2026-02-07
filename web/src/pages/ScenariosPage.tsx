@@ -4,6 +4,9 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
 import { queueOptimization } from '../lib/api'
+import { validateScenario, getFieldError, type ValidationError } from '../lib/validation'
+import { ValidationSummary } from '../components/FormField'
+import { useToast } from '../components/Toast'
 import type {
   Profile,
   Scenario,
@@ -55,6 +58,7 @@ export default function ScenariosPage() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const user = useAuthStore((state) => state.user)
+  const toast = useToast()
   const [showForm, setShowForm] = useState(false)
   const [editingScenario, setEditingScenario] = useState<Scenario | null>(null)
 
@@ -63,6 +67,7 @@ export default function ScenariosPage() {
   const [showIntermediateGoals, setShowIntermediateGoals] = useState(false)
 
   const [formData, setFormData] = useState<FormData>(getDefaultFormData())
+  const [validationErrors, setValidationErrors] = useState<ValidationError[]>([])
 
   const { data: profiles } = useQuery({
     queryKey: ['profiles'],
@@ -96,6 +101,10 @@ export default function ScenariosPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['scenarios'] })
       resetForm()
+      toast.success('Scenario created', 'Your scenario has been created successfully.')
+    },
+    onError: (error: Error) => {
+      toast.error('Failed to create scenario', error.message)
     },
   })
 
@@ -113,6 +122,10 @@ export default function ScenariosPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['scenarios'] })
       resetForm()
+      toast.success('Scenario updated', 'Your changes have been saved.')
+    },
+    onError: (error: Error) => {
+      toast.error('Failed to update scenario', error.message)
     },
   })
 
@@ -123,6 +136,10 @@ export default function ScenariosPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['scenarios'] })
+      toast.success('Scenario deleted', 'The scenario has been removed.')
+    },
+    onError: (error: Error) => {
+      toast.error('Failed to delete scenario', error.message)
     },
   })
 
@@ -139,7 +156,7 @@ export default function ScenariosPage() {
       .single()
 
     if (jobError) {
-      alert('Failed to create job: ' + jobError.message)
+      toast.error('Failed to create job', jobError.message)
       return
     }
 
@@ -149,9 +166,10 @@ export default function ScenariosPage() {
         job_id: job.id,
       })
       queryClient.invalidateQueries({ queryKey: ['recent-jobs'] })
+      toast.info('Optimization started', 'Redirecting to results page...')
       navigate(`/results/${job.id}`)
     } catch (err) {
-      alert('Failed to queue optimization: ' + (err instanceof Error ? err.message : 'Unknown error'))
+      toast.error('Failed to queue optimization', err instanceof Error ? err.message : 'Unknown error')
     }
   }
 
@@ -161,6 +179,7 @@ export default function ScenariosPage() {
     setShowWithdrawals(false)
     setShowIntermediateGoals(false)
     setFormData(getDefaultFormData())
+    setValidationErrors([])
   }
 
   const handleEdit = (scenario: Scenario) => {
@@ -190,6 +209,14 @@ export default function ScenariosPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+
+    // Validate form
+    const validation = validateScenario(formData)
+    if (!validation.valid) {
+      setValidationErrors(validation.errors)
+      return
+    }
+    setValidationErrors([])
 
     const scenarioData: ScenarioInsert = {
       profile_id: formData.profile_id,
@@ -307,11 +334,13 @@ export default function ScenariosPage() {
   // Stochastic Withdrawal helpers
   const addStochasticWithdrawal = () => {
     const accountName = accountOptions[0]?.name ?? 'Account'
+    const futureDate = new Date()
+    futureDate.setMonth(futureDate.getMonth() + 6)
     const newWithdrawal: StochasticWithdrawal = {
       account: accountName,
       base_amount: 500000,
       sigma: 0.2,
-      month: 11, // December
+      date: futureDate.toISOString().split('T')[0],
     }
     setFormData({
       ...formData,
@@ -377,6 +406,11 @@ export default function ScenariosPage() {
               {editingScenario ? 'Edit Scenario' : 'Create Scenario'}
             </h2>
             <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Validation Errors */}
+              {validationErrors.length > 0 && (
+                <ValidationSummary errors={validationErrors} />
+              )}
+
               {/* Basic Info */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -396,7 +430,11 @@ export default function ScenariosPage() {
                       })
                     }}
                     required
-                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    className={`mt-1 block w-full rounded-md border px-3 py-2 focus:outline-none focus:ring-1 ${
+                      getFieldError(validationErrors, 'profile_id')
+                        ? 'border-red-300 focus:border-red-500 focus:ring-red-500'
+                        : 'border-gray-300 focus:border-primary-500 focus:ring-primary-500'
+                    }`}
                   >
                     <option value="">Select profile</option>
                     {profiles?.map((p) => (
@@ -411,7 +449,11 @@ export default function ScenariosPage() {
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     required
-                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    className={`mt-1 block w-full rounded-md border px-3 py-2 focus:outline-none focus:ring-1 ${
+                      getFieldError(validationErrors, 'name')
+                        ? 'border-red-300 focus:border-red-500 focus:ring-red-500'
+                        : 'border-gray-300 focus:border-primary-500 focus:ring-primary-500'
+                    }`}
                   />
                 </div>
               </div>
@@ -783,7 +825,7 @@ export default function ScenariosPage() {
                     {/* Stochastic Withdrawals */}
                     <div>
                       <div className="mb-2 flex items-center justify-between">
-                        <h4 className="text-sm font-medium text-gray-700">Stochastic (Recurring/Variable)</h4>
+                        <h4 className="text-sm font-medium text-gray-700">Stochastic (Variable Amount)</h4>
                         <button
                           type="button"
                           onClick={addStochasticWithdrawal}
@@ -793,6 +835,7 @@ export default function ScenariosPage() {
                           + Add
                         </button>
                       </div>
+                      <p className="mb-2 text-xs text-gray-400">Withdrawals with uncertainty (amount varies around base)</p>
                       {formData.withdrawals.stochastic.length === 0 ? (
                         <p className="text-xs text-gray-500">No stochastic withdrawals.</p>
                       ) : (
@@ -813,6 +856,15 @@ export default function ScenariosPage() {
                                   ))}
                                 </select>
                               </div>
+                              <div className="flex-1">
+                                <label className="block text-xs text-gray-500">Date</label>
+                                <input
+                                  type="date"
+                                  value={w.date ?? ''}
+                                  onChange={(e) => updateStochasticWithdrawal(index, 'date', e.target.value)}
+                                  className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-xs focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                                />
+                              </div>
                               <div className="w-24">
                                 <label className="block text-xs text-gray-500">Base Amount</label>
                                 <input
@@ -829,18 +881,6 @@ export default function ScenariosPage() {
                                   step="0.01"
                                   value={w.sigma}
                                   onChange={(e) => updateStochasticWithdrawal(index, 'sigma', Number(e.target.value))}
-                                  className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-xs focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                                />
-                              </div>
-                              <div className="w-20">
-                                <label className="block text-xs text-gray-500">Month (0-11)</label>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  max="11"
-                                  value={w.month ?? ''}
-                                  onChange={(e) => updateStochasticWithdrawal(index, 'month', e.target.value ? Number(e.target.value) : undefined)}
-                                  placeholder="All"
                                   className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-xs focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                                 />
                               </div>
