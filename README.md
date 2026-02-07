@@ -278,41 +278,6 @@ mkdocs build
 
 ---
 
-## Roadmap
-
-### Phase 1: Core Improvements (In Progress)
-
-- [ ] **Historical Backtesting**: Validate with real fund return data
-- [ ] **Robust Optimization**: Uncertainty sets for (μ, σ) parameters
-- [ ] **Tax-Aware Optimization**: After-tax wealth maximization
-- [ ] **Rebalancing Constraints**: Transaction costs, minimum trade sizes
-
-### Phase 2: Platform Features
-
-- [ ] **Multi-Currency Support**: Handle portfolios across currencies
-- [ ] **PDF Reports**: Exportable optimization reports
-- [ ] **Scenario Comparison**: Side-by-side analysis of multiple scenarios
-- [ ] **What-If Analysis**: Sensitivity to parameter changes
-- [ ] **Goal Templates**: Pre-configured goals (retirement, house, education)
-
-### Phase 3: Advanced Capabilities
-
-- [ ] **Real-Time Data Integration**: Live market data feeds
-- [ ] **Portfolio Monitoring**: Track actual vs planned allocation
-- [ ] **Alerts & Notifications**: Goal progress, rebalancing reminders
-- [ ] **API for External Tools**: REST API for third-party integrations
-- [ ] **Mobile App**: React Native companion app
-
-### Phase 4: Enterprise Features
-
-- [ ] **Multi-User Collaboration**: Shared scenarios, team workspaces
-- [ ] **Advisor Dashboard**: Financial advisor tools
-- [ ] **Audit Trail**: Compliance and regulatory logging
-- [ ] **Custom Objectives**: User-defined optimization objectives
-- [ ] **White-Label Solution**: Customizable branding
-
----
-
 ## Deployment
 
 ### Render (Current)
@@ -340,18 +305,6 @@ docker build -f docker/Dockerfile.web -t finopt-web .
 **Optimization Theory**:
 - Rockafellar, R.T. & Uryasev, S. (2000). "Optimization of Conditional Value-at-Risk". *Journal of Risk*, 2(3), 21-41.
 - Shapiro, A., Dentcheva, D., & Ruszczyński, A. (2014). *Lectures on Stochastic Programming*. SIAM.
-
----
-
-## Contributing
-
-Contributions are welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Ensure tests pass (`pytest tests/`)
-4. Format code (`black src/ tests/`)
-5. Submit a pull request
 
 ---
 
