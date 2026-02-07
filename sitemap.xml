@@ -2,74 +2,82 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://mfourier.github.io/fin-opt/</loc>
-         <lastmod>2026-02-03</lastmod>
+         <lastmod>2026-02-07</lastmod>
+    </url>
+    <url>
+         <loc>https://mfourier.github.io/fin-opt/ROADMAP/</loc>
+         <lastmod>2026-02-07</lastmod>
     </url>
     <url>
          <loc>https://mfourier.github.io/fin-opt/exceptions/</loc>
-         <lastmod>2026-02-03</lastmod>
+         <lastmod>2026-02-07</lastmod>
     </url>
     <url>
          <loc>https://mfourier.github.io/fin-opt/framework/</loc>
-         <lastmod>2026-02-03</lastmod>
+         <lastmod>2026-02-07</lastmod>
     </url>
     <url>
          <loc>https://mfourier.github.io/fin-opt/goals/</loc>
-         <lastmod>2026-02-03</lastmod>
+         <lastmod>2026-02-07</lastmod>
     </url>
     <url>
          <loc>https://mfourier.github.io/fin-opt/income/</loc>
-         <lastmod>2026-02-03</lastmod>
+         <lastmod>2026-02-07</lastmod>
     </url>
     <url>
          <loc>https://mfourier.github.io/fin-opt/model/</loc>
-         <lastmod>2026-02-03</lastmod>
+         <lastmod>2026-02-07</lastmod>
     </url>
     <url>
          <loc>https://mfourier.github.io/fin-opt/optimization/</loc>
-         <lastmod>2026-02-03</lastmod>
+         <lastmod>2026-02-07</lastmod>
     </url>
     <url>
          <loc>https://mfourier.github.io/fin-opt/portfolio/</loc>
-         <lastmod>2026-02-03</lastmod>
+         <lastmod>2026-02-07</lastmod>
     </url>
     <url>
          <loc>https://mfourier.github.io/fin-opt/quickstart/</loc>
-         <lastmod>2026-02-03</lastmod>
+         <lastmod>2026-02-07</lastmod>
     </url>
     <url>
          <loc>https://mfourier.github.io/fin-opt/returns/</loc>
-         <lastmod>2026-02-03</lastmod>
+         <lastmod>2026-02-07</lastmod>
     </url>
     <url>
          <loc>https://mfourier.github.io/fin-opt/serialization/</loc>
-         <lastmod>2026-02-03</lastmod>
+         <lastmod>2026-02-07</lastmod>
     </url>
     <url>
          <loc>https://mfourier.github.io/fin-opt/utils/</loc>
-         <lastmod>2026-02-03</lastmod>
+         <lastmod>2026-02-07</lastmod>
     </url>
     <url>
          <loc>https://mfourier.github.io/fin-opt/withdrawal/</loc>
-         <lastmod>2026-02-03</lastmod>
+         <lastmod>2026-02-07</lastmod>
     </url>
     <url>
          <loc>https://mfourier.github.io/fin-opt/deployment/improvement-plan/</loc>
-         <lastmod>2026-02-03</lastmod>
+         <lastmod>2026-02-07</lastmod>
     </url>
     <url>
          <loc>https://mfourier.github.io/fin-opt/deployment/next-step-supabase-setup/</loc>
-         <lastmod>2026-02-03</lastmod>
+         <lastmod>2026-02-07</lastmod>
     </url>
     <url>
          <loc>https://mfourier.github.io/fin-opt/deployment/web-app-plan/</loc>
-         <lastmod>2026-02-03</lastmod>
+         <lastmod>2026-02-07</lastmod>
     </url>
     <url>
          <loc>https://mfourier.github.io/fin-opt/study-plan/</loc>
-         <lastmod>2026-02-03</lastmod>
+         <lastmod>2026-02-07</lastmod>
     </url>
     <url>
          <loc>https://mfourier.github.io/fin-opt/study-plan/project-file-index/</loc>
-         <lastmod>2026-02-03</lastmod>
+         <lastmod>2026-02-07</lastmod>
+    </url>
+    <url>
+         <loc>https://mfourier.github.io/fin-opt/study-plan/validation-report/</loc>
+         <lastmod>2026-02-07</lastmod>
     </url>
 </urlset>
