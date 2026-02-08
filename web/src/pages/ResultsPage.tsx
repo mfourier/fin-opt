@@ -7,8 +7,9 @@ import type { Result, Scenario } from '../types/database'
 import AllocationHeatmap from '../components/AllocationHeatmap'
 import AllocationChart from '../components/AllocationChart'
 import GoalProgressCard from '../components/GoalProgressCard'
+import WealthTrajectoryChart from '../components/WealthTrajectoryChart'
 
-type ViewTab = 'overview' | 'allocation' | 'goals'
+type ViewTab = 'overview' | 'allocation' | 'goals' | 'wealth'
 
 export default function ResultsPage() {
   const { jobId } = useParams<{ jobId: string }>()
@@ -224,6 +225,7 @@ export default function ResultsPage() {
             <nav className="-mb-px flex space-x-8">
               {[
                 { id: 'overview', label: 'Overview' },
+                { id: 'wealth', label: 'Wealth Trajectories' },
                 { id: 'allocation', label: 'Allocation Policy' },
                 { id: 'goals', label: 'Goals' },
               ].map((tab) => (
@@ -266,6 +268,28 @@ export default function ResultsPage() {
                 )}
 
                 {/* Allocation Chart Preview */}
+                {/* Wealth Trajectory Preview */}
+                {result.summary_stats?.total_wealth && (
+                  <div>
+                    <div className="mb-4 flex items-center justify-between">
+                      <h3 className="text-lg font-medium text-gray-900">Projected Wealth</h3>
+                      <button
+                        onClick={() => setActiveTab('wealth')}
+                        className="text-sm text-primary-600 hover:text-primary-500"
+                      >
+                        View Details →
+                      </button>
+                    </div>
+                    <WealthTrajectoryChart
+                      summaryStats={result.summary_stats}
+                      startDate={scenario?.start_date}
+                      goalStatus={result.goal_status}
+                      optimalHorizon={result.optimal_horizon}
+                    />
+                  </div>
+                )}
+
+                {/* Allocation Preview */}
                 {result.allocation_policy && (
                   <div>
                     <div className="mb-4 flex items-center justify-between">
@@ -283,6 +307,28 @@ export default function ResultsPage() {
                       startDate={scenario?.start_date}
                     />
                   </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'wealth' && (
+              <div>
+                <h3 className="mb-2 text-lg font-medium text-gray-900">Projected Wealth</h3>
+                <p className="mb-4 text-sm text-gray-500">
+                  Monte Carlo fan chart showing wealth distribution over the {result.optimal_horizon}-month horizon.
+                  The shaded bands represent the P10-P90 and P25-P75 percentile ranges.
+                </p>
+                {result.summary_stats ? (
+                  <WealthTrajectoryChart
+                    summaryStats={result.summary_stats}
+                    startDate={scenario?.start_date}
+                    goalStatus={result.goal_status}
+                    optimalHorizon={result.optimal_horizon}
+                  />
+                ) : (
+                  <p className="text-gray-500">
+                    No wealth trajectory data available. Re-run the optimization to generate trajectories.
+                  </p>
                 )}
               </div>
             )}

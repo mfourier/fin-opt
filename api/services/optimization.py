@@ -26,10 +26,14 @@ logger = logging.getLogger(__name__)
 def compute_goal_status_from_result(
     opt_result,
     model,
+    sim_result,
     start_date: date,
 ) -> list[dict[str, Any]]:
     """
-    Compute goal satisfaction status from optimization result.
+    Compute goal satisfaction status from optimization and simulation results.
+
+    Uses the re-simulated wealth trajectories to compute actual achievement
+    probabilities for each goal (empirical probability from Monte Carlo).
 
     Parameters
     ----------
@@ -37,31 +41,49 @@ def compute_goal_status_from_result(
         Result from CVaROptimizer.
     model : FinancialModel
         The financial model used.
+    sim_result : SimulationResult
+        Re-simulation result with wealth trajectories.
     start_date : date
         Simulation start date.
 
     Returns
     -------
     list[dict]
-        Goal status for each goal.
+        Goal status for each goal, including actual probabilities.
     """
     from finopt import IntermediateGoal, TerminalGoal
 
     status_list = []
 
+    # Map account names to indices
+    account_name_to_idx = {acc.name: idx for idx, acc in enumerate(model.accounts)}
+
     for goal in opt_result.goals:
-        # Get account name
+        # Get account name and index
         if isinstance(goal.account, str):
             account_name = goal.account
+            account_idx = account_name_to_idx.get(goal.account, 0)
         else:
             account_name = model.accounts[goal.account].name
+            account_idx = goal.account
 
         if isinstance(goal, IntermediateGoal):
             goal_type = "intermediate"
             goal_desc = f"{account_name} by {goal.date.isoformat()}"
+            # Resolve month for intermediate goal
+            resolved_month = goal.resolve_month(start_date)
+            # Compute actual probability from simulation
+            if resolved_month < sim_result.wealth.shape[1]:
+                wealth_at_goal = sim_result.wealth[:, resolved_month, account_idx]
+                actual_prob = float(np.mean(wealth_at_goal >= goal.threshold))
+            else:
+                actual_prob = None
         else:
             goal_type = "terminal"
             goal_desc = f"{account_name} at horizon T={opt_result.T}"
+            # Terminal goal: check at final time step
+            wealth_at_T = sim_result.wealth[:, -1, account_idx]
+            actual_prob = float(np.mean(wealth_at_T >= goal.threshold))
 
         status_list.append({
             "goal": goal_desc,
@@ -69,11 +91,66 @@ def compute_goal_status_from_result(
             "account": account_name,
             "threshold": goal.threshold,
             "required_confidence": goal.confidence,
-            # CVaR optimization guarantees satisfaction if feasible
-            "satisfied": opt_result.feasible,
+            "satisfied": actual_prob >= goal.confidence if actual_prob is not None else opt_result.feasible,
+            "actual_probability": actual_prob,
         })
 
     return status_list
+
+
+def compute_wealth_percentiles(
+    sim_result,
+    model,
+) -> dict[str, Any]:
+    """
+    Compute wealth trajectory percentiles for visualization.
+
+    Computes P10, P25, P50, P75, P90 percentiles for total wealth
+    and per-account wealth across all Monte Carlo scenarios.
+
+    Parameters
+    ----------
+    sim_result : SimulationResult
+        Simulation result containing wealth trajectories.
+    model : FinancialModel
+        The financial model (for account names).
+
+    Returns
+    -------
+    dict
+        Summary statistics with keys:
+        - total_wealth: dict with percentile arrays (T+1 values each)
+        - per_account: list of dicts, one per account, with percentile arrays
+    """
+    wealth = sim_result.wealth          # (n_sims, T+1, M)
+    total_wealth = sim_result.total_wealth  # (n_sims, T+1)
+
+    percentile_levels = [10, 25, 50, 75, 90]
+
+    # Total wealth percentiles
+    total_stats = {
+        "mean": np.mean(total_wealth, axis=0).tolist(),
+    }
+    for p in percentile_levels:
+        total_stats[f"p{p}"] = np.percentile(total_wealth, p, axis=0).tolist()
+
+    # Per-account percentiles
+    per_account = []
+    for m, acc in enumerate(model.accounts):
+        account_wealth = wealth[:, :, m]  # (n_sims, T+1)
+        acc_stats = {
+            "account": acc.name,
+            "display_name": acc.display_name or acc.name,
+            "mean": np.mean(account_wealth, axis=0).tolist(),
+        }
+        for p in percentile_levels:
+            acc_stats[f"p{p}"] = np.percentile(account_wealth, p, axis=0).tolist()
+        per_account.append(acc_stats)
+
+    return {
+        "total_wealth": total_stats,
+        "per_account": per_account,
+    }
 
 
 async def run_optimization(scenario_id: str, job_id: str) -> None:
@@ -82,7 +159,8 @@ async def run_optimization(scenario_id: str, job_id: str) -> None:
 
     This is the main entry point called from FastAPI background tasks.
     It fetches the scenario, runs bilevel optimization (outer: horizon search,
-    inner: convex allocation), and saves results.
+    inner: convex allocation), re-simulates with optimal policy to get
+    wealth trajectories, and saves results.
 
     Parameters
     ----------
@@ -147,17 +225,34 @@ async def run_optimization(scenario_id: str, job_id: str) -> None:
             solver=solver,
         )
 
+        update_job(job_id, progress=70, step="Simulating wealth trajectories")
+
+        # Re-simulate with optimal allocation to get wealth trajectories
+        sim_result = model.simulate_from_optimization(
+            opt_result,
+            n_sims=n_sims,
+            seed=seed,
+            start=start_date,
+            withdrawals=withdrawals,
+        )
+
         update_job(job_id, progress=85, step="Processing results")
 
         # Prepare allocation policy for storage
-        # X has shape (T, M), convert to list of lists
         allocation_policy = opt_result.X.tolist()
 
-        # Compute goal status
+        # Compute goal status with actual probabilities from simulation
         goal_status = compute_goal_status_from_result(
             opt_result,
             model,
+            sim_result,
             start_date,
+        )
+
+        # Compute wealth trajectory percentiles for visualization
+        summary_stats = compute_wealth_percentiles(
+            sim_result,
+            model,
         )
 
         # Prepare diagnostics
@@ -182,6 +277,7 @@ async def run_optimization(scenario_id: str, job_id: str) -> None:
             solve_time=float(opt_result.solve_time) if opt_result.solve_time else 0.0,
             diagnostics=diagnostics,
             goal_status=goal_status,
+            summary_stats=summary_stats,
         )
 
         # Mark job complete

@@ -99,10 +99,28 @@ export interface Goal {
 // Summary and Result Types
 // -----------------------------------------------------------------------------
 
+export interface WealthPercentiles {
+  mean: number[]
+  p10: number[]
+  p25: number[]
+  p50: number[]
+  p75: number[]
+  p90: number[]
+}
+
+export interface PerAccountStats extends WealthPercentiles {
+  account: string
+  display_name: string
+}
+
 export interface SummaryStats {
-  mean_wealth: number[]
-  std_wealth: number[]
-  percentiles: Record<string, number[]>
+  // Optimization results: wealth trajectory percentiles
+  total_wealth?: WealthPercentiles
+  per_account?: PerAccountStats[]
+  // Simulation results (legacy format)
+  mean_wealth?: number[]
+  std_wealth?: number[]
+  percentiles?: Record<string, number[]>
 }
 
 export interface GoalStatus {

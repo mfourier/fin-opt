@@ -113,6 +113,7 @@ def save_optimization_result(
     solve_time: float,
     diagnostics: dict[str, Any] | None = None,
     goal_status: list[dict[str, Any]] | None = None,
+    summary_stats: dict[str, Any] | None = None,
 ) -> None:
     """
     Save optimization result to Supabase.
@@ -135,6 +136,8 @@ def save_optimization_result(
         Additional solver diagnostics.
     goal_status : list[dict], optional
         Goal satisfaction status for each goal.
+    summary_stats : dict, optional
+        Wealth trajectory statistics (percentiles, mean, std per account).
     """
     client = get_supabase_client()
 
@@ -148,6 +151,7 @@ def save_optimization_result(
         "solve_time": solve_time,
         "diagnostics": diagnostics,
         "goal_status": goal_status,
+        "summary_stats": summary_stats,
     }
 
     client.table("results").insert(result_data).execute()
