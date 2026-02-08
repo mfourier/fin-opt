@@ -310,6 +310,28 @@ export default function ResultsPage() {
                       allocation={result.allocation_policy}
                       accountNames={accountNames}
                       startDate={scenario?.start_date}
+                      cashFlow={result.summary_stats?.cash_flow}
+                    />
+                  </div>
+                )}
+
+                {/* Investment Plan Preview */}
+                {result.allocation_policy && result.summary_stats?.cash_flow && (
+                  <div>
+                    <div className="mb-4 flex items-center justify-between">
+                      <h3 className="text-lg font-medium text-gray-900">Investment Plan</h3>
+                      <button
+                        onClick={() => setActiveTab('allocation')}
+                        className="text-sm text-primary-600 hover:text-primary-500"
+                      >
+                        View Details →
+                      </button>
+                    </div>
+                    <MonthlyInvestmentPlan
+                      allocation={result.allocation_policy}
+                      accountNames={accountNames}
+                      cashFlow={result.summary_stats.cash_flow}
+                      startDate={scenario?.start_date}
                     />
                   </div>
                 )}

@@ -924,6 +924,7 @@ class FinancialModel(ModelPlottingMixin):
         search_method: str = "binary",
         withdrawals: Optional[WithdrawalModel] = None,
         withdrawal_epsilon: float = 0.05,
+        progress_callback: Optional[Callable] = None,
         **solver_kwargs
     ) -> OptimizationResult:
         """
@@ -1082,7 +1083,10 @@ class FinancialModel(ModelPlottingMixin):
             )
 
         # Create bilevel solver
-        seeker = GoalSeeker(optimizer, T_max=T_max, verbose=verbose)
+        seeker = GoalSeeker(
+            optimizer, T_max=T_max, verbose=verbose,
+            progress_callback=progress_callback,
+        )
 
         # Build generators using model components
         start_date = start if start is not None else date.today()

@@ -65,9 +65,6 @@ export default function WealthTrajectoryChart({
   withdrawals,
 }: WealthTrajectoryChartProps) {
   void _optimalHorizon // Reserved for future timeline annotations
-  const [viewMode, setViewMode] = useState<'total' | 'per_account'>('total')
-  const [chartStyle, setChartStyle] = useState<ChartStyle>('percentiles')
-  const [selectedAccount, setSelectedAccount] = useState<number>(0)
 
   const perAccount = (summaryStats as unknown as { per_account?: PerAccountStats[] })?.per_account
   const totalWealth = summaryStats as unknown as {
@@ -77,6 +74,10 @@ export default function WealthTrajectoryChart({
 
   const totalData = totalWealth?.total_wealth
   const hasPerAccount = perAccount && perAccount.length > 0
+
+  const [viewMode, setViewMode] = useState<'total' | 'per_account' | 'all_accounts'>(hasPerAccount ? 'all_accounts' : 'total')
+  const [chartStyle, setChartStyle] = useState<ChartStyle>('percentiles')
+  const [selectedAccount, setSelectedAccount] = useState<number>(0)
   const hasTotalData = totalData && totalData.mean && totalData.mean.length > 0
   const hasTrajectories = trajectories && trajectories.total && trajectories.total.length > 0
 
@@ -197,6 +198,68 @@ export default function WealthTrajectoryChart({
     return { data, nTrajectories }
   }, [viewMode, trajectories, hasTrajectories, selectedAccount, startDate, totalData, hasTotalData, perAccount, hasPerAccount])
 
+  // All-accounts percentile data: overlays fan charts for every account
+  const allAccountsPercentileData = useMemo(() => {
+    if (viewMode !== 'all_accounts' || !hasPerAccount) return []
+
+    const T = perAccount![0].mean.length
+    return Array.from({ length: T }, (_, t) => {
+      const point: Record<string, number | string> = { month: t }
+      const dateLabel = getDateLabel(t)
+      if (dateLabel) point.date = dateLabel
+
+      for (let m = 0; m < perAccount!.length; m++) {
+        const acc = perAccount![m]
+        point[`acc${m}_base`] = acc.p10[t]
+        point[`acc${m}_band_10_25`] = acc.p25[t] - acc.p10[t]
+        point[`acc${m}_band_25_50`] = acc.p50[t] - acc.p25[t]
+        point[`acc${m}_band_50_75`] = acc.p75[t] - acc.p50[t]
+        point[`acc${m}_band_75_90`] = acc.p90[t] - acc.p75[t]
+        point[`acc${m}_p50`] = acc.p50[t]
+        point[`acc${m}_mean`] = acc.mean[t]
+        point[`acc${m}_p10`] = acc.p10[t]
+        point[`acc${m}_p25`] = acc.p25[t]
+        point[`acc${m}_p75`] = acc.p75[t]
+        point[`acc${m}_p90`] = acc.p90[t]
+      }
+      return point
+    })
+  }, [viewMode, perAccount, hasPerAccount, startDate])
+
+  // All-accounts Monte Carlo data: overlays trajectories for every account
+  const allAccountsMCData = useMemo(() => {
+    if (viewMode !== 'all_accounts' || !hasTrajectories || !trajectories?.per_account) {
+      return { data: [] as Record<string, number | string>[], nPerAccount: [] as number[] }
+    }
+
+    const nAccounts = trajectories.per_account.length
+    const nPerAccount = trajectories.per_account.map(a => a.trajectories.length)
+    const T = trajectories.per_account[0]?.trajectories[0]?.length ?? 0
+    if (T === 0) return { data: [], nPerAccount }
+
+    const data = Array.from({ length: T }, (_, t) => {
+      const point: Record<string, number | string> = { month: t }
+      const dateLabel = getDateLabel(t)
+      if (dateLabel) point.date = dateLabel
+
+      for (let m = 0; m < nAccounts; m++) {
+        const accTrajs = trajectories.per_account[m].trajectories
+        for (let i = 0; i < accTrajs.length; i++) {
+          point[`acc${m}_t${i}`] = accTrajs[i][t]
+        }
+        // Add percentile stats for tooltip
+        if (hasPerAccount) {
+          const acc = perAccount![m]
+          point[`acc${m}_p50`] = acc.p50[t]
+          point[`acc${m}_mean`] = acc.mean[t]
+        }
+      }
+      return point
+    })
+
+    return { data, nPerAccount }
+  }, [viewMode, trajectories, hasTrajectories, perAccount, hasPerAccount, startDate])
+
   // Compute withdrawal markers from scenario data
   const withdrawalMarkers = useMemo((): WithdrawalMarker[] => {
     if (!withdrawals || !startDate) return []
@@ -244,7 +307,7 @@ export default function WealthTrajectoryChart({
 
   // Filter markers for current view mode
   const visibleMarkers = useMemo(() => {
-    if (viewMode === 'total') return withdrawalMarkers
+    if (viewMode === 'total' || viewMode === 'all_accounts') return withdrawalMarkers
     if (!perAccount) return []
     const selectedAcc = perAccount[selectedAccount]
     if (!selectedAcc) return []
@@ -261,7 +324,7 @@ export default function WealthTrajectoryChart({
 
   // Find goal thresholds for reference lines
   const goalThresholds = goalStatus?.filter(g =>
-    viewMode === 'total' || (viewMode === 'per_account' && perAccount && g.account === perAccount[selectedAccount]?.account)
+    viewMode === 'total' || viewMode === 'all_accounts' || (viewMode === 'per_account' && perAccount && g.account === perAccount[selectedAccount]?.account)
   ) ?? []
 
   // Shared axis/grid/tooltip config for both chart types
@@ -303,21 +366,27 @@ export default function WealthTrajectoryChart({
   ))
 
   // Goal reference lines
-  const goalRefLines = viewMode === 'total' ? goalThresholds.map((goal, i) => (
-    <ReferenceLine
-      key={`goal-${i}`}
-      y={goal.threshold}
-      stroke="#EF4444"
-      strokeDasharray="4 4"
-      strokeWidth={1.5}
-      label={{
-        value: `${goal.account}: ${formatCurrency(goal.threshold)}`,
-        position: 'right',
-        fontSize: 10,
-        fill: '#EF4444',
-      }}
-    />
-  )) : []
+  const goalRefLines = (viewMode === 'total' || viewMode === 'all_accounts') ? goalThresholds.map((goal, i) => {
+    // In all_accounts mode, color-code goal lines by account
+    const goalColor = viewMode === 'all_accounts' && hasPerAccount
+      ? ACCOUNT_COLORS[(perAccount!.findIndex(a => a.account === goal.account || a.display_name === goal.account)) % ACCOUNT_COLORS.length] || '#EF4444'
+      : '#EF4444'
+    return (
+      <ReferenceLine
+        key={`goal-${i}`}
+        y={goal.threshold}
+        stroke={goalColor}
+        strokeDasharray="4 4"
+        strokeWidth={1.5}
+        label={{
+          value: `${goal.account}: ${formatCurrency(goal.threshold)}`,
+          position: 'right',
+          fontSize: 10,
+          fill: goalColor,
+        }}
+      />
+    )
+  }) : []
 
   // Active chart data for final stats
   const activeData = chartStyle === 'percentiles' ? percentileData : mcData.data
@@ -336,12 +405,20 @@ export default function WealthTrajectoryChart({
               Total Wealth
             </button>
             {hasPerAccount && (
-              <button
-                onClick={() => setViewMode('per_account')}
-                className={`px-3 py-1.5 text-xs ${viewMode === 'per_account' ? 'bg-gray-100 font-medium' : ''}`}
-              >
-                Per Account
-              </button>
+              <>
+                <button
+                  onClick={() => setViewMode('per_account')}
+                  className={`px-3 py-1.5 text-xs ${viewMode === 'per_account' ? 'bg-gray-100 font-medium' : ''}`}
+                >
+                  Per Account
+                </button>
+                <button
+                  onClick={() => setViewMode('all_accounts')}
+                  className={`px-3 py-1.5 text-xs ${viewMode === 'all_accounts' ? 'bg-gray-100 font-medium' : ''}`}
+                >
+                  All Accounts
+                </button>
+              </>
             )}
           </div>
 
@@ -377,8 +454,20 @@ export default function WealthTrajectoryChart({
         </div>
 
         {/* Legend */}
-        <div className="flex items-center gap-3 text-xs text-gray-500">
-          {chartStyle === 'percentiles' ? (
+        <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500">
+          {viewMode === 'all_accounts' && hasPerAccount ? (
+            <>
+              {perAccount!.map((acc, m) => (
+                <span key={m} className="flex items-center gap-1">
+                  <span
+                    className="inline-block h-2 w-4 rounded"
+                    style={{ backgroundColor: ACCOUNT_COLORS[m % ACCOUNT_COLORS.length] }}
+                  ></span>
+                  {acc.display_name || acc.account}
+                </span>
+              ))}
+            </>
+          ) : chartStyle === 'percentiles' ? (
             <>
               <span className="flex items-center gap-1">
                 <span className="inline-block h-2 w-4 rounded" style={{ backgroundColor: color, opacity: 0.2 }}></span>
@@ -417,7 +506,156 @@ export default function WealthTrajectoryChart({
       {/* Chart */}
       <div className="h-80 w-full">
         <ResponsiveContainer width="100%" height="100%">
-          {chartStyle === 'percentiles' ? (
+          {viewMode === 'all_accounts' && hasPerAccount ? (
+            chartStyle === 'montecarlo' && allAccountsMCData.data.length > 0 ? (
+              <LineChart
+                data={allAccountsMCData.data}
+                margin={{ top: 10, right: 30, left: 10, bottom: 0 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                <XAxis {...xAxisProps} />
+                <YAxis {...yAxisProps} />
+                <Tooltip
+                  content={({ active, payload, label }) => {
+                    if (!active || !payload || payload.length === 0) return null
+                    const point = payload[0]?.payload
+                    if (!point) return null
+                    const dateLabel = startDate ? String(label) : `Month ${label}`
+                    return (
+                      <div style={{
+                        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                        border: '1px solid #E5E7EB',
+                        borderRadius: '6px',
+                        fontSize: '12px',
+                        padding: '8px 12px',
+                      }}>
+                        <p style={{ fontWeight: 600, marginBottom: 4 }}>{dateLabel}</p>
+                        {perAccount!.map((acc, m) => (
+                          <p key={m} style={{ margin: '2px 0', display: 'flex', justifyContent: 'space-between', gap: 16 }}>
+                            <span style={{ color: ACCOUNT_COLORS[m % ACCOUNT_COLORS.length] }}>
+                              {acc.display_name || acc.account}
+                            </span>
+                            <span style={{ fontWeight: 500 }}>
+                              {formatCurrency(point[`acc${m}_p50`] as number ?? 0)}
+                            </span>
+                          </p>
+                        ))}
+                      </div>
+                    )
+                  }}
+                />
+                {/* Trajectories for each account */}
+                {perAccount!.map((_, m) => {
+                  const accColor = ACCOUNT_COLORS[m % ACCOUNT_COLORS.length]
+                  const nTrajs = allAccountsMCData.nPerAccount[m] ?? 0
+                  return Array.from({ length: nTrajs }, (__, i) => (
+                    <Line
+                      key={`acc${m}_t${i}`}
+                      type="monotone"
+                      dataKey={`acc${m}_t${i}`}
+                      stroke={accColor}
+                      strokeWidth={0.8}
+                      strokeOpacity={0.1}
+                      dot={false}
+                      activeDot={false}
+                      isAnimationActive={false}
+                      name={`acc${m}_t${i}`}
+                    />
+                  ))
+                }).flat()}
+                {/* Median lines on top */}
+                {perAccount!.map((acc, m) => (
+                  <Line
+                    key={`acc${m}_median`}
+                    type="monotone"
+                    dataKey={`acc${m}_p50`}
+                    stroke={ACCOUNT_COLORS[m % ACCOUNT_COLORS.length]}
+                    strokeWidth={2.5}
+                    dot={false}
+                    name={acc.display_name || acc.account}
+                    isAnimationActive={false}
+                  />
+                ))}
+                {goalRefLines}
+                {withdrawalRefLines}
+                <Legend content={() => null} />
+              </LineChart>
+            ) : (
+              <AreaChart
+                data={allAccountsPercentileData}
+                margin={{ top: 10, right: 30, left: 10, bottom: 0 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                <XAxis {...xAxisProps} />
+                <YAxis {...yAxisProps} />
+                <Tooltip
+                  content={({ active, payload, label }) => {
+                    if (!active || !payload || payload.length === 0) return null
+                    const point = payload[0]?.payload
+                    if (!point) return null
+                    const dateLabel = startDate ? String(label) : `Month ${label}`
+                    return (
+                      <div style={{
+                        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                        border: '1px solid #E5E7EB',
+                        borderRadius: '6px',
+                        fontSize: '12px',
+                        padding: '8px 12px',
+                      }}>
+                        <p style={{ fontWeight: 600, marginBottom: 4 }}>{dateLabel}</p>
+                        {perAccount!.map((acc, m) => {
+                          const accColor = ACCOUNT_COLORS[m % ACCOUNT_COLORS.length]
+                          return (
+                            <div key={m} style={{ margin: '4px 0' }}>
+                              <p style={{ color: accColor, fontWeight: 600, marginBottom: 2 }}>
+                                {acc.display_name || acc.account}
+                              </p>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, marginLeft: 8 }}>
+                                <span style={{ color: '#6B7280' }}>Median</span>
+                                <span style={{ fontWeight: 500 }}>{formatCurrency(point[`acc${m}_p50`] as number)}</span>
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, marginLeft: 8 }}>
+                                <span style={{ color: '#6B7280' }}>P25–P75</span>
+                                <span>{formatCurrency(point[`acc${m}_p25`] as number)} – {formatCurrency(point[`acc${m}_p75`] as number)}</span>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )
+                  }}
+                />
+                {/* Fan chart per account */}
+                {perAccount!.map((_, m) => {
+                  const accColor = ACCOUNT_COLORS[m % ACCOUNT_COLORS.length]
+                  const stackId = `fan_${m}`
+                  return [
+                    <Area key={`${m}_base`} type="monotone" dataKey={`acc${m}_base`} stackId={stackId} stroke="none" fill="transparent" />,
+                    <Area key={`${m}_b1`} type="monotone" dataKey={`acc${m}_band_10_25`} stackId={stackId} stroke="none" fill={accColor} fillOpacity={0.08} name={`acc${m}_p10`} />,
+                    <Area key={`${m}_b2`} type="monotone" dataKey={`acc${m}_band_25_50`} stackId={stackId} stroke="none" fill={accColor} fillOpacity={0.18} name={`acc${m}_p25`} />,
+                    <Area key={`${m}_b3`} type="monotone" dataKey={`acc${m}_band_50_75`} stackId={stackId} stroke="none" fill={accColor} fillOpacity={0.18} name={`acc${m}_p75`} />,
+                    <Area key={`${m}_b4`} type="monotone" dataKey={`acc${m}_band_75_90`} stackId={stackId} stroke="none" fill={accColor} fillOpacity={0.08} name={`acc${m}_p90`} />,
+                  ]
+                }).flat()}
+                {/* Median lines on top */}
+                {perAccount!.map((acc, m) => (
+                  <Area
+                    key={`acc${m}_median`}
+                    type="monotone"
+                    dataKey={`acc${m}_p50`}
+                    stroke={ACCOUNT_COLORS[m % ACCOUNT_COLORS.length]}
+                    strokeWidth={2}
+                    fill="none"
+                    dot={false}
+                    name={acc.display_name || acc.account}
+                  />
+                ))}
+                {goalRefLines}
+                {withdrawalRefLines}
+                <Legend content={() => null} />
+              </AreaChart>
+            )
+          ) : chartStyle === 'percentiles' ? (
             <AreaChart
               data={percentileData}
               margin={{ top: 10, right: 30, left: 10, bottom: 0 }}
@@ -546,8 +784,8 @@ export default function WealthTrajectoryChart({
         </p>
       )}
 
-      {/* Final Wealth Stats */}
-      {activeData.length > 0 && chartStyle === 'percentiles' && (
+      {/* Final Wealth Stats — total / per_account percentile */}
+      {viewMode !== 'all_accounts' && activeData.length > 0 && chartStyle === 'percentiles' && (
         <div className="grid grid-cols-5 gap-3 rounded-lg bg-gray-50 p-4 text-center">
           {[
             { label: 'P10 (Pessimistic)', key: 'p10' },
@@ -570,8 +808,8 @@ export default function WealthTrajectoryChart({
         </div>
       )}
 
-      {/* Monte Carlo final wealth distribution */}
-      {activeData.length > 0 && chartStyle === 'montecarlo' && mcData.nTrajectories > 0 && (
+      {/* Final Wealth Stats — total / per_account Monte Carlo */}
+      {viewMode !== 'all_accounts' && activeData.length > 0 && chartStyle === 'montecarlo' && mcData.nTrajectories > 0 && (
         <div className="grid grid-cols-3 gap-3 rounded-lg bg-gray-50 p-4 text-center">
           {(() => {
             const lastValues = Array.from({ length: mcData.nTrajectories }, (_, i) => {
@@ -592,6 +830,29 @@ export default function WealthTrajectoryChart({
               </div>
             ))
           })()}
+        </div>
+      )}
+
+      {/* Final Wealth Stats — all_accounts */}
+      {viewMode === 'all_accounts' && hasPerAccount && (
+        <div className="grid gap-3 rounded-lg bg-gray-50 p-4" style={{ gridTemplateColumns: `repeat(${perAccount!.length}, 1fr)` }}>
+          {perAccount!.map((acc, m) => {
+            const accColor = ACCOUNT_COLORS[m % ACCOUNT_COLORS.length]
+            const lastT = acc.mean.length - 1
+            return (
+              <div key={m} className="text-center">
+                <p className="text-xs font-medium" style={{ color: accColor }}>
+                  {acc.display_name || acc.account}
+                </p>
+                <p className="mt-1 text-sm font-semibold text-gray-900">
+                  {formatCurrency(acc.p50[lastT])}
+                </p>
+                <p className="text-xs text-gray-400">
+                  {formatCurrency(acc.p25[lastT])} – {formatCurrency(acc.p75[lastT])}
+                </p>
+              </div>
+            )
+          })}
         </div>
       )}
     </div>

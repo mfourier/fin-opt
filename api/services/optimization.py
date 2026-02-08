@@ -312,6 +312,23 @@ async def run_optimization(scenario_id: str, job_id: str) -> None:
 
         update_job(job_id, progress=20, step="Starting goal-seeking optimization")
 
+        # Build progress callback to report binary search iterations
+        def _optimization_progress(info):
+            """Map search iterations to progress range 20-70%."""
+            try:
+                if info.phase != "solving":
+                    return
+                fraction = min(info.iteration / max(info.total_estimated, 1), 1.0)
+                progress = 20 + int(fraction * 50)  # 20 → 70
+                progress = min(progress, 69)  # Reserve 70 for post-optimization
+                step = (
+                    f"Testing horizon T={info.current_T} months "
+                    f"[{info.iteration}/{info.total_estimated}]"
+                )
+                update_job(job_id, progress=progress, step=step)
+            except Exception as exc:
+                logger.warning(f"Progress update failed (non-fatal): {exc}")
+
         # Run optimization with goal-seeking
         # This uses bilevel optimization: binary search over T, convex solve for X
         opt_result = model.optimize(
@@ -326,6 +343,7 @@ async def run_optimization(scenario_id: str, job_id: str) -> None:
             withdrawals=withdrawals,
             withdrawal_epsilon=0.05,
             solver=solver,
+            progress_callback=_optimization_progress,
         )
 
         update_job(job_id, progress=70, step="Simulating wealth trajectories")

@@ -59,6 +59,7 @@ from dataclasses import dataclass
 from typing import List, Optional, Callable, Dict, Any, Union, Literal, TYPE_CHECKING
 from abc import ABC, abstractmethod
 from datetime import date
+import math
 import time
 import numpy as np
 
@@ -75,7 +76,56 @@ __all__ = [
     "AllocationOptimizer",
     "CVaROptimizer",
     "GoalSeeker",
+    "SearchProgressInfo",
 ]
+
+
+class SearchProgressInfo:
+    """Progress information emitted during horizon search iterations.
+
+    Attributes
+    ----------
+    iteration : int
+        Current iteration number (1-based).
+    total_estimated : int
+        Estimated total iterations (ceil(log2(range))+1 for binary, worst-case for linear).
+    current_T : int
+        Horizon T being tested this iteration.
+    left : int
+        Current left bound of search range.
+    right : int
+        Current right bound of search range.
+    feasible : bool or None
+        Feasibility result (None before solve).
+    search_method : str
+        "binary" or "linear".
+    phase : str
+        "solving" (before solve) or "solved" (after solve).
+    """
+    __slots__ = (
+        "iteration", "total_estimated", "current_T", "left", "right",
+        "feasible", "search_method", "phase",
+    )
+
+    def __init__(
+        self,
+        iteration: int,
+        total_estimated: int,
+        current_T: int,
+        left: int,
+        right: int,
+        feasible: Optional[bool],
+        search_method: str,
+        phase: str,
+    ):
+        self.iteration = iteration
+        self.total_estimated = total_estimated
+        self.current_T = current_T
+        self.left = left
+        self.right = right
+        self.feasible = feasible
+        self.search_method = search_method
+        self.phase = phase
 
 
 # Type alias for objective specifications
@@ -1347,7 +1397,8 @@ class GoalSeeker:
         self,
         optimizer: AllocationOptimizer,
         T_max: int = 240,
-        verbose: bool = True
+        verbose: bool = True,
+        progress_callback: Optional[Callable[[SearchProgressInfo], None]] = None,
     ):
         if not isinstance(optimizer, AllocationOptimizer):
             raise TypeError(
@@ -1356,10 +1407,11 @@ class GoalSeeker:
             )
         if T_max < 1:
             raise ValueError(f"T_max must be ≥ 1, got {T_max}")
-        
+
         self.optimizer = optimizer
         self.T_max = T_max
         self.verbose = verbose
+        self.progress_callback = progress_callback
 
     def seek(
         self,
@@ -1515,10 +1567,26 @@ class GoalSeeker:
 
         """
         X_prev = None
+        total_estimated = self.T_max - T_start + 1
 
         for T in range(T_start, self.T_max + 1):
+            iteration = T - T_start + 1
+
             if self.verbose:
-                print(f"[Iter {T - T_start + 1}] Testing T={T}...")
+                print(f"[Iter {iteration}] Testing T={T}...")
+
+            # Pre-solve progress callback
+            if self.progress_callback is not None:
+                self.progress_callback(SearchProgressInfo(
+                    iteration=iteration,
+                    total_estimated=total_estimated,
+                    current_T=T,
+                    left=T,
+                    right=self.T_max,
+                    feasible=None,
+                    search_method="linear",
+                    phase="solving",
+                ))
 
             A = A_generator(T, n_sims, seed)
             R = R_generator(T, n_sims, None if seed is None else seed + 1)
@@ -1541,6 +1609,19 @@ class GoalSeeker:
                 status = "✓ Feasible" if result.feasible else "✗ Infeasible"
                 print(f"    {status}, obj={result.objective_value:.2f}, "
                     f"time={result.solve_time:.3f}s\n")
+
+            # Post-solve progress callback
+            if self.progress_callback is not None:
+                self.progress_callback(SearchProgressInfo(
+                    iteration=iteration,
+                    total_estimated=total_estimated,
+                    current_T=T,
+                    left=T,
+                    right=self.T_max,
+                    feasible=result.feasible,
+                    search_method="linear",
+                    phase="solved",
+                ))
 
             if result.feasible:
                 if self.verbose:
@@ -1589,6 +1670,7 @@ class GoalSeeker:
 
         best_result = None
         iteration = 0
+        total_estimated = math.ceil(math.log2(max(right - left, 1))) + 1
 
         while left < right:
             iteration += 1
@@ -1597,6 +1679,19 @@ class GoalSeeker:
             if self.verbose:
                 print(f"[Iter {iteration}] Binary search: testing T={mid} "
                     f"(range=[{left}, {right}])...")
+
+            # Pre-solve progress callback
+            if self.progress_callback is not None:
+                self.progress_callback(SearchProgressInfo(
+                    iteration=iteration,
+                    total_estimated=total_estimated,
+                    current_T=mid,
+                    left=left,
+                    right=right,
+                    feasible=None,
+                    search_method="binary",
+                    phase="solving",
+                ))
 
             # Generate scenarios for mid
             A = A_generator(mid, n_sims, seed)
@@ -1631,6 +1726,19 @@ class GoalSeeker:
                 print(f"    {status}, obj={result.objective_value:.2f}, "
                     f"time={result.solve_time:.3f}s\n")
 
+            # Post-solve progress callback
+            if self.progress_callback is not None:
+                self.progress_callback(SearchProgressInfo(
+                    iteration=iteration,
+                    total_estimated=total_estimated,
+                    current_T=mid,
+                    left=left,
+                    right=right,
+                    feasible=result.feasible,
+                    search_method="binary",
+                    phase="solved",
+                ))
+
             if result.feasible:
                 # Found feasible solution: try lower half
                 best_result = result
@@ -1648,6 +1756,19 @@ class GoalSeeker:
         # Need to verify left (may not have been tested)
         if self.verbose:
             print(f"[Iter {iteration + 1}] Verifying T={left} (final check)...")
+
+        # Pre-solve progress callback for verification step
+        if self.progress_callback is not None:
+            self.progress_callback(SearchProgressInfo(
+                iteration=iteration + 1,
+                total_estimated=total_estimated,
+                current_T=left,
+                left=left,
+                right=right,
+                feasible=None,
+                search_method="binary",
+                phase="solving",
+            ))
 
         A = A_generator(left, n_sims, seed)
         R = R_generator(left, n_sims, None if seed is None else seed + 1)

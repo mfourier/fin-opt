@@ -65,7 +65,7 @@ export default function AllocationHeatmap({ allocation, accountNames, startDate,
 
       return { name, avg, min, max, initial, final, trend, avgAmount, color: ACCOUNT_COLORS[m % ACCOUNT_COLORS.length] }
     })
-  }, [allocation, accountNames])
+  }, [allocation, accountNames, cashFlow])
 
   if (!allocation || allocation.length === 0) {
     return <p className="text-gray-500">No allocation data available</p>
