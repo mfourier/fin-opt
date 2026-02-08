@@ -10,7 +10,7 @@ import {
   Legend,
   ReferenceLine,
 } from 'recharts'
-import type { SummaryStats, GoalStatus } from '../types/database'
+import type { SummaryStats, GoalStatus, WithdrawalsConfig } from '../types/database'
 
 interface PerAccountStats {
   account: string
@@ -23,11 +23,20 @@ interface PerAccountStats {
   p90: number[]
 }
 
+interface WithdrawalMarker {
+  month: number
+  label: string
+  amount: number
+  account: string
+  type: 'scheduled' | 'stochastic'
+}
+
 interface WealthTrajectoryChartProps {
   summaryStats: SummaryStats
   startDate?: string
   goalStatus?: GoalStatus[] | null
   optimalHorizon?: number | null
+  withdrawals?: WithdrawalsConfig | null
 }
 
 const formatCurrency = (value: number) => {
@@ -49,6 +58,7 @@ export default function WealthTrajectoryChart({
   startDate,
   goalStatus,
   optimalHorizon: _optimalHorizon,
+  withdrawals,
 }: WealthTrajectoryChartProps) {
   void _optimalHorizon // Reserved for future timeline annotations
   const [viewMode, setViewMode] = useState<'total' | 'per_account'>('total')
@@ -126,6 +136,62 @@ export default function WealthTrajectoryChart({
     return []
   }, [viewMode, totalData, hasTotalData, perAccount, hasPerAccount, selectedAccount, startDate])
 
+  // Compute withdrawal markers from scenario data
+  const withdrawalMarkers = useMemo((): WithdrawalMarker[] => {
+    if (!withdrawals || !startDate) return []
+
+    const markers: WithdrawalMarker[] = []
+    const start = new Date(startDate + 'T00:00:00')
+
+    // Scheduled withdrawals
+    for (const w of withdrawals.scheduled ?? []) {
+      const target = new Date(w.date + 'T00:00:00')
+      const month = (target.getFullYear() - start.getFullYear()) * 12 + (target.getMonth() - start.getMonth())
+      if (month >= 0) {
+        markers.push({
+          month,
+          label: w.description || `${w.account} withdrawal`,
+          amount: w.amount,
+          account: w.account,
+          type: 'scheduled',
+        })
+      }
+    }
+
+    // Stochastic withdrawals
+    for (const w of withdrawals.stochastic ?? []) {
+      let month: number
+      if (w.date) {
+        const target = new Date(w.date + 'T00:00:00')
+        month = (target.getFullYear() - start.getFullYear()) * 12 + (target.getMonth() - start.getMonth())
+      } else if (w.month !== undefined) {
+        month = w.month
+      } else {
+        continue
+      }
+      if (month >= 0) {
+        markers.push({
+          month,
+          label: w.description || `${w.account} variable`,
+          amount: w.base_amount,
+          account: w.account,
+          type: 'stochastic',
+        })
+      }
+    }
+
+    return markers.sort((a, b) => a.month - b.month)
+  }, [withdrawals, startDate])
+
+  // Filter markers for current view mode
+  const visibleMarkers = useMemo(() => {
+    if (viewMode === 'total') return withdrawalMarkers
+    if (!perAccount) return []
+    const selectedAcc = perAccount[selectedAccount]
+    if (!selectedAcc) return []
+    return withdrawalMarkers.filter(m => m.account === selectedAcc.account)
+  }, [withdrawalMarkers, viewMode, perAccount, selectedAccount])
+
   if (!hasTotalData && !hasPerAccount) {
     return <p className="text-gray-500">No wealth trajectory data available</p>
   }
@@ -188,6 +254,12 @@ export default function WealthTrajectoryChart({
             <span className="inline-block h-1 w-4 rounded" style={{ backgroundColor: color }}></span>
             Median
           </span>
+          {visibleMarkers.length > 0 && (
+            <span className="flex items-center gap-1">
+              <span className="inline-block h-4 w-0 border-l-2 border-dashed border-red-600"></span>
+              Withdrawals
+            </span>
+          )}
         </div>
       </div>
 
@@ -310,7 +382,7 @@ export default function WealthTrajectoryChart({
             {/* Goal threshold reference lines */}
             {viewMode === 'total' && goalThresholds.map((goal, i) => (
               <ReferenceLine
-                key={i}
+                key={`goal-${i}`}
                 y={goal.threshold}
                 stroke="#EF4444"
                 strokeDasharray="4 4"
@@ -320,6 +392,27 @@ export default function WealthTrajectoryChart({
                   position: 'right',
                   fontSize: 10,
                   fill: '#EF4444',
+                }}
+              />
+            ))}
+
+            {/* Withdrawal timeline markers */}
+            {visibleMarkers.map((marker, i) => (
+              <ReferenceLine
+                key={`wd-${i}`}
+                x={startDate ? (() => {
+                  const d = new Date(startDate + 'T00:00:00')
+                  d.setMonth(d.getMonth() + marker.month)
+                  return d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' })
+                })() : marker.month}
+                stroke={marker.type === 'scheduled' ? '#DC2626' : '#EA580C'}
+                strokeDasharray="3 3"
+                strokeWidth={1}
+                label={{
+                  value: `${marker.type === 'stochastic' ? '~' : ''}${formatCurrency(marker.amount)}`,
+                  position: 'top',
+                  fontSize: 9,
+                  fill: marker.type === 'scheduled' ? '#DC2626' : '#EA580C',
                 }}
               />
             ))}

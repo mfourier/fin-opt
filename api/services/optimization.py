@@ -98,6 +98,83 @@ def compute_goal_status_from_result(
     return status_list
 
 
+def compute_cash_flow_stats(
+    sim_result,
+    model,
+) -> dict[str, Any]:
+    """
+    Compute cash flow statistics (contributions and withdrawals) for visualization.
+
+    Parameters
+    ----------
+    sim_result : SimulationResult
+        Simulation result containing contributions and withdrawal arrays.
+    model : FinancialModel
+        The financial model (for account names).
+
+    Returns
+    -------
+    dict
+        Cash flow statistics with keys:
+        - contributions_mean: list of T mean contribution values
+        - contributions_by_account: list of dicts per account with mean allocations
+        - withdrawals_mean: list of T mean total withdrawal values (or None)
+        - withdrawals_by_account: list of dicts per account (or None)
+    """
+    T = sim_result.T
+    M = sim_result.M
+    X = sim_result.allocation  # (T, M)
+
+    # Contributions: sim_result.contributions is (n_sims, T) or (T,)
+    contributions = sim_result.contributions
+    if contributions.ndim == 1:
+        # Deterministic: same for all sims
+        mean_contributions = contributions  # (T,)
+    else:
+        mean_contributions = np.mean(contributions, axis=0)  # (T,)
+
+    # Per-account contributions = total_contribution * allocation_fraction
+    contributions_by_account = []
+    for m, acc in enumerate(model.accounts):
+        acc_contributions = (mean_contributions * X[:, m]).tolist()
+        contributions_by_account.append({
+            "account": acc.name,
+            "display_name": acc.display_name or acc.name,
+            "mean": acc_contributions,
+        })
+
+    result: dict[str, Any] = {
+        "contributions_mean": mean_contributions.tolist(),
+        "contributions_by_account": contributions_by_account,
+    }
+
+    # Withdrawals
+    if sim_result.withdrawals is not None:
+        D = sim_result.withdrawals
+        if D.ndim == 2:
+            # Deterministic: (T, M)
+            mean_D = D
+        else:
+            # Stochastic: (n_sims, T, M)
+            mean_D = np.mean(D, axis=0)  # (T, M)
+
+        # Total withdrawals per month
+        result["withdrawals_mean"] = np.sum(mean_D, axis=1).tolist()  # (T,)
+
+        # Per-account withdrawals
+        withdrawals_by_account = []
+        for m, acc in enumerate(model.accounts):
+            acc_D = mean_D[:T, m] if mean_D.shape[0] >= T else mean_D[:, m]
+            withdrawals_by_account.append({
+                "account": acc.name,
+                "display_name": acc.display_name or acc.name,
+                "mean": acc_D.tolist(),
+            })
+        result["withdrawals_by_account"] = withdrawals_by_account
+
+    return result
+
+
 def compute_wealth_percentiles(
     sim_result,
     model,
@@ -251,6 +328,12 @@ async def run_optimization(scenario_id: str, job_id: str) -> None:
 
         # Compute wealth trajectory percentiles for visualization
         summary_stats = compute_wealth_percentiles(
+            sim_result,
+            model,
+        )
+
+        # Compute cash flow statistics (contributions + withdrawals)
+        summary_stats["cash_flow"] = compute_cash_flow_stats(
             sim_result,
             model,
         )

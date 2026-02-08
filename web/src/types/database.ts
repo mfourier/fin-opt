@@ -63,6 +63,7 @@ export interface StochasticWithdrawal {
   floor?: number                  // Minimum withdrawal
   cap?: number                    // Maximum withdrawal
   seed?: number                   // Random seed
+  description?: string            // Optional description
 }
 
 export interface WithdrawalsConfig {
@@ -113,10 +114,25 @@ export interface PerAccountStats extends WealthPercentiles {
   display_name: string
 }
 
+export interface CashFlowAccountStats {
+  account: string
+  display_name: string
+  mean: number[]
+}
+
+export interface CashFlowStats {
+  contributions_mean: number[]
+  contributions_by_account: CashFlowAccountStats[]
+  withdrawals_mean?: number[]
+  withdrawals_by_account?: CashFlowAccountStats[]
+}
+
 export interface SummaryStats {
   // Optimization results: wealth trajectory percentiles
   total_wealth?: WealthPercentiles
   per_account?: PerAccountStats[]
+  // Cash flow statistics
+  cash_flow?: CashFlowStats
   // Simulation results (legacy format)
   mean_wealth?: number[]
   std_wealth?: number[]

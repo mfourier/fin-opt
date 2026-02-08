@@ -8,8 +8,10 @@ import AllocationHeatmap from '../components/AllocationHeatmap'
 import AllocationChart from '../components/AllocationChart'
 import GoalProgressCard from '../components/GoalProgressCard'
 import WealthTrajectoryChart from '../components/WealthTrajectoryChart'
+import WithdrawalSummary from '../components/WithdrawalSummary'
+import CashFlowChart from '../components/CashFlowChart'
 
-type ViewTab = 'overview' | 'allocation' | 'goals' | 'wealth'
+type ViewTab = 'overview' | 'allocation' | 'goals' | 'wealth' | 'cashflow'
 
 export default function ResultsPage() {
   const { jobId } = useParams<{ jobId: string }>()
@@ -226,6 +228,7 @@ export default function ResultsPage() {
               {[
                 { id: 'overview', label: 'Overview' },
                 { id: 'wealth', label: 'Wealth Trajectories' },
+                { id: 'cashflow', label: 'Cash Flow' },
                 { id: 'allocation', label: 'Allocation Policy' },
                 { id: 'goals', label: 'Goals' },
               ].map((tab) => (
@@ -285,6 +288,7 @@ export default function ResultsPage() {
                       startDate={scenario?.start_date}
                       goalStatus={result.goal_status}
                       optimalHorizon={result.optimal_horizon}
+                      withdrawals={scenario?.withdrawals}
                     />
                   </div>
                 )}
@@ -324,11 +328,49 @@ export default function ResultsPage() {
                     startDate={scenario?.start_date}
                     goalStatus={result.goal_status}
                     optimalHorizon={result.optimal_horizon}
+                    withdrawals={scenario?.withdrawals}
                   />
                 ) : (
                   <p className="text-gray-500">
                     No wealth trajectory data available. Re-run the optimization to generate trajectories.
                   </p>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'cashflow' && (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="mb-2 text-lg font-medium text-gray-900">Cash Flow Analysis</h3>
+                  <p className="mb-4 text-sm text-gray-500">
+                    Monthly contributions and withdrawals over the investment horizon.
+                  </p>
+                </div>
+
+                {/* Net Cash Flow Chart */}
+                {result.summary_stats?.cash_flow ? (
+                  <CashFlowChart
+                    cashFlow={result.summary_stats.cash_flow}
+                    startDate={scenario?.start_date}
+                  />
+                ) : (
+                  <p className="text-sm text-gray-500">
+                    No cash flow data available. Re-run the optimization to generate cash flow statistics.
+                  </p>
+                )}
+
+                {/* Withdrawal Schedule */}
+                {scenario?.withdrawals && (
+                  <>
+                    <hr className="border-gray-200" />
+                    <div>
+                      <h3 className="mb-4 text-lg font-medium text-gray-900">Withdrawal Schedule</h3>
+                      <WithdrawalSummary
+                        withdrawals={scenario.withdrawals}
+                        startDate={scenario.start_date}
+                      />
+                    </div>
+                  </>
                 )}
               </div>
             )}
