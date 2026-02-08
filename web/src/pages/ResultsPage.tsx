@@ -10,6 +10,7 @@ import GoalProgressCard from '../components/GoalProgressCard'
 import WealthTrajectoryChart from '../components/WealthTrajectoryChart'
 import WithdrawalSummary from '../components/WithdrawalSummary'
 import CashFlowChart from '../components/CashFlowChart'
+import MonthlyInvestmentPlan from '../components/MonthlyInvestmentPlan'
 
 type ViewTab = 'overview' | 'allocation' | 'goals' | 'wealth' | 'cashflow'
 
@@ -381,11 +382,13 @@ export default function ResultsPage() {
                   <h3 className="mb-2 text-lg font-medium text-gray-900">Allocation Timeline</h3>
                   <p className="mb-4 text-sm text-gray-500">
                     Stacked area chart showing how allocation changes over the {result.optimal_horizon}-month horizon.
+                    {result.summary_stats?.cash_flow && ' Toggle between percentage and dollar amount views.'}
                   </p>
                   <AllocationChart
                     allocation={result.allocation_policy}
                     accountNames={accountNames}
                     startDate={scenario?.start_date}
+                    cashFlow={result.summary_stats?.cash_flow}
                   />
                 </div>
                 <hr className="border-gray-200" />
@@ -398,8 +401,23 @@ export default function ResultsPage() {
                     allocation={result.allocation_policy}
                     accountNames={accountNames}
                     startDate={scenario?.start_date}
+                    cashFlow={result.summary_stats?.cash_flow}
                   />
                 </div>
+                {result.summary_stats?.cash_flow && (
+                  <>
+                    <hr className="border-gray-200" />
+                    <div>
+                      <h3 className="mb-2 text-lg font-medium text-gray-900">Investment Plan</h3>
+                      <MonthlyInvestmentPlan
+                        allocation={result.allocation_policy}
+                        accountNames={accountNames}
+                        cashFlow={result.summary_stats.cash_flow}
+                        startDate={scenario?.start_date}
+                      />
+                    </div>
+                  </>
+                )}
               </div>
             )}
 

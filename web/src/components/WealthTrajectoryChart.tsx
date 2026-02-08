@@ -161,7 +161,7 @@ export default function WealthTrajectoryChart({
     const nTrajectories = rawTrajectories.length
     const T = rawTrajectories[0].length
 
-    // Build data: each row is { month, date?, traj_0, traj_1, ..., mean, p50 }
+    // Build data: each row is { month, date?, traj_0, traj_1, ..., percentile stats }
     const data = Array.from({ length: T }, (_, t) => {
       const point: Record<string, number | string> = { month: t }
       const dateLabel = getDateLabel(t)
@@ -171,12 +171,24 @@ export default function WealthTrajectoryChart({
         point[`t${i}`] = rawTrajectories[i][t]
       }
 
-      // Also include median for reference
+      // Reuse full-simulation percentile stats for tooltip consistency
       if (viewMode === 'total' && hasTotalData) {
+        point.p10 = totalData!.p10[t]
+        point.p25 = totalData!.p25[t]
         point.p50 = totalData!.p50[t]
+        point.p75 = totalData!.p75[t]
+        point.p90 = totalData!.p90[t]
+        point.mean = totalData!.mean[t]
       } else if (viewMode === 'per_account' && hasPerAccount) {
         const acc = perAccount![selectedAccount]
-        if (acc) point.p50 = acc.p50[t]
+        if (acc) {
+          point.p10 = acc.p10[t]
+          point.p25 = acc.p25[t]
+          point.p50 = acc.p50[t]
+          point.p75 = acc.p75[t]
+          point.p90 = acc.p90[t]
+          point.mean = acc.mean[t]
+        }
       }
 
       return point
@@ -459,19 +471,37 @@ export default function WealthTrajectoryChart({
               <XAxis {...xAxisProps} />
               <YAxis {...yAxisProps} />
               <Tooltip
-                formatter={(value: number, name: string) => {
-                  if (name === 'p50') return [formatCurrency(value), 'Median (P50)']
-                  return [formatCurrency(value), name]
+                content={({ active, payload, label }) => {
+                  if (!active || !payload || payload.length === 0) return null
+                  const point = payload[0]?.payload
+                  if (!point) return null
+                  const dateLabel = startDate ? String(label) : `Month ${label}`
+                  const stats = [
+                    { label: 'P90', value: point.p90 },
+                    { label: 'P75', value: point.p75 },
+                    { label: 'Median (P50)', value: point.p50 },
+                    { label: 'Mean', value: point.mean },
+                    { label: 'P25', value: point.p25 },
+                    { label: 'P10', value: point.p10 },
+                  ]
+                  return (
+                    <div style={{
+                      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                      border: '1px solid #E5E7EB',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      padding: '8px 12px',
+                    }}>
+                      <p style={{ fontWeight: 600, marginBottom: 4 }}>{dateLabel}</p>
+                      {stats.map(s => (
+                        <p key={s.label} style={{ margin: '2px 0', display: 'flex', justifyContent: 'space-between', gap: 16 }}>
+                          <span style={{ color: '#6B7280' }}>{s.label}</span>
+                          <span style={{ fontWeight: 500 }}>{formatCurrency(s.value as number)}</span>
+                        </p>
+                      ))}
+                    </div>
+                  )
                 }}
-                labelFormatter={(label) => startDate ? String(label) : `Month ${label}`}
-                contentStyle={{
-                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                  border: '1px solid #E5E7EB',
-                  borderRadius: '6px',
-                  fontSize: '12px',
-                }}
-                // Only show median in tooltip to avoid clutter from all trajectories
-                filterNull={false}
               />
 
               {/* Individual trajectories */}

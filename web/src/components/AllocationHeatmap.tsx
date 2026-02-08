@@ -1,9 +1,21 @@
 import { useMemo, useState } from 'react'
+import type { CashFlowStats } from '../types/database'
 
 interface AllocationHeatmapProps {
   allocation: number[][]
   accountNames: string[]
   startDate?: string
+  cashFlow?: CashFlowStats
+}
+
+const formatCurrency = (value: number) => {
+  if (Math.abs(value) >= 1_000_000) {
+    return `$${(value / 1_000_000).toFixed(1)}M`
+  }
+  if (Math.abs(value) >= 1_000) {
+    return `$${(value / 1_000).toFixed(0)}K`
+  }
+  return `$${value.toFixed(0)}`
 }
 
 // Color palette for different accounts
@@ -16,9 +28,20 @@ const ACCOUNT_COLORS = [
   { main: '#EC4899', light: '#FCE7F3', name: 'pink' },    // Pink
 ]
 
-export default function AllocationHeatmap({ allocation, accountNames, startDate }: AllocationHeatmapProps) {
+export default function AllocationHeatmap({ allocation, accountNames, startDate, cashFlow }: AllocationHeatmapProps) {
   const [hoveredCell, setHoveredCell] = useState<{ t: number; m: number } | null>(null)
   const [viewMode, setViewMode] = useState<'heatmap' | 'stacked'>('heatmap')
+
+  // Build lookup: accountName -> mean contribution array for enriched tooltips
+  const contributionsByName = useMemo(() => {
+    if (!cashFlow) return null
+    const map: Record<string, number[]> = {}
+    for (const acc of cashFlow.contributions_by_account) {
+      const displayName = acc.display_name || acc.account
+      map[displayName] = acc.mean
+    }
+    return map
+  }, [cashFlow])
 
   const stats = useMemo(() => {
     if (!allocation || allocation.length === 0) return null
@@ -34,7 +57,13 @@ export default function AllocationHeatmap({ allocation, accountNames, startDate 
       const final = values[T - 1] ?? 0
       const trend = final - initial
 
-      return { name, avg, min, max, initial, final, trend, color: ACCOUNT_COLORS[m % ACCOUNT_COLORS.length] }
+      // Average dollar amount for this account
+      const contribs = cashFlow?.contributions_by_account.find(
+        a => (a.display_name || a.account) === name
+      )?.mean
+      const avgAmount = contribs ? contribs.reduce((a, b) => a + b, 0) / contribs.length : null
+
+      return { name, avg, min, max, initial, final, trend, avgAmount, color: ACCOUNT_COLORS[m % ACCOUNT_COLORS.length] }
     })
   }, [allocation, accountNames])
 
@@ -165,22 +194,33 @@ export default function AllocationHeatmap({ allocation, accountNames, startDate 
             </div>
 
             {/* Tooltip */}
-            {hoveredCell && (
-              <div className="mt-2 rounded-md bg-gray-800 px-3 py-2 text-xs text-white">
-                <span className="font-medium">Month {hoveredCell.t}</span>
-                {startDate && (
-                  <span className="ml-2 text-gray-300">
-                    ({formatMonth(hoveredCell.t)})
-                  </span>
-                )}
-                <span className="mx-2">|</span>
-                <span>{accountNames[hoveredCell.m]}</span>
-                <span className="mx-2">:</span>
-                <span className="font-semibold">
-                  {((allocation[hoveredCell.t]?.[hoveredCell.m] ?? 0) * 100).toFixed(1)}%
-                </span>
-              </div>
-            )}
+            {hoveredCell && (() => {
+              const pct = (allocation[hoveredCell.t]?.[hoveredCell.m] ?? 0) * 100
+              const amount = contributionsByName?.[accountNames[hoveredCell.m]]?.[hoveredCell.t]
+              const total = cashFlow?.contributions_mean[hoveredCell.t]
+              return (
+                <div className="mt-2 rounded-md bg-gray-800 px-3 py-2 text-xs text-white">
+                  <span className="font-medium">Month {hoveredCell.t}</span>
+                  {startDate && (
+                    <span className="ml-2 text-gray-300">
+                      ({formatMonth(hoveredCell.t)})
+                    </span>
+                  )}
+                  {total != null && (
+                    <span className="ml-2 text-gray-300">
+                      • Total: {formatCurrency(total)}
+                    </span>
+                  )}
+                  <span className="mx-2">|</span>
+                  <span>{accountNames[hoveredCell.m]}</span>
+                  <span className="mx-2">:</span>
+                  <span className="font-semibold">{pct.toFixed(1)}%</span>
+                  {amount != null && (
+                    <span className="ml-2 text-gray-300">→ {formatCurrency(amount)}</span>
+                  )}
+                </div>
+              )
+            })()}
           </div>
         </div>
       ) : (
@@ -219,18 +259,31 @@ export default function AllocationHeatmap({ allocation, accountNames, startDate 
           </div>
 
           {/* Tooltip for stacked view */}
-          {hoveredCell && (
-            <div className="mt-2 rounded-md bg-gray-800 px-3 py-2 text-xs text-white">
-              <span className="font-medium">Month {hoveredCell.t}</span>
-              <span className="ml-4">
-                {accountNames.map((name, m) => (
-                  <span key={m} className="ml-2">
-                    {name}: {((allocation[hoveredCell.t]?.[m] ?? 0) * 100).toFixed(0)}%
-                  </span>
-                ))}
-              </span>
-            </div>
-          )}
+          {hoveredCell && (() => {
+            const total = cashFlow?.contributions_mean[hoveredCell.t]
+            return (
+              <div className="mt-2 rounded-md bg-gray-800 px-3 py-2 text-xs text-white">
+                <span className="font-medium">Month {hoveredCell.t}</span>
+                {total != null && (
+                  <span className="ml-2 text-gray-300">• Total: {formatCurrency(total)}</span>
+                )}
+                <span className="ml-4">
+                  {accountNames.map((name, m) => {
+                    const pct = ((allocation[hoveredCell.t]?.[m] ?? 0) * 100).toFixed(0)
+                    const amount = contributionsByName?.[name]?.[hoveredCell.t]
+                    return (
+                      <span key={m} className="ml-2">
+                        {name}: {pct}%
+                        {amount != null && (
+                          <span className="text-gray-300"> ({formatCurrency(amount)})</span>
+                        )}
+                      </span>
+                    )
+                  })}
+                </span>
+              </div>
+            )
+          })()}
         </div>
       )}
 
@@ -259,6 +312,12 @@ export default function AllocationHeatmap({ allocation, accountNames, startDate 
                     {stat.trend > 0 ? '+' : ''}{(stat.trend * 100).toFixed(1)}%
                   </span>
                 </div>
+                {stat.avgAmount != null && (
+                  <div className="flex justify-between border-t border-gray-100 pt-1 mt-1">
+                    <span>Avg/mo:</span>
+                    <span className="font-medium text-gray-700">{formatCurrency(stat.avgAmount)}</span>
+                  </div>
+                )}
               </div>
             </div>
           ))}
