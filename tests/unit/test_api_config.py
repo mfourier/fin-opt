@@ -115,18 +115,20 @@ def test_missing_required_var_raises_error(monkeypatch):
     """Test Settings raises ValidationError when required vars are missing."""
     # Only set some required vars, missing others
     monkeypatch.setenv("SUPABASE_URL", "https://test.supabase.co")
-    # Missing: SUPABASE_ANON_KEY and SUPABASE_SERVICE_KEY
-    
+    monkeypatch.delenv("SUPABASE_ANON_KEY", raising=False)
+    monkeypatch.delenv("SUPABASE_SERVICE_KEY", raising=False)
+
     from api.config import Settings, get_settings
     get_settings.cache_clear()
-    
+
+    # Disable .env file loading so only actual env vars are used
     with pytest.raises(ValidationError) as exc_info:
-        Settings()
-    
+        Settings(_env_file=None)
+
     # Check error mentions missing fields
     error_str = str(exc_info.value)
     assert "supabase_anon_key" in error_str.lower() or "Field required" in error_str
-    
+
     get_settings.cache_clear()
 
 

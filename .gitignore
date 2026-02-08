@@ -50,6 +50,10 @@ data/processed/
 .DS_Store
 Thumbs.db
 
+# Personal docs (not for repo)
+LINKEDIN_CV.md
+docs/study-plan/
+
 # Cache
 .cache/
 *.log

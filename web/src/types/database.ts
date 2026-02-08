@@ -127,10 +127,25 @@ export interface CashFlowStats {
   withdrawals_by_account?: CashFlowAccountStats[]
 }
 
+export interface SampledAccountTrajectories {
+  account: string
+  display_name: string
+  trajectories: number[][]
+}
+
+export interface SampledTrajectories {
+  total: number[][]
+  per_account: SampledAccountTrajectories[]
+  n_sampled: number
+  n_total: number
+}
+
 export interface SummaryStats {
   // Optimization results: wealth trajectory percentiles
   total_wealth?: WealthPercentiles
   per_account?: PerAccountStats[]
+  // Sampled Monte Carlo trajectories
+  trajectories?: SampledTrajectories
   // Cash flow statistics
   cash_flow?: CashFlowStats
   // Simulation results (legacy format)

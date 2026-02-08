@@ -224,9 +224,35 @@ def compute_wealth_percentiles(
             acc_stats[f"p{p}"] = np.percentile(account_wealth, p, axis=0).tolist()
         per_account.append(acc_stats)
 
+    # Sample individual trajectories for Monte Carlo visualization
+    n_sims = total_wealth.shape[0]
+    max_trajectories = 50
+    if n_sims <= max_trajectories:
+        sample_idx = np.arange(n_sims)
+    else:
+        rng = np.random.default_rng(0)
+        sample_idx = rng.choice(n_sims, size=max_trajectories, replace=False)
+        sample_idx.sort()
+
+    sampled_total = total_wealth[sample_idx, :].tolist()  # list of lists
+
+    sampled_per_account = []
+    for m, acc in enumerate(model.accounts):
+        sampled_per_account.append({
+            "account": acc.name,
+            "display_name": acc.display_name or acc.name,
+            "trajectories": wealth[sample_idx, :, m].tolist(),
+        })
+
     return {
         "total_wealth": total_stats,
         "per_account": per_account,
+        "trajectories": {
+            "total": sampled_total,
+            "per_account": sampled_per_account,
+            "n_sampled": len(sample_idx),
+            "n_total": int(n_sims),
+        },
     }
 
 

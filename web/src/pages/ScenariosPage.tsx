@@ -904,6 +904,16 @@ export default function ScenariosPage() {
                                   className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-xs focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                                 />
                               </div>
+                              <div className="flex-1">
+                                <label className="block text-xs text-gray-500">Description</label>
+                                <input
+                                  type="text"
+                                  value={w.description ?? ''}
+                                  onChange={(e) => updateStochasticWithdrawal(index, 'description', e.target.value || undefined)}
+                                  placeholder="e.g. Medical expenses"
+                                  className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-xs focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                                />
+                              </div>
                               <button
                                 type="button"
                                 onClick={() => removeStochasticWithdrawal(index)}

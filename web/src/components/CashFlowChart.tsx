@@ -71,12 +71,23 @@ export default function CashFlowChart({ cashFlow, startDate }: CashFlowChartProp
     })
   }, [cashFlow, startDate, viewMode])
 
-  // Sample data for large horizons to keep the chart readable
+  // Sample data for large horizons, always keeping months with withdrawals
   const sampledData = useMemo(() => {
     if (chartData.length <= 48) return chartData
     const step = Math.ceil(chartData.length / 48)
-    return chartData.filter((_, i) => i % step === 0 || i === chartData.length - 1)
-  }, [chartData])
+
+    // Identify months that have non-zero withdrawals (must always show)
+    const withdrawalMonths = new Set<number>()
+    if (cashFlow.withdrawals_mean) {
+      cashFlow.withdrawals_mean.forEach((val, i) => {
+        if (val > 0) withdrawalMonths.add(i)
+      })
+    }
+
+    return chartData.filter((_, i) =>
+      i % step === 0 || i === chartData.length - 1 || withdrawalMonths.has(i)
+    )
+  }, [chartData, cashFlow.withdrawals_mean])
 
   // Compute totals for summary
   const totalContributions = cashFlow.contributions_mean.reduce((s, v) => s + v, 0)
