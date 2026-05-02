@@ -837,5 +837,167 @@ class TestReturnModelIntegration:
         assert corr_AB > corr_AC  # A-B should be more correlated
 
 
+class TestReturnModelCorrelationDictEdgeCases:
+    """Test correlation dict edge cases and special handling."""
+
+    def test_correlation_dict_with_single_pair(self):
+        """Test correlation dict with only one pair specified."""
+        accounts = [
+            Account.from_annual("A", 0.08, 0.10),
+            Account.from_annual("B", 0.10, 0.12),
+            Account.from_annual("C", 0.12, 0.15),
+        ]
+
+        # Only specify A-B correlation, others default to 0
+        corr_dict = {("A", "B"): 0.7}
+        model = ReturnModel(accounts, default_correlation=corr_dict)
+
+        R = model.generate(T=12, n_sims=100, seed=42)
+        assert R.shape == (100, 12, 3)
+
+        # Compute empirical correlation
+        R_reshaped = R.reshape(-1, 3)  # (n_sims*T, M)
+        empirical_corr = np.corrcoef(R_reshaped.T)
+
+        # A-B should have correlation ~0.7
+        assert abs(empirical_corr[0, 1] - 0.7) < 0.15  # Allow some sampling error
+
+    def test_correlation_dict_reverse_order(self):
+        """Test that (A,B) and (B,A) are treated equivalently."""
+        accounts = [
+            Account.from_annual("A", 0.08, 0.10),
+            Account.from_annual("B", 0.10, 0.12),
+        ]
+
+        # Specify as (B, A) instead of (A, B)
+        corr_dict = {("B", "A"): 0.8}
+        model = ReturnModel(accounts, default_correlation=corr_dict)
+
+        R = model.generate(T=50, n_sims=500, seed=123)
+        R_reshaped = R.reshape(-1, 2)
+        empirical_corr = np.corrcoef(R_reshaped.T)
+
+        # Correlation should still be ~0.8
+        assert abs(empirical_corr[0, 1] - 0.8) < 0.1
+
+    def test_correlation_dict_partial_specification(self):
+        """Test correlation dict with partial specification of pairs."""
+        accounts = [
+            Account.from_annual("A", 0.08, 0.10),
+            Account.from_annual("B", 0.10, 0.12),
+            Account.from_annual("C", 0.12, 0.15),
+        ]
+
+        # Only specify A-B and B-C, A-C will default to 0
+        corr_dict = {("A", "B"): 0.6, ("B", "C"): 0.4}
+        model = ReturnModel(accounts, default_correlation=corr_dict)
+
+        R = model.generate(T=50, n_sims=500, seed=456)
+        assert R.shape == (500, 50, 3)
+
+        # Verify matrix is symmetric and positive definite
+        corr_matrix = model.default_correlation
+        np.testing.assert_allclose(corr_matrix, corr_matrix.T)
+        eigenvalues = np.linalg.eigvalsh(corr_matrix)
+        assert np.all(eigenvalues >= -1e-10)  # Positive semi-definite
+
+    def test_correlation_dict_missing_pairs_default_to_zero(self):
+        """Test that unspecified pairs default to zero correlation."""
+        accounts = [
+            Account.from_annual("A", 0.08, 0.10),
+            Account.from_annual("B", 0.10, 0.12),
+            Account.from_annual("C", 0.12, 0.15),
+        ]
+
+        # Only specify A-C, others should be 0
+        corr_dict = {("A", "C"): 0.9}
+        model = ReturnModel(accounts, default_correlation=corr_dict)
+
+        R = model.generate(T=100, n_sims=1000, seed=999)
+        R_reshaped = R.reshape(-1, 3)
+        empirical_corr = np.corrcoef(R_reshaped.T)
+
+        # A-C should be high
+        assert empirical_corr[0, 2] > 0.7
+
+        # A-B and B-C should be close to zero
+        assert abs(empirical_corr[0, 1]) < 0.15
+        assert abs(empirical_corr[1, 2]) < 0.15
+
+    def test_correlation_dict_full_specification(self):
+        """Test correlation dict with all pairs specified."""
+        accounts = [
+            Account.from_annual("A", 0.08, 0.10),
+            Account.from_annual("B", 0.10, 0.12),
+            Account.from_annual("C", 0.12, 0.15),
+        ]
+
+        # Specify all pairs
+        corr_dict = {
+            ("A", "B"): 0.5,
+            ("A", "C"): 0.3,
+            ("B", "C"): 0.7,
+        }
+        model = ReturnModel(accounts, default_correlation=corr_dict)
+
+        R = model.generate(T=50, n_sims=500, seed=111)
+        R_reshaped = R.reshape(-1, 3)
+        empirical_corr = np.corrcoef(R_reshaped.T)
+
+        # Check all correlations are approximately correct
+        assert abs(empirical_corr[0, 1] - 0.5) < 0.15
+        assert abs(empirical_corr[0, 2] - 0.3) < 0.15
+        assert abs(empirical_corr[1, 2] - 0.7) < 0.15
+
+    def test_correlation_dict_override_at_generation(self):
+        """Test that correlation can be overridden at generation time."""
+        accounts = [
+            Account.from_annual("A", 0.08, 0.10),
+            Account.from_annual("B", 0.10, 0.12),
+        ]
+
+        # Default correlation
+        default_corr = {("A", "B"): 0.3}
+        model = ReturnModel(accounts, default_correlation=default_corr)
+
+        # Override at generation with higher correlation
+        override_corr = np.array([[1.0, 0.9], [0.9, 1.0]])
+        R = model.generate(T=50, n_sims=500, correlation=override_corr, seed=222)
+
+        R_reshaped = R.reshape(-1, 2)
+        empirical_corr = np.corrcoef(R_reshaped.T)
+
+        # Should use override (0.9), not default (0.3)
+        assert empirical_corr[0, 1] > 0.7
+
+    def test_correlation_dict_with_three_accounts_chain(self):
+        """Test correlation dict with three accounts in a chain pattern."""
+        accounts = [
+            Account.from_annual("A", 0.08, 0.10),
+            Account.from_annual("B", 0.10, 0.12),
+            Account.from_annual("C", 0.12, 0.15),
+        ]
+
+        # Chain: A-B and B-C, but not A-C directly
+        corr_dict = {
+            ("A", "B"): 0.5,
+            ("B", "C"): 0.5,
+        }
+        model = ReturnModel(accounts, default_correlation=corr_dict)
+
+        R = model.generate(T=30, n_sims=300, seed=333)
+        assert R.shape == (300, 30, 3)
+
+        # Verify correlation matrix is symmetric and has 1s on diagonal
+        corr_matrix = model.default_correlation
+        assert corr_matrix.shape == (3, 3)
+        np.testing.assert_allclose(corr_matrix, corr_matrix.T)  # Symmetric
+        np.testing.assert_allclose(np.diag(corr_matrix), 1.0)  # Diagonal is 1
+
+        # Verify it's positive semi-definite
+        eigenvalues = np.linalg.eigvalsh(corr_matrix)
+        assert np.all(eigenvalues >= -1e-10)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

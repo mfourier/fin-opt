@@ -87,11 +87,16 @@ Domain-level abstractions for financial goals as chance constraints.
   - `estimate_minimum_horizon(monthly_contribution, accounts)`: Deterministic T estimate for terminal goals
 
 **Utility functions**:
-- **`check_goals(result, goals, accounts, start_date)`**: Validates goal satisfaction, returns metrics dict
+- **`check_goals(result, goals, accounts, start_date)`**: Validates goal satisfaction, returns metrics dict with dual reporting:
+  - **Legacy metrics**: satisfied, violation_rate, required_rate, margin, median_shortfall, n_violations
+  - **CVaR transparency metrics** (new): empirical_probability, confidence_gap, note
+  - Reports both specified confidence (CVaR guarantee) and empirical probability (observed success rate)
 - **`goal_progress(result, goals, accounts, start_date)`**: Computes VaR-based progress toward each goal
-- **`print_goal_status(result, goals, accounts, start_date)`**: Pretty-prints goal satisfaction status
+- **`print_goal_status(result, goals, accounts, start_date)`**: Pretty-prints goal satisfaction status with dual metrics display
 
 **Design principle**: Immutable frozen dataclasses with calendar-aware resolution.
+
+**CVaR Transparency**: Due to CVaR conservatism (CVaR_ε ≤ 0 ⟹ ℙ(W≥b) ≥ 1-ε, one-way implication), empirical probability typically exceeds specified confidence. Both metrics are reported for intellectual honesty.
 
 ### 5. `optimization.py` - Convex Solvers
 
@@ -105,6 +110,7 @@ Implements bilevel optimization: outer problem (minimize horizon T) + inner prob
 - **`OptimizationResult`**: Container for X*, T*, objective value, goal_set, and diagnostics
   - `validate_goals(result)`: Validates goal satisfaction using stored goal_set
   - `is_valid_allocation()`: Checks simplex constraints on X
+  - `goal_metrics`: Optional field storing dual metrics from `check_goals()` (empirical probability + confidence gap)
 
 **CVaR Reformulation** (Rockafellar & Uryasev 2000):
 ```
@@ -114,6 +120,11 @@ Epigraph (LP):          γ + (1/εN)Σ z_i ≤ 0,  z_i ≥ b - W_t^i - γ,  z_i 
 ```
 
 This provides global optimality guarantees (vs local minima from gradient-based methods).
+
+**CVaR Conservatism**: The reformulation is conservative - satisfying CVaR constraint **guarantees** but does not **require** the probabilistic constraint. In practice:
+- CVaR_ε(b - W) ≤ 0  ⟹  ℙ(W ≥ b) ≥ 1-ε  (one-way implication)
+- Empirical probability typically exceeds specified confidence by 1-5%
+- Both metrics reported via `check_goals()` for transparency
 
 **Optimization Objectives**:
 

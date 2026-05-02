@@ -678,5 +678,209 @@ class TestPortfolioNumericalStability:
         assert np.all(F == 1.0)
 
 
+class TestPortfolioAffineMethod:
+    """Test affine simulation method and comparison with recursive method."""
+
+    @pytest.fixture
+    def portfolio(self):
+        """Create test portfolio."""
+        accounts = [
+            Account.from_annual("Conservative", 0.04, 0.05, initial_wealth=500_000),
+            Account.from_annual("Aggressive", 0.08, 0.10, initial_wealth=300_000),
+        ]
+        return Portfolio(accounts)
+
+    def test_affine_method_basic(self, portfolio):
+        """Test affine method runs without errors."""
+        T = 24
+        n_sims = 100
+        M = 2
+
+        np.random.seed(42)
+        A = np.full(T, 100_000.0)
+        R = np.random.randn(n_sims, T, M) * 0.02 + 0.005
+        X = np.tile([0.6, 0.4], (T, 1))
+
+        result = portfolio.simulate(A=A, R=R, X=X, method="affine")
+
+        assert "wealth" in result
+        assert "total_wealth" in result
+        assert result["wealth"].shape == (n_sims, T + 1, M)
+
+    def test_affine_matches_recursive(self, portfolio):
+        """Test that affine and recursive methods produce identical results."""
+        T = 24
+        n_sims = 100
+        M = 2
+
+        # Use same seed for reproducibility
+        np.random.seed(123)
+        A = np.full(T, 100_000.0)
+        R = np.random.randn(n_sims, T, M) * 0.02 + 0.005
+        X = np.tile([0.6, 0.4], (T, 1))
+
+        # Compute with both methods
+        result_recursive = portfolio.simulate(A=A, R=R, X=X, method="recursive")
+        result_affine = portfolio.simulate(A=A, R=R, X=X, method="affine")
+
+        # Wealth trajectories should match exactly (no stochasticity in methods)
+        np.testing.assert_allclose(
+            result_recursive["wealth"],
+            result_affine["wealth"],
+            rtol=1e-10,
+            atol=1e-8,
+            err_msg="Affine and recursive methods produce different wealth trajectories"
+        )
+
+        np.testing.assert_allclose(
+            result_recursive["total_wealth"],
+            result_affine["total_wealth"],
+            rtol=1e-10,
+            atol=1e-8,
+            err_msg="Affine and recursive methods produce different total wealth"
+        )
+
+    def test_affine_with_withdrawals(self, portfolio):
+        """Test affine method with withdrawals matches recursive."""
+        T = 12
+        n_sims = 50
+        M = 2
+
+        np.random.seed(456)
+        A = np.full(T, 100_000.0)
+        R = np.random.randn(n_sims, T, M) * 0.02 + 0.005
+        X = np.tile([0.6, 0.4], (T, 1))
+
+        # Create withdrawal schedule (deterministic)
+        D = np.zeros((T, M))
+        D[6, 0] = 50_000  # Withdraw 50k from account 0 at month 6
+
+        result_recursive = portfolio.simulate(A=A, R=R, X=X, D=D, method="recursive")
+        result_affine = portfolio.simulate(A=A, R=R, X=X, D=D, method="affine")
+
+        np.testing.assert_allclose(
+            result_recursive["wealth"],
+            result_affine["wealth"],
+            rtol=1e-10,
+            atol=1e-8,
+            err_msg="Affine and recursive methods differ with withdrawals"
+        )
+
+    def test_affine_with_stochastic_withdrawals(self, portfolio):
+        """Test affine method with stochastic withdrawals."""
+        T = 12
+        n_sims = 50
+        M = 2
+
+        np.random.seed(789)
+        A = np.full(T, 100_000.0)
+        R = np.random.randn(n_sims, T, M) * 0.02 + 0.005
+        X = np.tile([0.6, 0.4], (T, 1))
+
+        # Stochastic withdrawals
+        D = np.random.uniform(0, 30_000, size=(n_sims, T, M))
+
+        result_recursive = portfolio.simulate(A=A, R=R, X=X, D=D, method="recursive")
+        result_affine = portfolio.simulate(A=A, R=R, X=X, D=D, method="affine")
+
+        np.testing.assert_allclose(
+            result_recursive["wealth"],
+            result_affine["wealth"],
+            rtol=1e-10,
+            atol=1e-8,
+            err_msg="Affine and recursive methods differ with stochastic withdrawals"
+        )
+
+    def test_affine_with_varying_allocation(self, portfolio):
+        """Test affine method with time-varying allocation policy."""
+        T = 24
+        n_sims = 50
+        M = 2
+
+        np.random.seed(999)
+        A = np.full(T, 100_000.0)
+        R = np.random.randn(n_sims, T, M) * 0.02 + 0.005
+
+        # Time-varying allocation: gradually shift from 100-0 to 0-100
+        X = np.zeros((T, M))
+        for t in range(T):
+            X[t, 0] = 1.0 - (t / T)  # Decreasing
+            X[t, 1] = t / T  # Increasing
+
+        result_recursive = portfolio.simulate(A=A, R=R, X=X, method="recursive")
+        result_affine = portfolio.simulate(A=A, R=R, X=X, method="affine")
+
+        np.testing.assert_allclose(
+            result_recursive["wealth"],
+            result_affine["wealth"],
+            rtol=1e-10,
+            atol=1e-8,
+            err_msg="Affine and recursive methods differ with varying allocation"
+        )
+
+    def test_affine_with_zero_initial_wealth(self):
+        """Test affine method with zero initial wealth."""
+        accounts = [
+            Account.from_annual("A", 0.04, 0.05, initial_wealth=0),
+            Account.from_annual("B", 0.08, 0.10, initial_wealth=0),
+        ]
+        portfolio = Portfolio(accounts)
+
+        T = 12
+        n_sims = 50
+        M = 2
+
+        np.random.seed(111)
+        A = np.full(T, 100_000.0)
+        R = np.random.randn(n_sims, T, M) * 0.02 + 0.005
+        X = np.tile([0.5, 0.5], (T, 1))
+
+        result_recursive = portfolio.simulate(A=A, R=R, X=X, method="recursive")
+        result_affine = portfolio.simulate(A=A, R=R, X=X, method="affine")
+
+        # Initial wealth should be zero
+        assert np.all(result_affine["wealth"][:, 0, :] == 0)
+
+        # Methods should still match
+        np.testing.assert_allclose(
+            result_recursive["wealth"],
+            result_affine["wealth"],
+            rtol=1e-10,
+            atol=1e-8
+        )
+
+    def test_affine_with_initial_wealth_override(self, portfolio):
+        """Test affine method with initial_wealth override."""
+        T = 12
+        n_sims = 50
+        M = 2
+
+        np.random.seed(222)
+        A = np.full(T, 100_000.0)
+        R = np.random.randn(n_sims, T, M) * 0.02 + 0.005
+        X = np.tile([0.6, 0.4], (T, 1))
+
+        initial_wealth = np.array([1_000_000.0, 2_000_000.0])
+
+        result_recursive = portfolio.simulate(
+            A=A, R=R, X=X, initial_wealth=initial_wealth, method="recursive"
+        )
+        result_affine = portfolio.simulate(
+            A=A, R=R, X=X, initial_wealth=initial_wealth, method="affine"
+        )
+
+        # Check override was applied
+        assert np.all(result_affine["wealth"][:, 0, 0] == 1_000_000)
+        assert np.all(result_affine["wealth"][:, 0, 1] == 2_000_000)
+
+        # Methods should match
+        np.testing.assert_allclose(
+            result_recursive["wealth"],
+            result_affine["wealth"],
+            rtol=1e-10,
+            atol=1e-8
+        )
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

@@ -67,6 +67,27 @@ CVaR form (convex):     CVaR_ε(b - W_t) ≤ 0
 
 This enables globally optimal allocation policies via convex programming.
 
+### CVaR conservatism and dual metrics
+
+**Important mathematical property**: The CVaR reformulation provides a **one-way guarantee**:
+
+```
+CVaR_ε(b - W_t) ≤ 0  ⟹  ℙ(W_t ≥ b) ≥ 1-ε    (but NOT vice versa)
+```
+
+**Practical implications**:
+- ✅ **Computational efficiency**: Convex formulation solves in polynomial time with global optimality
+- ✅ **Conservative estimates**: Actual confidence exceeds specification (safer results)
+- ⚠️ **Potential over-design**: Required horizons may be longer than strictly necessary
+- 📊 **Dual reporting**: Both specified confidence and empirical probability reported
+
+**Example**: If you specify 80% confidence:
+- CVaR guarantees: **at least** 80% probability
+- Typical observation: 83-85% empirical probability
+- Confidence gap: +3-5% (safety margin)
+
+To maintain intellectual honesty, FinOpt reports both metrics via `check_goals()` and `print_goal_status()`. See [optimization.md](optimization.md#cvar-conservatism-and-dual-metric-reporting) for technical details.
+
 ---
 
 ## Main API
@@ -199,17 +220,28 @@ status = check_goals(
 for goal, metrics in status.items():
     print(f"{goal}: {'✓' if metrics['satisfied'] else '✗'}")
     print(f"  Violation rate: {metrics['violation_rate']:.1%}")
+    print(f"  Empirical probability: {metrics['empirical_probability']:.1%}")
+    print(f"  Confidence gap: {metrics['confidence_gap']:+.1%}")
     print(f"  Required rate:  {metrics['required_rate']:.1%}")
     print(f"  Margin:         {metrics['margin']:+.1%}")
 ```
 
 **Returns dict with metrics for each goal:**
+
+*Legacy metrics (backward compatible):*
 - `satisfied`: bool — True if empirical violation rate ≤ ε
 - `violation_rate`: float — Empirical ℙ(W_t^m < threshold)
 - `required_rate`: float — Goal's ε = 1 - confidence
 - `margin`: float — required_rate - violation_rate (positive = satisfied)
 - `median_shortfall`: float — Median shortfall over violated scenarios
 - `n_violations`: int — Count of scenarios violating threshold
+
+*CVaR transparency metrics (new in v0.2):*
+- `empirical_probability`: float — Observed success rate = 1 - violation_rate
+- `confidence_gap`: float — empirical_probability - specified confidence (measures CVaR conservatism)
+- `note`: str — Contextual explanation of CVaR conservatism (varies by gap magnitude)
+
+**CVaR Conservatism Note**: Due to the one-way implication CVaR_ε ≤ 0 ⟹ ℙ(W≥b) ≥ 1-ε, empirical probability typically exceeds specified confidence by 1-5%. Both metrics are reported for transparency.
 
 ---
 
@@ -259,12 +291,21 @@ print_goal_status(
     Target: $5,500,000 | Confidence: 90.0%
     Status: SATISFIED (margin: +2.3%)
     Violation rate: 7.7% (38 scenarios)
+    Empirical probability: 92.3% (specified: 90.0%)
+    Confidence gap: +2.3% (CVaR conservatism)
+    Note: CVaR optimization yields conservative estimates. Specified
+          confidence 90.0% guarantees at least 92.3% empirical success
+          rate (+2.3% safety margin).
 
 [✗] TerminalGoal: Emergency Fund @ T=24
     Target: $20,000,000 | Confidence: 90.0%
     Status: VIOLATED (margin: -3.1%)
     Violation rate: 13.1% (66 scenarios)
+    Empirical probability: 86.9% (specified: 90.0%)
     Median shortfall: $1,234,567
+    Note: Warning: Empirical probability 86.9% is below specified
+          confidence 90.0%. This may indicate CVaR approximation error
+          or insufficient scenarios.
 ```
 
 ---

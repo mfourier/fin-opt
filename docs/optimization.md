@@ -156,6 +156,56 @@ z_w^i &\geq (D_t^m - W_t^{m,i}(X)) - \gamma_w \\
 \end{aligned}
 $$
 
+### CVaR Conservatism and Dual Metric Reporting
+
+**Mathematical Property**
+
+The CVaR reformulation is **conservative** in a precise mathematical sense:
+
+$$
+\text{CVaR}_\varepsilon(b - W) \leq 0 \quad \Longrightarrow \quad \mathbb{P}(W \geq b) \geq 1-\varepsilon
+$$
+
+but the **reverse implication does not hold**. This means:
+- Satisfying the CVaR constraint **guarantees** at least $(1-\varepsilon)$ probability
+- But $(1-\varepsilon)$ probability does **not necessarily** imply CVaR satisfaction
+- In practice, empirical probability typically **exceeds** specified confidence by 1-5%
+
+**Why This Matters**
+
+1. **Computational Efficiency**: CVaR reformulation converts non-convex chance constraints into tractable LP/QP problems with global optimality guarantees
+2. **Conservative Estimates**: Results are "safer" than specified - actual risk is lower
+3. **Intellectual Honesty**: Users deserve to know both the theoretical guarantee and observed reality
+
+**Dual Metric Reporting**
+
+To maintain transparency, FinOpt reports **both metrics** via `check_goals()`:
+
+| Metric | Definition | Interpretation |
+|--------|------------|----------------|
+| **Specified Confidence** | $1 - \varepsilon$ | CVaR theoretical guarantee |
+| **Empirical Probability** | $\hat{p} = \frac{1}{N}\sum_{i=1}^N \mathbb{1}_{W^i \geq b}$ | Observed success rate |
+| **Confidence Gap** | $\Delta = \hat{p} - (1-\varepsilon)$ | CVaR conservatism measure |
+
+**Example Output**:
+```
+[✓] TerminalGoal: Conservative @ T=24
+    Target: $5,000,000 | Confidence: 80.0%
+    Status: SATISFIED (margin: +5.0%)
+    Violation rate: 15.0% (15 scenarios)
+    Empirical probability: 85.0% (specified: 80.0%)
+    Confidence gap: +5.0% (CVaR conservatism)
+```
+
+**Implications for Users**
+
+- **Conservative by design**: Actual confidence exceeds specification
+- **Safety margin**: Positive confidence gap provides robustness buffer
+- **No free lunch**: Conservatism may result in longer required horizons
+- **Transparency**: Both metrics reported for informed decision-making
+
+See [Phase 1 Implementation Summary](phase1-dual-metrics-summary.md) for technical details.
+
 ---
 
 ## Implementation Architecture
@@ -171,6 +221,7 @@ OptimizationResult (frozen dataclass)
     ├─ goals: List[IntermediateGoal | TerminalGoal]
     ├─ goal_set: GoalSet
     ├─ solve_time: float
+    ├─ goal_metrics: Optional[Dict] (dual metrics from check_goals)
     ├─ validate_goals(result) → dict
     ├─ is_valid_allocation(tol) → bool
     └─ summary() → str

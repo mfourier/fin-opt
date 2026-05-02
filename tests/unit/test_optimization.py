@@ -2539,5 +2539,73 @@ class TestThreeAccountOptimization:
         assert result.M == 3
 
 
+class TestGoalSeekerLinearSearch:
+    """Test GoalSeeker with linear search strategy."""
+
+    @pytest.fixture
+    def generators(self, accounts):
+        """Create A and R generators."""
+        def A_generator(T, n_sims, seed=None):
+            return np.full((n_sims, T), 100_000.0)
+
+        def R_generator(T, n_sims, seed=None):
+            if seed is not None:
+                np.random.seed(seed)
+            return np.random.randn(n_sims, T, len(accounts)) * 0.02 + 0.005
+
+        return A_generator, R_generator
+
+    def test_linear_search_finds_solution(self, accounts, terminal_goals, start_date, generators):
+        """Test that linear search finds a solution."""
+        optimizer = CVaROptimizer(n_accounts=len(accounts), objective="balanced")
+        seeker = GoalSeeker(optimizer, T_max=60, verbose=False)
+
+        A_gen, R_gen = generators
+        initial_wealth = np.array([0.0, 0.0])
+
+        result = seeker.seek(
+            goals=terminal_goals,
+            A_generator=A_gen,
+            R_generator=R_gen,
+            accounts=accounts,
+            initial_wealth=initial_wealth,
+            start_date=start_date,
+            search_method="linear",
+            n_sims=100,
+            seed=42,
+        )
+
+        assert result is not None
+        assert result.feasible
+        assert result.X is not None
+
+    def test_linear_search_with_easy_goal(self, accounts, start_date, generators):
+        """Test linear search with easy goal (finds solution quickly)."""
+        # Easy goal
+        easy_goals = [TerminalGoal(account="Aggressive", threshold=500_000, confidence=0.70)]
+
+        optimizer = CVaROptimizer(n_accounts=len(accounts), objective="balanced")
+        seeker = GoalSeeker(optimizer, T_max=60, verbose=False)
+
+        A_gen, R_gen = generators
+        initial_wealth = np.array([0.0, 0.0])
+
+        result = seeker.seek(
+            goals=easy_goals,
+            A_generator=A_gen,
+            R_generator=R_gen,
+            accounts=accounts,
+            initial_wealth=initial_wealth,
+            start_date=start_date,
+            search_method="linear",
+            n_sims=100,
+            seed=789,
+        )
+
+        assert result.feasible
+        # Should find solution relatively quickly
+        assert result.T < 30
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

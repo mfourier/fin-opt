@@ -686,6 +686,12 @@ def check_goals(
             Zero if no violations occur
         - n_violations : int
             Count of scenarios violating threshold
+        - empirical_probability : float
+            Observed success rate: ℙ̂(W_t^m ≥ threshold) = 1 - violation_rate
+        - confidence_gap : float
+            empirical_probability - goal.confidence (typically positive due to CVaR conservatism)
+        - note : str
+            Explanation of CVaR conservatism and metric interpretation
     
     Raises
     ------
@@ -758,7 +764,31 @@ def check_goals(
             median_shortfall = float(np.median(shortfall[violations]))
         else:
             median_shortfall = 0.0
-        
+
+        # Dual metric computation (CVaR transparency)
+        empirical_probability = 1.0 - violation_rate
+        confidence_gap = empirical_probability - goal.confidence
+
+        # Generate explanatory note
+        if confidence_gap > 0.01:  # Significant conservatism (>1%)
+            note = (
+                f"CVaR optimization yields conservative estimates. "
+                f"Specified confidence {goal.confidence:.1%} guarantees at least "
+                f"{empirical_probability:.1%} empirical success rate "
+                f"(+{confidence_gap:.1%} safety margin)."
+            )
+        elif confidence_gap >= 0:  # Mild conservatism
+            note = (
+                f"CVaR constraint satisfied with empirical probability "
+                f"{empirical_probability:.1%} (≥ specified {goal.confidence:.1%})."
+            )
+        else:  # Violation (shouldn't occur if CVaR optimization succeeded)
+            note = (
+                f"Warning: Empirical probability {empirical_probability:.1%} "
+                f"is below specified confidence {goal.confidence:.1%}. "
+                f"This may indicate CVaR approximation error or insufficient scenarios."
+            )
+
         status[goal] = {
             "satisfied": bool(satisfied),
             "violation_rate": float(violation_rate),
@@ -766,6 +796,9 @@ def check_goals(
             "margin": float(margin),
             "median_shortfall": median_shortfall,
             "n_violations": int(n_violations),
+            "empirical_probability": float(empirical_probability),
+            "confidence_gap": float(confidence_gap),
+            "note": note,
         }
     
     return status
@@ -875,17 +908,21 @@ def print_goal_status(
     >>> print_goal_status(result, goals, accounts, date(2025, 1, 1))
     
     === Goal Status ===
-    
+
     [✓] IntermediateGoal: Emergency @ month 6
         Target: $5,500,000 | Confidence: 90.0%
         Status: SATISFIED (margin: +2.3%)
         Violation rate: 7.7% (38 scenarios)
-    
+        Empirical probability: 92.3% (specified: 90.0%)
+        Confidence gap: +2.3% (CVaR conservatism)
+
     [✗] TerminalGoal: Emergency @ T=24
         Target: $20,000,000 | Confidence: 90.0%
         Status: VIOLATED (margin: -3.1%)
         Violation rate: 13.1% (66 scenarios)
+        Empirical probability: 86.9% (specified: 90.0%)
         Median shortfall: $1,234,567
+        Note: Warning: Empirical probability 86.9% is below specified confidence 90.0%. This may indicate CVaR approximation error or insufficient scenarios.
     """
     status = check_goals(result, goals, accounts, start_date)
     
@@ -923,8 +960,21 @@ def print_goal_status(
         
         print(f"    Violation rate: {metrics['violation_rate']:.1%} "
               f"({metrics['n_violations']} scenarios)")
-        
+
+        # Display dual metrics (CVaR transparency)
+        print(f"    Empirical probability: {metrics['empirical_probability']:.1%} "
+              f"(specified: {goal.confidence:.1%})")
+
+        if metrics['confidence_gap'] > 0.001:  # Display gap if > 0.1%
+            gap_sign = "+" if metrics['confidence_gap'] >= 0 else ""
+            print(f"    Confidence gap: {gap_sign}{metrics['confidence_gap']:.1%} "
+                  f"(CVaR conservatism)")
+
         if metrics["median_shortfall"] > 0:
             print(f"    Median shortfall: ${metrics['median_shortfall']:,.0f}")
-        
+
+        # Display explanatory note if significant conservatism or violation
+        if abs(metrics['confidence_gap']) > 0.01:
+            print(f"    Note: {metrics['note']}")
+
         print()

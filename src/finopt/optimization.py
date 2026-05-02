@@ -172,6 +172,12 @@ class OptimizationResult:
         Number of solver iterations (solver-dependent).
     diagnostics : dict, optional
         Solver-specific metadata (duality_gap, convergence_status, etc.)
+    goal_metrics : dict, optional
+        Goal satisfaction metrics from check_goals() including:
+        - empirical_probability: observed success rate
+        - confidence_gap: difference from specified confidence (CVaR conservatism)
+        - note: explanation of CVaR conservatism
+        Populated when result is validated against simulation data.
     
     Examples
     --------
@@ -202,6 +208,7 @@ class OptimizationResult:
     solve_time: float
     n_iterations: Optional[int] = None
     diagnostics: Optional[Dict[str, Any]] = None
+    goal_metrics: Optional[Dict[Union[IntermediateGoal, TerminalGoal], Dict[str, Any]]] = None
     
     def __post_init__(self):
         """Validate result structure at construction."""
