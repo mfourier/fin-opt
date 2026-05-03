@@ -53,7 +53,17 @@ Thumbs.db
 # Personal docs (not for repo)
 LINKEDIN_CV.md
 docs/study-plan/
+docs/dev-notes/
 
 # Cache
 .cache/
 *.log
+
+# MkDocs generated site
+site/
+
+# Jupyter notebook exports (regenerate with nbconvert)
+notebooks/*.html
+
+# TypeScript build artifacts
+web/tsconfig.tsbuildinfo
