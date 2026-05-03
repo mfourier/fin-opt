@@ -757,6 +757,41 @@ class CVaROptimizer(AllocationOptimizer):
                 "Install with: pip install cvxpy"
             )
 
+    def _solve_problem(
+        self,
+        prob,
+        solver_name: str,
+        verbose: bool,
+        max_iters: int,
+        abstol: float,
+        reltol: float,
+    ) -> None:
+        """Dispatch a CVXPY Problem to the requested solver with mapped options."""
+        cp = self.cp
+        solver_options = {"max_iters": max_iters, "abstol": abstol, "reltol": reltol}
+
+        if solver_name.upper() == "ECOS":
+            prob.solve(solver=cp.ECOS, verbose=verbose, **solver_options)
+        elif solver_name.upper() == "SCS":
+            scs_opts = solver_options.copy()
+            if "abstol" in scs_opts:
+                scs_opts["eps_abs"] = scs_opts.pop("abstol")
+            if "reltol" in scs_opts:
+                scs_opts["eps_rel"] = scs_opts.pop("reltol")
+            prob.solve(solver=cp.SCS, verbose=verbose, **scs_opts)
+        elif solver_name.upper() == "CLARABEL":
+            clarabel_opts = solver_options.copy()
+            if "max_iters" in clarabel_opts:
+                clarabel_opts["max_iter"] = clarabel_opts.pop("max_iters")
+            if "abstol" in clarabel_opts:
+                clarabel_opts["tol_gap_abs"] = clarabel_opts.pop("abstol")
+            if "reltol" in clarabel_opts:
+                clarabel_opts["tol_gap_rel"] = clarabel_opts.pop("reltol")
+            prob.solve(solver=cp.CLARABEL, verbose=verbose, **clarabel_opts)
+        else:
+            # Let CVXPY auto-select solver
+            prob.solve(verbose=verbose, **solver_options)
+
     def solve(
         self,
         T: int,
@@ -1124,44 +1159,7 @@ class CVaROptimizer(AllocationOptimizer):
         # ============= SOLVE CONVEX PROGRAM =============
 
         prob = cp.Problem(objective, constraints)
-
-        # Configure solver
-        solver_options = {
-            'max_iters': max_iters,
-            'abstol': abstol,
-            'reltol': reltol,
-        }
-
-        # Select solver and solve
-        if solver_name.upper() == 'ECOS':
-            prob.solve(solver=cp.ECOS, verbose=verbose, **solver_options)
-        elif solver_name.upper() == 'SCS':
-            # SCS options mapping
-            scs_opts = solver_options.copy()
-
-            # Map standard options to SCS specific ones
-            if 'abstol' in scs_opts:
-                scs_opts['eps_abs'] = scs_opts.pop('abstol')
-            if 'reltol' in scs_opts:
-                scs_opts['eps_rel'] = scs_opts.pop('reltol')
-
-            prob.solve(solver=cp.SCS, verbose=verbose, **scs_opts)
-        elif solver_name.upper() == 'CLARABEL':
-            # Clarabel options mapping
-            clarabel_opts = solver_options.copy()
-
-            # Map standard options to Clarabel specific ones
-            if 'max_iters' in clarabel_opts:
-                clarabel_opts['max_iter'] = clarabel_opts.pop('max_iters')
-            if 'abstol' in clarabel_opts:
-                clarabel_opts['tol_gap_abs'] = clarabel_opts.pop('abstol')
-            if 'reltol' in clarabel_opts:
-                clarabel_opts['tol_gap_rel'] = clarabel_opts.pop('reltol')
-
-            prob.solve(solver=cp.CLARABEL, verbose=verbose, **clarabel_opts)
-        else:
-            # Let CVXPY auto-select solver
-            prob.solve(verbose=verbose, **solver_options)
+        self._solve_problem(prob, solver_name, verbose, max_iters, abstol, reltol)
 
         solve_time = time.time() - start_time
 

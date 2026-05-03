@@ -13,7 +13,7 @@ from typing import Any
 
 import numpy as np
 
-from api.services._goal_metrics import compute_dual_metrics
+from api.services._goal_metrics import compute_goal_probability
 from api.services.reconstruction import reconstruct_from_scenario
 from api.supabase_client import (
     fetch_scenario_with_profile,
@@ -147,9 +147,7 @@ def compute_goal_status(
     """
     from finopt import IntermediateGoal
 
-    n_sims, T_plus_1, M = wealth.shape
-    T = T_plus_1 - 1
-
+    T = wealth.shape[1] - 1
     status_list = []
 
     for goal in goals:
@@ -181,14 +179,10 @@ def compute_goal_status(
             goal_type = "terminal"
             goal_desc = f"{goal.account} at horizon"
 
-        # Get wealth at goal time for target account
-        wealth_at_t = wealth[:, t_idx, account_idx]
-
-        # Calculate satisfaction probability
-        satisfied_count = np.sum(wealth_at_t >= goal.threshold)
-        actual_prob = satisfied_count / n_sims
-
-        dual = compute_dual_metrics(float(actual_prob), goal.confidence)
+        # Calculate satisfaction probability and CVaR dual metrics
+        actual_prob, dual = compute_goal_probability(
+            wealth[:, t_idx, account_idx], goal.threshold, goal.confidence
+        )
 
         status_list.append({
             "goal": goal_desc,

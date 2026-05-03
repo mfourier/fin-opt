@@ -13,7 +13,7 @@ from typing import Any
 
 import numpy as np
 
-from api.services._goal_metrics import compute_dual_metrics
+from api.services._goal_metrics import compute_goal_probability
 from api.services.reconstruction import reconstruct_from_scenario
 from api.supabase_client import (
     fetch_scenario_with_profile,
@@ -71,25 +71,22 @@ def compute_goal_status_from_result(
         if isinstance(goal, IntermediateGoal):
             goal_type = "intermediate"
             goal_desc = f"{account_name} by {goal.date.isoformat()}"
-            # Resolve month for intermediate goal
             resolved_month = goal.resolve_month(start_date)
-            # Compute actual probability from simulation
             if resolved_month < sim_result.wealth.shape[1]:
-                wealth_at_goal = sim_result.wealth[:, resolved_month, account_idx]
-                actual_prob = float(np.mean(wealth_at_goal >= goal.threshold))
+                actual_prob, dual = compute_goal_probability(
+                    sim_result.wealth[:, resolved_month, account_idx],
+                    goal.threshold,
+                    goal.confidence,
+                )
             else:
                 actual_prob = None
+                dual = {"empirical_probability": None, "confidence_gap": None, "note": None}
         else:
             goal_type = "terminal"
             goal_desc = f"{account_name} at horizon T={opt_result.T}"
-            # Terminal goal: check at final time step
-            wealth_at_T = sim_result.wealth[:, -1, account_idx]
-            actual_prob = float(np.mean(wealth_at_T >= goal.threshold))
-
-        if actual_prob is not None:
-            dual = compute_dual_metrics(actual_prob, goal.confidence)
-        else:
-            dual = {"empirical_probability": None, "confidence_gap": None, "note": None}
+            actual_prob, dual = compute_goal_probability(
+                sim_result.wealth[:, -1, account_idx], goal.threshold, goal.confidence
+            )
 
         status_list.append({
             "goal": goal_desc,

@@ -11,6 +11,36 @@ Both are reported so users understand the actual risk achieved.
 
 from __future__ import annotations
 
+import numpy as np
+
+
+def compute_goal_probability(
+    wealth_slice: np.ndarray,
+    threshold: float,
+    confidence: float,
+) -> tuple[float, dict]:
+    """
+    Compute achievement probability and dual metrics for a single goal.
+
+    Parameters
+    ----------
+    wealth_slice : np.ndarray, shape (n_sims,)
+        Wealth values across all scenarios at the goal's evaluation time.
+    threshold : float
+        Minimum wealth required to satisfy the goal.
+    confidence : float
+        Required confidence level (1 - ε).
+
+    Returns
+    -------
+    tuple[float, dict]
+        (actual_prob, dual_metrics) where dual_metrics has keys
+        empirical_probability, confidence_gap, note.
+    """
+    actual_prob = float(np.mean(wealth_slice >= threshold))
+    dual = compute_dual_metrics(actual_prob, confidence)
+    return actual_prob, dual
+
 
 def compute_dual_metrics(
     empirical_probability: float,
