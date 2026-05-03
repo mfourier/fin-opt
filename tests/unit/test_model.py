@@ -4,18 +4,18 @@ Unit tests for model.py module.
 Tests FinancialModel and SimulationResult classes.
 """
 
-import pytest
-import numpy as np
-import pandas as pd
 from datetime import date
 
-from finopt.income import IncomeModel, FixedIncome, VariableIncome
-from finopt.portfolio import Account
-from finopt.model import FinancialModel, SimulationResult
-from finopt.goals import TerminalGoal, IntermediateGoal
-from finopt.optimization import CVaROptimizer, OptimizationResult
-from finopt.withdrawal import WithdrawalModel, WithdrawalSchedule, WithdrawalEvent
+import numpy as np
+import pandas as pd
+import pytest
 
+from finopt.goals import TerminalGoal
+from finopt.income import FixedIncome, IncomeModel, VariableIncome
+from finopt.model import FinancialModel, SimulationResult
+from finopt.optimization import CVaROptimizer, OptimizationResult
+from finopt.portfolio import Account
+from finopt.withdrawal import WithdrawalEvent, WithdrawalModel, WithdrawalSchedule
 
 # ============================================================================
 # FIXTURES

@@ -53,7 +53,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Dict, Iterable, Optional, Literal
+from typing import Dict, Iterable, Literal, Optional
 
 import numpy as np
 import pandas as pd
@@ -61,14 +61,14 @@ from matplotlib.ticker import FuncFormatter
 
 from .exceptions import ValidationError
 from .finopt_types import MonthlyContributionDict, PlotColorsDict
+
 # Reuse common utilities
 from .utils import (
-    check_non_negative,
     annual_to_monthly,
+    check_non_negative,
+    millions_formatter,
     month_index,
     normalize_start_month,
-    millions_formatter,
-    format_currency,
 )
 
 __all__ = [
@@ -281,11 +281,11 @@ class FixedIncome:
                 arr[month] = current_salary
                 if month < months - 1:
                     current_salary *= (1.0 + monthly_rate)
-        
+
         # Replicate for n_sims > 1 (deterministic replication)
         if n_sims > 1:
             arr = np.tile(arr, (n_sims, 1))
-        
+
         # Format output
         if output == "array":
             return arr
@@ -304,14 +304,14 @@ class FixedIncome:
     def _date_to_month_offset(self, start_date: date, target_date: date) -> int:
         """
         Calculate month offset between two dates.
-        
+
         Parameters
         ----------
         start_date : date
             Reference start date (month 0).
         target_date : date
             Target date for the raise.
-            
+
         Returns
         -------
         int
@@ -502,23 +502,23 @@ class VariableIncome:
         --------
         >>> vi = VariableIncome(
         ...     base=200_000.0,
-        ...     seasonality=[1.0, 0.9, 1.1, 1.0, 1.2, 1.1, 
+        ...     seasonality=[1.0, 0.9, 1.1, 1.0, 1.2, 1.1,
         ...                  1.0, 0.8, 0.9, 1.0, 1.05, 1.15],
         ...     sigma=0.15,
         ...     floor=50_000.0,
         ...     seed=42
         ... )
-        
+
         # Single simulation
         >>> vi.project(6)
         array([200000., 183000., 224000., 210500., 240300., 230100.])
-        
+
         # Multiple simulations (vectorized)
         >>> vi.project(6, n_sims=100)
         array([[200000., 183000., ...],
             [195000., 180000., ...],
             ...])  # shape: (100, 6)
-        
+
         # Series output with calendar index (n_sims=1 only)
         >>> vi.project(6, start=date(2025, 1, 1), output="series")
         2025-01-01    200000.0
@@ -533,10 +533,10 @@ class VariableIncome:
         # Validate output FIRST (before any logic that uses it)
         if output not in ("array", "series"):
             raise ValueError(f"output must be 'array' or 'series', got: {output}")
-            
+
         # Use method seed if provided, else instance seed
         rng_seed = seed if seed is not None else self.seed
-        
+
         # Handle edge case: months <= 0
         if months <= 0:
             arr = np.zeros((n_sims, 0) if n_sims > 1 else 0, dtype=float)
@@ -549,12 +549,12 @@ class VariableIncome:
                 return pd.Series(arr, index=idx, name=self.name)
             else:
                 raise ValueError(f"output must be 'array' or 'series', got: {output}")
-        
+
         # 1. Base path: deterministic growth trajectory (shape: (months,))
         m = annual_to_monthly(self.annual_growth)
         t = np.arange(months, dtype=float)
         base_path = self.base * np.power(1.0 + m, t)
-        
+
         # 2. Seasonality: vectorized application (shape: (months,))
         if self.seasonality is None:
             means = base_path
@@ -563,7 +563,7 @@ class VariableIncome:
             offset = normalize_start_month(start)
             seasonal_idx = (offset + np.arange(months)) % 12
             means = base_path * s[seasonal_idx]
-        
+
         # 3. Noise: vectorized generation (shape: (n_sims, months) or (months,))
         if self.sigma == 0.0:
             # No noise: replicate or return directly
@@ -577,18 +577,18 @@ class VariableIncome:
             noise = rng.normal(loc=0.0, scale=self.sigma, size=(n_sims, months))
             # Broadcasting: (1, months) * (n_sims, months) -> (n_sims, months)
             noisy = means[None, :] * (1.0 + noise)
-            
+
             if n_sims == 1:
                 noisy = noisy[0, :]  # Squeeze for backward compatibility
-        
+
         # 4. Guardrails: work with any shape via broadcasting
         if self.floor is not None:
             noisy = np.maximum(noisy, self.floor)
         if self.cap is not None:
             noisy = np.minimum(noisy, self.cap)
-        
+
         arr = np.maximum(noisy, 0.0)
-        
+
         # 5. Format output
         if output == "array":
             return arr
@@ -723,7 +723,7 @@ class IncomeModel:
             raise ValueError(
                 "At least one income stream must be provided. "
                 "Both 'fixed' and 'variable' cannot be None."
-            ) 
+            )
 
     def project(
         self,
@@ -808,18 +808,18 @@ class IncomeModel:
         # Validate n_sims
         if not isinstance(n_sims, int) or n_sims < 1:
             raise ValueError(f"n_sims must be a positive integer, got: {n_sims}")
-        
+
         # Validate output
         if output not in ("series", "dataframe", "array"):
             raise ValueError(f"output must be 'series', 'dataframe', or 'array', got: {output}")
-        
+
         # Validate n_sims > 1 constraint
         if n_sims > 1 and output != "array":
             raise ValueError(
                 f"output='{output}' requires n_sims=1. "
                 f"Use output='array' with n_sims={n_sims}."
             )
-        
+
         idx = month_index(start=start, months=max(months, 0))
 
         # Determine output shape based on n_sims
@@ -854,7 +854,7 @@ class IncomeModel:
             variable_arr = np.zeros(shape, dtype=float)
 
         total_arr = fixed_arr + variable_arr
-        
+
         if output == "array":
             return {
                 self.name_fixed: fixed_arr,
@@ -881,7 +881,7 @@ class IncomeModel:
         """
         Compute monthly contributions from fixed and variable income streams.
 
-        Calculates monthly contributions by applying monthly fractional rates to the 
+        Calculates monthly contributions by applying monthly fractional rates to the
         projected fixed and variable incomes. Contribution fractions are specified
         as 12-month arrays and rotated based on the starting month. Supports vectorized
         generation of multiple independent simulations.
@@ -936,18 +936,18 @@ class IncomeModel:
         >>> income.contributions(6, start=date(2025, 1, 1))
         2025-01-01    620000.0
         ...
-        
+
         # Array output
         >>> income.contributions(6, start=date(2025, 1, 1), output="array")
         array([620000., 624200., 628400., 632600., 636800., 641000.])
-        
+
         # Multiple simulations (vectorized)
         >>> contrib = income.contributions(6, n_sims=100, output="array")
         >>> contrib.shape
         (100, 6)
         >>> contrib.mean(axis=0)  # Mean contribution per month
         array([620000., ...])
-        
+
         # Custom fractions
         >>> income.monthly_contribution = {"fixed": [0.35]*12, "variable": [1.0]*12}
         >>> income.contributions(6, start=date(2025, 1, 1))
@@ -955,18 +955,18 @@ class IncomeModel:
         # Validate n_sims
         if not isinstance(n_sims, int) or n_sims < 1:
             raise ValueError(f"n_sims must be a positive integer, got: {n_sims}")
-        
+
         # Validate output
         if output not in ("array", "series"):
             raise ValueError(f"output must be 'array' or 'series', got: {output}")
-        
+
         # Validate n_sims > 1 constraint
         if n_sims > 1 and output != "array":
             raise ValueError(
                 f"output='series' requires n_sims=1. "
                 f"Use output='array' with n_sims={n_sims}."
             )
-        
+
         # Determine output shape based on n_sims
         shape = (n_sims, months) if n_sims > 1 else (months,)
         empty_shape = (n_sims, 0) if n_sims > 1 else (0,)
@@ -1015,10 +1015,10 @@ class IncomeModel:
             # fixed_frac_full: (months,), fixed_arr: (n_sims, months)
             # Broadcasting: (1, months) * (n_sims, months) → (n_sims, months)
             contrib_arr = (
-                fixed_frac_full[None, :] * fixed_arr + 
+                fixed_frac_full[None, :] * fixed_arr +
                 var_frac_full[None, :] * variable_arr
             )
-        
+
         contrib_arr = np.maximum(contrib_arr, 0.0)
 
         # Return in requested format
@@ -1214,7 +1214,7 @@ class IncomeModel:
             var_mean = np.zeros(months, dtype=float)
 
         total_mean = fixed_arr + var_mean
-        
+
         if len(idx) == 0:
             fig, ax = plt.subplots(figsize=figsize) if ax is None else (None, ax)
             ax.set_axis_off()
@@ -1237,46 +1237,46 @@ class IncomeModel:
 
         lines, labels = [], []
         ax_right = None
-        
+
         if use_dual:
             # --- Dual-axis mode ---
             ax_right = ax.twinx()
-            
+
             # 1. Plot trajectories FIRST (background)
             if show_trajectories and sims is not None:
                 for i in range(n_simulations):
                     # Variable trajectories on right axis: sims[i, :] shape (months,)
-                    ax_right.plot(idx, sims[i, :], color='gray', alpha=trajectory_alpha, 
+                    ax_right.plot(idx, sims[i, :], color='gray', alpha=trajectory_alpha,
                             linewidth=0.8, zorder=1)
                     # Total trajectories on left axis
-                    ax.plot(idx, fixed_arr + sims[i, :], color='gray', 
+                    ax.plot(idx, fixed_arr + sims[i, :], color='gray',
                         alpha=trajectory_alpha*0.7, linewidth=0.8, zorder=1)
-            
+
             # 2. Plot confidence bands (if enabled)
             if show_confidence_band and lower_perc is not None:
-                ax_right.fill_between(idx, lower_perc, upper_perc, 
-                                color=colors.get("variable", "orange"), 
+                ax_right.fill_between(idx, lower_perc, upper_perc,
+                                color=colors.get("variable", "orange"),
                                 alpha=0.2, zorder=2)
                 ax.fill_between(idx, lower_perc + fixed_arr, upper_perc + fixed_arr,
-                            color=colors.get("total", "black"), 
+                            color=colors.get("total", "black"),
                             alpha=0.15, zorder=2)
-            
+
             # 3. Plot mean lines (foreground)
-            l_fixed, = ax.plot(idx, fixed_arr, label=fixed_col, 
-                            color=colors.get("fixed", "blue"), 
+            l_fixed, = ax.plot(idx, fixed_arr, label=fixed_col,
+                            color=colors.get("fixed", "blue"),
                             linewidth=2.5, zorder=3)
-            l_total, = ax.plot(idx, total_mean, label="total", 
-                            color=colors.get("total", "black"), 
+            l_total, = ax.plot(idx, total_mean, label="total",
+                            color=colors.get("total", "black"),
                             linewidth=2.5, zorder=3)
-            l_var, = ax_right.plot(idx, var_mean, linestyle="--", label=var_col, 
-                            color=colors.get("variable", "orange"), 
+            l_var, = ax_right.plot(idx, var_mean, linestyle="--", label=var_col,
+                            color=colors.get("variable", "orange"),
                             linewidth=2.5, zorder=3)
-            
+
             ax.set_ylabel(ylabel_left)
             ax_right.set_ylabel(ylabel_right)
             lines.extend([l_fixed, l_total, l_var])
             labels.extend([fixed_col, "total", var_col])
-            
+
         else:
             # --- Single-axis mode ---
 
@@ -1331,7 +1331,7 @@ class IncomeModel:
         ax.yaxis.set_major_formatter(FuncFormatter(millions_formatter))
         if ax_right is not None:
             ax_right.yaxis.set_major_formatter(FuncFormatter(millions_formatter))
-        
+
         if grid: ax.grid(True, linestyle="--", alpha=0.4, zorder=0)
         if title: ax.set_title(title)
         ax.set_xlabel("Month")
@@ -1486,7 +1486,7 @@ class IncomeModel:
 
         colors = colors or {"total": "blue", "ci": "orange"}
         idx = month_index(start=start, months=max(months, 0))
-        
+
         if months <= 0 or len(idx) == 0:
             fig, ax = plt.subplots(figsize=figsize) if ax is None else (None, ax)
             ax.set_axis_off()
@@ -1528,16 +1528,16 @@ class IncomeModel:
         # 1. Plot trajectories FIRST (background)
         if show_trajectories and sims is not None:
             for i in range(n_simulations):
-                ax.plot(idx, sims[i, :], color='gray', alpha=trajectory_alpha, 
+                ax.plot(idx, sims[i, :], color='gray', alpha=trajectory_alpha,
                     linewidth=0.8, zorder=1, label='_nolegend_')
-        
+
         # 2. Plot confidence band (if enabled)
         if show_confidence_band and lower is not None:
             ax.fill_between(idx, lower, upper, color=colors["ci"], alpha=0.2,
                         label=f"{int(confidence*100)}% CI", zorder=2)
-        
+
         # 3. Plot mean line (foreground)
-        ax.plot(idx, contrib_mean, color=colors["total"], label="Mean Contribution", 
+        ax.plot(idx, contrib_mean, color=colors["total"], label="Mean Contribution",
             linewidth=2.5, zorder=3)
 
         # ========== Formatting ==========
@@ -1555,7 +1555,7 @@ class IncomeModel:
         total_contrib = contrib_mean.sum()
         ax.text(0.02, 0.98,
                 f"Total Contributions: ${total_contrib:,.0f}".replace(",", "."),
-                transform=ax.transAxes, fontsize=9, verticalalignment="top", 
+                transform=ax.transAxes, fontsize=9, verticalalignment="top",
                 horizontalalignment="left",
                 bbox=dict(boxstyle="round", facecolor="white", alpha=0.7), zorder=10)
 
@@ -1587,7 +1587,7 @@ class IncomeModel:
     ):
         """
         Unified plot wrapper to call either `plot_income` or `plot_contributions`.
-        
+
         Parameters
         ----------
         mode : str
@@ -1610,9 +1610,9 @@ class IncomeModel:
             Left y-axis label. Defaults depend on mode.
         ylabel_right : str, optional
             Right y-axis label (only for dual-axis income plots).
-        
+
         Other parameters are passed directly to the corresponding plotting method.
-        
+
         Returns
         -------
         None or tuple
@@ -1691,8 +1691,8 @@ class IncomeModel:
         pd.Series
             Keys: ["months", "total_income", "total_fixed", "total_variable",
                 "mean_total", "mean_fixed", "mean_variable",
-                "fixed_share", "variable_share", "std_variable", 
-                "coefvar_variable", "min_variable", "max_variable", 
+                "fixed_share", "variable_share", "std_variable",
+                "coefvar_variable", "min_variable", "max_variable",
                 "pct_variable_below_threshold"].
         """
         metrics = self.income_metrics(

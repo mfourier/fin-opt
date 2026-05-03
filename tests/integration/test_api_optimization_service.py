@@ -10,16 +10,18 @@ the core optimization logic is tested in test_optimization.py. These tests
 focus on the API service layer (result formatting, job updates).
 """
 
-import pytest
 from datetime import date
+
+import pytest
 
 
 def test_compute_goal_status_from_result_intermediate_goal():
     """Test compute_goal_status_from_result formats intermediate goal correctly."""
     import numpy as np
+
     from api.services.optimization import compute_goal_status_from_result
-    from finopt import FinancialModel, IntermediateGoal, OptimizationResult
-    from finopt.income import IncomeModel, FixedIncome
+    from finopt import FinancialModel, IntermediateGoal
+    from finopt.income import FixedIncome, IncomeModel
     from finopt.portfolio import Account
 
     # Create minimal model
@@ -60,9 +62,10 @@ def test_compute_goal_status_from_result_intermediate_goal():
 def test_compute_goal_status_from_result_terminal_goal():
     """Test compute_goal_status_from_result formats terminal goal correctly."""
     import numpy as np
+
     from api.services.optimization import compute_goal_status_from_result
     from finopt import FinancialModel, TerminalGoal
-    from finopt.income import IncomeModel, FixedIncome
+    from finopt.income import FixedIncome, IncomeModel
     from finopt.portfolio import Account
 
     income = IncomeModel(fixed=FixedIncome(base=1_000_000))
@@ -97,9 +100,10 @@ def test_compute_goal_status_from_result_terminal_goal():
 def test_compute_goal_status_from_result_infeasible():
     """Test compute_goal_status_from_result marks infeasible correctly."""
     import numpy as np
+
     from api.services.optimization import compute_goal_status_from_result
     from finopt import FinancialModel, TerminalGoal
-    from finopt.income import IncomeModel, FixedIncome
+    from finopt.income import FixedIncome, IncomeModel
     from finopt.portfolio import Account
 
     income = IncomeModel(fixed=FixedIncome(base=1_000_000))
@@ -128,9 +132,10 @@ def test_compute_goal_status_from_result_infeasible():
 def test_compute_goal_status_from_result_mixed_goals():
     """Test compute_goal_status_from_result handles multiple goals."""
     import numpy as np
+
     from api.services.optimization import compute_goal_status_from_result
     from finopt import FinancialModel, IntermediateGoal, TerminalGoal
-    from finopt.income import IncomeModel, FixedIncome
+    from finopt.income import FixedIncome, IncomeModel
     from finopt.portfolio import Account
 
     income = IncomeModel(fixed=FixedIncome(base=1_000_000))
@@ -166,9 +171,10 @@ def test_compute_goal_status_from_result_mixed_goals():
 def test_compute_goal_status_from_result_includes_dual_metrics():
     """Test that compute_goal_status_from_result includes CVaR dual metric fields."""
     import numpy as np
+
     from api.services.optimization import compute_goal_status_from_result
     from finopt import FinancialModel, TerminalGoal
-    from finopt.income import IncomeModel, FixedIncome
+    from finopt.income import FixedIncome, IncomeModel
     from finopt.portfolio import Account
 
     income = IncomeModel(fixed=FixedIncome(base=1_000_000))
@@ -200,9 +206,10 @@ def test_compute_goal_status_from_result_includes_dual_metrics():
 def test_compute_goal_status_from_result_dual_metrics_with_actual_prob_none():
     """Test dual metrics are None when actual_probability cannot be computed."""
     import numpy as np
+
     from api.services.optimization import compute_goal_status_from_result
     from finopt import FinancialModel, IntermediateGoal
-    from finopt.income import IncomeModel, FixedIncome
+    from finopt.income import FixedIncome, IncomeModel
     from finopt.portfolio import Account
 
     income = IncomeModel(fixed=FixedIncome(base=1_000_000))
@@ -280,12 +287,12 @@ async def test_run_optimization_handles_error(mocker, sample_scenario_data, mock
     # Mock fetch to raise an error
     mocker.patch('api.services.optimization.fetch_scenario_with_profile', side_effect=ValueError("Test error"))
     mock_update_job = mocker.patch('api.services.optimization.update_job')
-    
+
     from api.services.optimization import run_optimization
-    
+
     with pytest.raises(ValueError):
         await run_optimization(scenario_id="test-scenario", job_id="test-job")
-    
+
     # Should have updated job with failed status
     calls = [call for call in mock_update_job.call_args_list if 'status' in call[1]]
     failed_calls = [call for call in calls if call[1]['status'] == 'failed']

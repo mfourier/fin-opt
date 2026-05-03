@@ -25,8 +25,8 @@ from pydantic import BaseModel, Field
 
 from api import __version__
 from api.config import Settings, get_settings
-from api.services.simulation import run_simulation
 from api.services.optimization import run_optimization
+from api.services.simulation import run_simulation
 
 # Configure logging
 logging.basicConfig(

@@ -4,13 +4,13 @@ Unit tests for goals.py module.
 Tests IntermediateGoal, TerminalGoal, and GoalSet classes.
 """
 
-import pytest
-import numpy as np
 from datetime import date
 
-from finopt.portfolio import Account
-from finopt.goals import IntermediateGoal, TerminalGoal, GoalSet
+import numpy as np
+import pytest
 
+from finopt.goals import GoalSet, IntermediateGoal, TerminalGoal
+from finopt.portfolio import Account
 
 # ============================================================================
 # INTERMEDIATEGOAL TESTS

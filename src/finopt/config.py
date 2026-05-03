@@ -31,11 +31,12 @@ Example
 """
 
 from __future__ import annotations
-from typing import Optional, Literal, List, Union
+
 import datetime
 from pathlib import Path
+from typing import List, Literal, Optional, Union
 
-from pydantic import BaseModel, Field, field_validator, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic_settings import BaseSettings
 
 __all__ = [

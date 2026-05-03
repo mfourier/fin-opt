@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
-from typing import Iterable, Mapping, Optional, Sequence
+from typing import Mapping, Optional, Sequence
 
 import numpy as np
 import pandas as pd
@@ -266,29 +266,29 @@ def summary_metrics(results: Mapping[str, object]) -> pd.DataFrame:
 def millions_formatter(x, pos):
     """
     Format axis values as millions for matplotlib FuncFormatter.
-    
+
     Converts large monetary values to compact millions notation:
     - 25_000_000 → "25M"
     - 12_500_000 → "12.5M"
     - 0 → "0"
-    
+
     Parameters
     ----------
     x : float
         Value to format (in raw units, e.g., CLP).
     pos : int
         Tick position (unused, required by FuncFormatter signature).
-    
+
     Returns
     -------
     str
         Formatted string with "M" suffix.
-    
+
     Examples
     --------
     >>> from matplotlib.ticker import FuncFormatter
     >>> ax.yaxis.set_major_formatter(FuncFormatter(millions_formatter))
-    
+
     Notes
     -----
     Designed for use with matplotlib's FuncFormatter. For text annotations
@@ -303,10 +303,10 @@ def millions_formatter(x, pos):
 def format_currency(value, decimals=1, symbol='$', unit='M'):
     """
     Format currency values for text annotations and labels.
-    
+
     Standardizes monetary display across plots with customizable precision
     and symbols. Default behavior: millions with 1 decimal place.
-    
+
     Parameters
     ----------
     value : float
@@ -317,12 +317,12 @@ def format_currency(value, decimals=1, symbol='$', unit='M'):
         Currency symbol prefix.
     unit : str, default 'M'
         Unit suffix (typically 'M' for millions).
-    
+
     Returns
     -------
     str
         Formatted currency string.
-    
+
     Examples
     --------
     >>> format_currency(25_000_000)
@@ -331,7 +331,7 @@ def format_currency(value, decimals=1, symbol='$', unit='M'):
     '$25M'
     >>> format_currency(5_500_000, decimals=2)
     '$5.50M'
-    
+
     Notes
     -----
     - Always divides by 1e6 (millions scaling)

@@ -5,12 +5,11 @@ Tests command-line interface functionality using Click's testing utilities.
 """
 
 import json
+
 import pytest
-from pathlib import Path
 from click.testing import CliRunner
 
-from finopt.cli import main, __version__
-
+from finopt.cli import __version__, main
 
 # ============================================================================
 # FIXTURES

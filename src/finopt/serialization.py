@@ -43,36 +43,34 @@ Example
 """
 
 from __future__ import annotations
-from typing import Dict, Any, List, Union, Optional, Literal, TYPE_CHECKING
-from pathlib import Path
-from datetime import date
+
 import json
 import warnings
+from datetime import date
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 import numpy as np
 
 from .config import (
     AccountConfig,
     IncomeConfig,
-    FixedIncomeConfig,
-    VariableIncomeConfig,
-    WithdrawalEventConfig,
-    StochasticWithdrawalConfig,
-    WithdrawalConfig,
     IntermediateGoalConfig,
-    TerminalGoalConfig,
-    ScenarioConfig,
-    SimulationConfig,
     OptimizationConfig,
+    SimulationConfig,
+    TerminalGoalConfig,
+    WithdrawalConfig,
 )
 
 if TYPE_CHECKING:
-    from .model import FinancialModel
-    from .portfolio import Account
-    from .income import IncomeModel, FixedIncome, VariableIncome
-    from .optimization import OptimizationResult
-    from .withdrawal import WithdrawalEvent, StochasticWithdrawal, WithdrawalModel, WithdrawalSchedule
     from .goals import IntermediateGoal, TerminalGoal
+    from .income import IncomeModel
+    from .model import FinancialModel
+    from .optimization import OptimizationResult
+    from .portfolio import Account
+    from .withdrawal import (
+        WithdrawalModel,
+    )
 
 __all__ = [
     "save_model",
@@ -214,13 +212,13 @@ def income_to_dict(income_model: IncomeModel) -> Dict[str, Any]:
     if isinstance(contrib, dict):
         fixed_rate = contrib.get("fixed", 0.3)
         var_rate = contrib.get("variable", 1.0)
-        
+
         # Convert numpy arrays to lists for JSON serializability
         if isinstance(fixed_rate, np.ndarray):
             fixed_rate = fixed_rate.tolist()
         if isinstance(var_rate, np.ndarray):
             var_rate = var_rate.tolist()
-            
+
         result["contribution_rate_fixed"] = fixed_rate
         result["contribution_rate_variable"] = var_rate
     else:
@@ -244,7 +242,7 @@ def income_from_dict(data: Dict[str, Any]) -> IncomeModel:
     IncomeModel
         Reconstructed income model instance
     """
-    from .income import IncomeModel, FixedIncome, VariableIncome
+    from .income import FixedIncome, IncomeModel, VariableIncome
 
     # Validate using Pydantic config
     config = IncomeConfig.model_validate(data)
@@ -286,7 +284,7 @@ def income_from_dict(data: Dict[str, Any]) -> IncomeModel:
     # Build income model
     # IncomeModel expects 12-element arrays for monthly contributions
     # Handle both scalar and per-month list inputs
-    
+
     def _to_rate_array(rate):
         if isinstance(rate, list):
             return np.array(rate, dtype=float)
@@ -398,7 +396,12 @@ def withdrawal_from_dict(data: Dict[str, Any]) -> WithdrawalModel:
     >>> len(model.scheduled.events)
     1
     """
-    from .withdrawal import WithdrawalModel, WithdrawalSchedule, WithdrawalEvent, StochasticWithdrawal
+    from .withdrawal import (
+        StochasticWithdrawal,
+        WithdrawalEvent,
+        WithdrawalModel,
+        WithdrawalSchedule,
+    )
 
     # Validate using Pydantic config
     # Convert date strings to date objects for validation
@@ -686,7 +689,6 @@ def save_scenario(
     ...     start_date=date(2025, 1, 1)
     ... )
     """
-    from .goals import IntermediateGoal, TerminalGoal
 
     if model is not None and model_path is not None:
         raise ValueError("Specify either model or model_path, not both")

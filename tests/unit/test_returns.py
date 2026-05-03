@@ -4,12 +4,11 @@ Unit tests for returns.py module.
 Tests ReturnModel class for correlated lognormal return generation.
 """
 
-import pytest
 import numpy as np
+import pytest
 
 from finopt.portfolio import Account
 from finopt.returns import ReturnModel
-
 
 # ============================================================================
 # RETURNMODEL INSTANTIATION TESTS

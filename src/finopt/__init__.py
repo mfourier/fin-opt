@@ -43,108 +43,108 @@ __version__ = "0.1.0"
 __author__ = "FinOpt Contributors"
 
 # Core income modeling
-from .income import FixedIncome, VariableIncome, IncomeModel
+# Utilities
+from . import utils
+
+# Configuration and serialization
+from .config import (
+    AccountConfig,
+    FixedIncomeConfig,
+    IncomeConfig,
+    StochasticWithdrawalConfig,
+    VariableIncomeConfig,
+    WithdrawalConfig,
+    WithdrawalEventConfig,
+)
+
+# Constants
+from .constants import (
+    DEFAULT_ALPHA_BANDS,
+    DEFAULT_ALPHA_TRAJECTORIES,
+    DEFAULT_CONFIDENCE_LEVELS,
+    DEFAULT_FIGSIZE,
+    DEFAULT_FIGSIZE_TALL,
+    DEFAULT_FIGSIZE_WIDE,
+    DEFAULT_FIXED_CONTRIBUTION_RATE,
+    DEFAULT_GOAL_CONFIDENCE,
+    DEFAULT_LINEWIDTH,
+    DEFAULT_LINEWIDTH_THICK,
+    DEFAULT_MAX_ITERS,
+    DEFAULT_N_SIMS,
+    DEFAULT_N_SIMS_OPTIMIZATION,
+    DEFAULT_N_SIMS_PLOTTING,
+    DEFAULT_OBJECTIVE,
+    DEFAULT_SEED,
+    DEFAULT_SOLVER,
+    DEFAULT_T_MAX,
+    DEFAULT_T_MIN,
+    DEFAULT_TOLERANCE,
+    DEFAULT_VARIABLE_CONTRIBUTION_RATE,
+    DEFAULT_WITHDRAWAL_EPSILON,
+    MONTHS_PER_YEAR,
+)
+
+# Exceptions
+from .exceptions import (
+    AllocationConstraintError,
+    ConfigurationError,
+    FinOptError,
+    InfeasibleError,
+    MemoryLimitError,
+    OptimizationError,
+    TimeIndexError,
+    ValidationError,
+)
+
+# Type definitions
+from .finopt_types import (
+    AnnualParamsDict,
+    DiagnosticsDict,
+    GoalMetricsDict,
+    MonthlyContributionDict,
+    PlotColorsDict,
+    ReturnStrategyDict,
+    SimulationResultDict,
+)
+
+# Goals
+from .goals import GoalSet, IntermediateGoal, TerminalGoal
+from .income import FixedIncome, IncomeModel, VariableIncome
+
+# Orchestration facade
+from .model import FinancialModel, SimulationResult
 
 # Portfolio and account management
 from .portfolio import Account, Portfolio
 
 # Return generation
 from .returns import ReturnModel
+from .serialization import (
+    SCHEMA_VERSION,
+    account_from_dict,
+    account_to_dict,
+    goals_from_dict,
+    goals_to_dict,
+    income_from_dict,
+    income_to_dict,
+    load_model,
+    load_optimization_result,
+    load_scenario,
+    save_model,
+    save_optimization_result,
+    save_scenario,
+    withdrawal_from_dict,
+    withdrawal_to_dict,
+)
 
 # Withdrawal modeling
 from .withdrawal import (
-    WithdrawalEvent,
-    WithdrawalSchedule,
     StochasticWithdrawal,
+    WithdrawalEvent,
     WithdrawalModel,
+    WithdrawalSchedule,
 )
 
-# Orchestration facade
-from .model import FinancialModel, SimulationResult
-
-# Goals
-from .goals import IntermediateGoal, TerminalGoal, GoalSet
-
-# Configuration and serialization
-from .config import (
-    AccountConfig,
-    IncomeConfig,
-    FixedIncomeConfig,
-    VariableIncomeConfig,
-    WithdrawalEventConfig,
-    StochasticWithdrawalConfig,
-    WithdrawalConfig,
-)
-from .serialization import (
-    save_model,
-    load_model,
-    save_optimization_result,
-    load_optimization_result,
-    save_scenario,
-    load_scenario,
-    account_to_dict,
-    account_from_dict,
-    income_to_dict,
-    income_from_dict,
-    withdrawal_to_dict,
-    withdrawal_from_dict,
-    goals_to_dict,
-    goals_from_dict,
-    SCHEMA_VERSION,
-)
-
-# Utilities
-from . import utils
-
-# Type definitions
-from .finopt_types import (
-    ReturnStrategyDict,
-    AnnualParamsDict,
-    MonthlyContributionDict,
-    SimulationResultDict,
-    GoalMetricsDict,
-    DiagnosticsDict,
-    PlotColorsDict,
-)
-
-# Constants
-from .constants import (
-    DEFAULT_N_SIMS,
-    DEFAULT_N_SIMS_OPTIMIZATION,
-    DEFAULT_N_SIMS_PLOTTING,
-    DEFAULT_SEED,
-    DEFAULT_T_MAX,
-    DEFAULT_T_MIN,
-    DEFAULT_SOLVER,
-    DEFAULT_OBJECTIVE,
-    DEFAULT_TOLERANCE,
-    DEFAULT_MAX_ITERS,
-    DEFAULT_WITHDRAWAL_EPSILON,
-    DEFAULT_FIGSIZE,
-    DEFAULT_FIGSIZE_WIDE,
-    DEFAULT_FIGSIZE_TALL,
-    DEFAULT_ALPHA_TRAJECTORIES,
-    DEFAULT_ALPHA_BANDS,
-    DEFAULT_LINEWIDTH,
-    DEFAULT_LINEWIDTH_THICK,
-    DEFAULT_FIXED_CONTRIBUTION_RATE,
-    DEFAULT_VARIABLE_CONTRIBUTION_RATE,
-    MONTHS_PER_YEAR,
-    DEFAULT_CONFIDENCE_LEVELS,
-    DEFAULT_GOAL_CONFIDENCE,
-)
-
-# Exceptions
-from .exceptions import (
-    FinOptError,
-    ConfigurationError,
-    ValidationError,
-    TimeIndexError,
-    AllocationConstraintError,
-    OptimizationError,
-    InfeasibleError,
-    MemoryLimitError,
-)
 
 # Lazy imports for optional dependencies
 def __getattr__(name: str):

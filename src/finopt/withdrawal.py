@@ -79,10 +79,10 @@ Example
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Dict, List, Optional, Union, TYPE_CHECKING
-import warnings
+from typing import TYPE_CHECKING, Dict, List, Optional, Union
 
 import numpy as np
 

@@ -5,14 +5,15 @@ Tests end-to-end scenarios combining income, portfolio, returns,
 and optimization modules.
 """
 
-import pytest
-import numpy as np
 from datetime import date
 
-from finopt.income import IncomeModel, FixedIncome, VariableIncome
-from finopt.portfolio import Account, Portfolio
+import numpy as np
+import pytest
+
+from finopt.goals import GoalSet, IntermediateGoal, TerminalGoal
+from finopt.income import FixedIncome, IncomeModel, VariableIncome
 from finopt.model import FinancialModel
-from finopt.goals import IntermediateGoal, TerminalGoal, GoalSet
+from finopt.portfolio import Account
 
 
 @pytest.mark.integration

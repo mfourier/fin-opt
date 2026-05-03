@@ -4,32 +4,33 @@ Unit tests for utils.py module.
 Tests validation functions, rate conversions, and formatting utilities.
 """
 
-import pytest
-import numpy as np
-import pandas as pd
 from datetime import date
 
+import numpy as np
+import pandas as pd
+import pytest
+
 from finopt.utils import (
-    check_non_negative,
-    annual_to_monthly,
-    monthly_to_annual,
-    month_index,
-    normalize_start_month,
-    format_currency,
-    millions_formatter,
-    ensure_1d,
-    to_series,
-    drawdown,
-    compute_cagr,
-    rescale_returns,
-    bootstrap_returns,
+    PortfolioMetrics,
     align_index_like,
+    annual_to_monthly,
+    bootstrap_returns,
+    check_non_negative,
+    compute_cagr,
+    compute_metrics,
+    drawdown,
+    ensure_1d,
+    fixed_rate_path,
+    format_currency,
+    lognormal_iid,
+    millions_formatter,
+    month_index,
+    monthly_to_annual,
+    normalize_start_month,
+    rescale_returns,
     set_random_seed,
     summary_metrics,
-    fixed_rate_path,
-    lognormal_iid,
-    PortfolioMetrics,
-    compute_metrics,
+    to_series,
 )
 
 

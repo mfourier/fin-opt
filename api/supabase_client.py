@@ -8,9 +8,8 @@ Uses service_role key to bypass RLS for backend operations.
 from functools import lru_cache
 from typing import Any
 
-from supabase import Client, create_client
-
 from api.config import get_settings
+from supabase import Client, create_client
 
 
 @lru_cache

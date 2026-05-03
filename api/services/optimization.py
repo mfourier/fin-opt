@@ -13,13 +13,13 @@ from typing import Any
 
 import numpy as np
 
+from api.services._goal_metrics import compute_dual_metrics
+from api.services.reconstruction import reconstruct_from_scenario
 from api.supabase_client import (
     fetch_scenario_with_profile,
     save_optimization_result,
     update_job,
 )
-from api.services.reconstruction import reconstruct_from_scenario
-from api.services._goal_metrics import compute_dual_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,7 @@ def compute_goal_status_from_result(
     list[dict]
         Goal status for each goal, including actual probabilities.
     """
-    from finopt import IntermediateGoal, TerminalGoal
+    from finopt import IntermediateGoal
 
     status_list = []
 

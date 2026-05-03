@@ -4,18 +4,17 @@ Unit tests for optimization.py module.
 Tests OptimizationResult, CVaROptimizer, GoalSeeker, and AllocationOptimizer classes.
 """
 
-import pytest
-import numpy as np
 from datetime import date
-from unittest.mock import Mock, patch
 
-from finopt.portfolio import Account, Portfolio
-from finopt.goals import IntermediateGoal, TerminalGoal, GoalSet
-from finopt.optimization import OptimizationResult, CVaROptimizer, GoalSeeker, AllocationOptimizer
+import numpy as np
+import pytest
+
 from finopt.exceptions import InfeasibleError
+from finopt.goals import GoalSet, IntermediateGoal, TerminalGoal
 from finopt.income import FixedIncome, IncomeModel
 from finopt.model import FinancialModel
-
+from finopt.optimization import CVaROptimizer, GoalSeeker, OptimizationResult
+from finopt.portfolio import Account, Portfolio
 
 # ============================================================================
 # FIXTURES

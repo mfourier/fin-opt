@@ -4,17 +4,18 @@ Unit tests for config.py Pydantic models.
 Tests validation, defaults, and serialization of configuration classes.
 """
 
-import pytest
 from pathlib import Path
 
+import pytest
+
 from finopt.config import (
-    SimulationConfig,
-    OptimizationConfig,
-    FixedIncomeConfig,
-    VariableIncomeConfig,
-    IncomeConfig,
     AccountConfig,
     AppSettings,
+    FixedIncomeConfig,
+    IncomeConfig,
+    OptimizationConfig,
+    SimulationConfig,
+    VariableIncomeConfig,
 )
 
 

@@ -39,14 +39,15 @@ from typing import Optional
 import click
 import numpy as np
 
+
 # Lazy imports for performance
 def _import_rich():
     """Lazy import Rich for better startup time."""
     try:
         from rich.console import Console
-        from rich.table import Table
         from rich.panel import Panel
         from rich.progress import Progress, SpinnerColumn, TextColumn
+        from rich.table import Table
         return Console(), Table, Panel, Progress, SpinnerColumn, TextColumn
     except ImportError:
         return None, None, None, None, None, None
@@ -199,7 +200,6 @@ def simulate(
 
     if console and not quiet:
         from rich.table import Table
-        from rich.panel import Panel
 
         table = Table(title="Simulation Results", show_header=True)
         table.add_column("Metric", style="cyan")
@@ -320,12 +320,12 @@ def optimize(
     quiet = ctx.obj.get("quiet", False)
 
     # Import here to avoid slow startup
-    from .serialization import load_model, save_optimization_result
-    from .goals import IntermediateGoal, TerminalGoal, GoalSet
+    from .goals import GoalSet, IntermediateGoal, TerminalGoal
     from .optimization import CVaROptimizer, GoalSeeker
+    from .serialization import load_model, save_optimization_result
 
     if not quiet and console:
-        console.print(f"[bold blue]Loading model and goals...[/bold blue]")
+        console.print("[bold blue]Loading model and goals...[/bold blue]")
 
     try:
         model = load_model(config)
@@ -531,7 +531,6 @@ def config_show(ctx: click.Context, config_file: Path, format: str) -> None:
     else:
         if console:
             from rich.table import Table
-            from rich import print_json
 
             # Income table
             income_table = Table(title="Income Configuration")
@@ -734,7 +733,6 @@ def report(
     if format == "summary":
         if console and not quiet:
             from rich.table import Table
-            from rich.panel import Panel
 
             table = Table(title="Simulation Summary")
             table.add_column("Statistic", style="cyan")

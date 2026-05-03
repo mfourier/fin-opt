@@ -5,7 +5,6 @@ Tests the compute_dual_metrics() helper that both simulation and
 optimization services use to produce CVaR transparency fields.
 """
 
-import pytest
 from api.services._goal_metrics import compute_dual_metrics
 
 

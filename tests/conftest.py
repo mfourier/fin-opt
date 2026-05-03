@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import List
 
 import numpy as np
-import pandas as pd
 import pytest
 
 
@@ -27,11 +26,10 @@ def pytest_configure(config):
             coverage_file.unlink()
             print("Removed corrupted .coverage file")
 
-from finopt.income import FixedIncome, VariableIncome, IncomeModel
+from finopt.goals import IntermediateGoal, TerminalGoal
+from finopt.income import FixedIncome, IncomeModel, VariableIncome
 from finopt.portfolio import Account, Portfolio
 from finopt.returns import ReturnModel
-from finopt.goals import IntermediateGoal, TerminalGoal
-
 
 # ---------------------------------------------------------------------------
 # Date Fixtures
@@ -362,7 +360,7 @@ def assert_simplex():
 def mock_env_vars(monkeypatch):
     """
     Configure environment variables for API testing.
-    
+
     Sets required Supabase credentials and clears settings cache
     to ensure tests use fresh configuration.
     """
@@ -371,13 +369,13 @@ def mock_env_vars(monkeypatch):
     monkeypatch.setenv("SUPABASE_SERVICE_KEY", "test-service-key")
     monkeypatch.setenv("ENVIRONMENT", "development")
     monkeypatch.setenv("CORS_ORIGINS_STR", "http://localhost:3000,http://localhost:5173")
-    
+
     # Clear settings cache to force reload with test env vars
     from api.config import get_settings
     get_settings.cache_clear()
-    
+
     yield
-    
+
     # Clean up cache after test
     get_settings.cache_clear()
 
@@ -386,7 +384,7 @@ def mock_env_vars(monkeypatch):
 def sample_profile_data():
     """
     Sample profile data matching Supabase schema.
-    
+
     Includes income configuration, accounts, and optional correlation matrix.
     """
     return {
@@ -428,7 +426,7 @@ def sample_profile_data():
 def sample_scenario_data(sample_profile_data):
     """
     Sample scenario data with embedded profile.
-    
+
     Matches the structure returned by Supabase with JOIN on profiles table.
     """
     return {
@@ -467,11 +465,12 @@ def sample_scenario_data(sample_profile_data):
 def fastapi_test_client(mock_env_vars):
     """
     FastAPI TestClient for testing API endpoints.
-    
+
     Uses mock environment variables and provides isolated test client.
     Does not require a running server.
     """
     from fastapi.testclient import TestClient
+
     from api.main import app
-    
+
     return TestClient(app)

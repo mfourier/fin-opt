@@ -4,18 +4,18 @@ Unit tests for income.py module.
 Tests FixedIncome, VariableIncome, and IncomeModel classes.
 """
 
-import pytest
+from datetime import date
+
 import numpy as np
 import pandas as pd
-from datetime import date
+import pytest
 
 from finopt.income import (
     FixedIncome,
-    VariableIncome,
-    IncomeModel,
     IncomeMetrics,
+    IncomeModel,
+    VariableIncome,
 )
-
 
 # ============================================================================
 # FIXEDINCOME TESTS

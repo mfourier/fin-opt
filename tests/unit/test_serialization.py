@@ -4,37 +4,39 @@ Unit tests for serialization.py module.
 Tests model serialization and deserialization.
 """
 
-import pytest
-import numpy as np
 import json
-import warnings
-from pathlib import Path
 from datetime import date
-import tempfile
 
-from finopt.income import IncomeModel, FixedIncome, VariableIncome
-from finopt.portfolio import Account
-from finopt.model import FinancialModel
+import numpy as np
+import pytest
+
 from finopt.goals import IntermediateGoal, TerminalGoal
-from finopt.withdrawal import WithdrawalModel, WithdrawalSchedule, WithdrawalEvent, StochasticWithdrawal
+from finopt.income import FixedIncome, IncomeModel, VariableIncome
+from finopt.model import FinancialModel
+from finopt.portfolio import Account
 from finopt.serialization import (
     SCHEMA_VERSION,
-    account_to_dict,
     account_from_dict,
-    income_to_dict,
-    income_from_dict,
-    save_model,
-    load_model,
-    withdrawal_to_dict,
-    withdrawal_from_dict,
-    goals_to_dict,
+    account_to_dict,
     goals_from_dict,
-    save_scenario,
-    load_scenario,
-    save_optimization_result,
+    goals_to_dict,
+    income_from_dict,
+    income_to_dict,
+    load_model,
     load_optimization_result,
+    load_scenario,
+    save_model,
+    save_optimization_result,
+    save_scenario,
+    withdrawal_from_dict,
+    withdrawal_to_dict,
 )
-
+from finopt.withdrawal import (
+    StochasticWithdrawal,
+    WithdrawalEvent,
+    WithdrawalModel,
+    WithdrawalSchedule,
+)
 
 # ============================================================================
 # ACCOUNT SERIALIZATION TESTS
@@ -851,8 +853,8 @@ class TestOptimizationResultSerialization:
     @pytest.fixture
     def mock_optimization_result(self):
         """Create a mock optimization result."""
-        from finopt.optimization import OptimizationResult
         from finopt.goals import GoalSet
+        from finopt.optimization import OptimizationResult
 
         accounts = [
             Account.from_annual("Conservative", 0.04, 0.05),

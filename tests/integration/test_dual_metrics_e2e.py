@@ -25,10 +25,10 @@ Note on CVaR conservatism:
 from __future__ import annotations
 
 import math
-import numpy as np
-import pytest
 from datetime import date
 
+import numpy as np
+import pytest
 
 # =============================================================================
 # 5.1 – Cross-implementation note consistency
@@ -128,8 +128,8 @@ class TestArithmeticInvariants:
     ])
     def test_empirical_probability_from_check_goals(self, n_sims, n_success, confidence):
         """check_goals empirical_probability = n_success / n_sims."""
-        from finopt.model import SimulationResult
         from finopt.goals import TerminalGoal, check_goals
+        from finopt.model import SimulationResult
         from finopt.portfolio import Account
 
         T, M = 12, 1
@@ -174,9 +174,9 @@ class TestFullSimulationPipeline:
     """
 
     def _build_result(self, n_sims: int = 200, T: int = 24):
-        from finopt.income import IncomeModel, FixedIncome
-        from finopt.portfolio import Account
+        from finopt.income import FixedIncome, IncomeModel
         from finopt.model import FinancialModel
+        from finopt.portfolio import Account
 
         income = IncomeModel(fixed=FixedIncome(base=1_500_000, annual_growth=0.03))
         accounts = [
@@ -189,7 +189,7 @@ class TestFullSimulationPipeline:
 
     def test_dual_metrics_present_in_check_goals(self):
         """check_goals returns the three new fields for every goal."""
-        from finopt.goals import TerminalGoal, IntermediateGoal, check_goals
+        from finopt.goals import IntermediateGoal, TerminalGoal, check_goals
 
         result, accounts = self._build_result()
         goals = [
@@ -294,7 +294,7 @@ class TestAPIGoalStatusPipeline:
         """compute_goal_status_from_result() includes dual metric fields."""
         from api.services.optimization import compute_goal_status_from_result
         from finopt import FinancialModel, TerminalGoal
-        from finopt.income import IncomeModel, FixedIncome
+        from finopt.income import FixedIncome, IncomeModel
         from finopt.portfolio import Account
 
         income = IncomeModel(fixed=FixedIncome(base=1_000_000))
@@ -328,10 +328,10 @@ class TestAPIGoalStatusPipeline:
         Given identical empirical success counts, core check_goals() and
         API compute_goal_status() must produce the same confidence_gap.
         """
-        from finopt.model import SimulationResult
-        from finopt.goals import TerminalGoal, check_goals
-        from finopt.portfolio import Account
         from api.services.simulation import compute_goal_status
+        from finopt.goals import TerminalGoal, check_goals
+        from finopt.model import SimulationResult
+        from finopt.portfolio import Account
 
         n_sims, T, M = 100, 12, 1
         n_above = 85  # 85% empirical success
@@ -376,10 +376,10 @@ class TestAPIGoalStatusPipeline:
         For same empirical/confidence, core check_goals() and API
         compute_goal_status() produce *word-for-word identical* notes.
         """
-        from finopt.model import SimulationResult
-        from finopt.goals import TerminalGoal, check_goals
-        from finopt.portfolio import Account
         from api.services.simulation import compute_goal_status
+        from finopt.goals import TerminalGoal, check_goals
+        from finopt.model import SimulationResult
+        from finopt.portfolio import Account
 
         n_sims, T, M = 100, 12, 1
         n_above = 95   # 95% → gap 0.15 > 0.01 → "significant" category
@@ -454,9 +454,10 @@ class TestFieldContract:
     )
 
     def _simulation_goal_status(self, n_above=85, n_sims=100, confidence=0.80):
+        import numpy as np
+
         from api.services.simulation import compute_goal_status
         from finopt import TerminalGoal
-        import numpy as np
 
         T, M = 12, 1
         wealth = np.zeros((n_sims, T + 1, M))
@@ -468,11 +469,12 @@ class TestFieldContract:
         return compute_goal_status(wealth, goals, accounts, date(2025, 1, 1))
 
     def _optimization_goal_status(self, n_above=85, n_sims=100, confidence=0.80):
+        import numpy as np
+
         from api.services.optimization import compute_goal_status_from_result
         from finopt import FinancialModel, TerminalGoal
-        from finopt.income import IncomeModel, FixedIncome
+        from finopt.income import FixedIncome, IncomeModel
         from finopt.portfolio import Account
-        import numpy as np
 
         income = IncomeModel(fixed=FixedIncome(base=1_000_000))
         accounts = [Account.from_annual("Savings", 0.08, 0.10, 0)]
@@ -558,8 +560,8 @@ class TestBoundaryConditions:
 
     def test_single_scenario(self):
         """n_sims = 1 should not cause division-by-zero errors."""
-        from finopt.model import SimulationResult
         from finopt.goals import TerminalGoal, check_goals
+        from finopt.model import SimulationResult
         from finopt.portfolio import Account
 
         n_sims, T, M = 1, 12, 1
@@ -587,7 +589,7 @@ class TestBoundaryConditions:
         """
         from api.services.optimization import compute_goal_status_from_result
         from finopt import FinancialModel, IntermediateGoal
-        from finopt.income import IncomeModel, FixedIncome
+        from finopt.income import FixedIncome, IncomeModel
         from finopt.portfolio import Account
 
         income = IncomeModel(fixed=FixedIncome(base=1_000_000))
@@ -610,9 +612,9 @@ class TestBoundaryConditions:
 
     def test_all_dual_metrics_are_finite_or_none(self):
         """No NaN or Inf in dual metric fields."""
+
         from api.services.simulation import compute_goal_status
         from finopt import TerminalGoal
-        import random
 
         rng = np.random.default_rng(seed=99)
         n_sims, T, M = 200, 12, 1

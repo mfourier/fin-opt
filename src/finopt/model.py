@@ -20,7 +20,7 @@ Key components
     1. Income generation (fixed + variable streams)
     2. Return generation (correlated lognormal)
     3. Portfolio dynamics (wealth accumulation)
-    
+
     Provides unified plot() method with automatic simulation and caching,
     plus simulate() method with intelligent result reuse.
 
@@ -40,7 +40,7 @@ Example
 >>> from finopt.src.income import FixedIncome, VariableIncome, IncomeModel
 >>> from finopt.src.portfolio import Account
 >>> from finopt.src.model import FinancialModel
->>> 
+>>>
 >>> # 1. Setup components
 >>> income = IncomeModel(
 ...     fixed=FixedIncome(base=1_400_000, annual_growth=0.03),
@@ -50,14 +50,14 @@ Example
 ...     Account.from_annual("Emergency", annual_return=0.04, annual_volatility=0.05),
 ...     Account.from_annual("Housing", annual_return=0.07, annual_volatility=0.12)
 ... ]
->>> 
+>>>
 >>> # 2. Create unified model
 >>> model = FinancialModel(income, accounts)
->>> 
+>>>
 >>> # 3. Direct plotting (auto-simulates + caches)
 >>> X = np.tile([0.6, 0.4], (24, 1))
 >>> model.plot("wealth", T=24, X=X, n_sims=500, seed=42)
->>> 
+>>>
 >>> # 4. Or explicit simulation (for data access)
 >>> result = model.simulate(T=24, X=X, n_sims=500, seed=42)
 >>> print(result.summary())
@@ -71,7 +71,7 @@ import pickle
 import sys
 from dataclasses import dataclass, field
 from datetime import date
-from typing import List, Optional, Union, Dict, TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -82,12 +82,12 @@ if TYPE_CHECKING:
     from .withdrawal import WithdrawalModel
 
 # Direct imports (always available)
+from .goals import IntermediateGoal, TerminalGoal
 from .income import IncomeModel
+from .plotting import ModelPlottingMixin
 from .portfolio import Account, Portfolio
 from .returns import ReturnModel
 from .utils import compute_cagr, drawdown
-from .goals import IntermediateGoal, TerminalGoal
-from .plotting import ModelPlottingMixin
 
 __all__ = [
     "SimulationResult",
@@ -151,7 +151,7 @@ class SimulationResult:
         None indicates non-deterministic simulation.
     account_names : List[str]
         Names of accounts for indexing and display.
-    
+
     Methods
     -------
     metrics(account=None) -> pd.DataFrame
@@ -162,30 +162,30 @@ class SimulationResult:
         Statistical summary of final wealth with confidence intervals.
     convergence_analysis() -> pd.DataFrame
         Analyze Monte Carlo convergence (error vs n_sims).
-    
+
     Notes
     -----
     - Mutable by design (frozen=False) to allow lazy computation
     - Internal cache (_metrics) computed on first metrics() call
     - All arrays are numpy ndarrays for computational efficiency
     - Seed propagation: income uses seed, returns uses seed+1
-    
+
     Examples
     --------
     >>> result = model.simulate(T=24, X=X, n_sims=500, seed=42)
-    >>> 
+    >>>
     >>> # Access wealth data
     >>> final_wealth = result.wealth[:, -1, :]  # (500, 2)
     >>> mean_final_wealth = result.total_wealth[:, -1].mean()
-    >>> 
+    >>>
     >>> # Compute metrics
     >>> metrics = result.metrics()  # all accounts
     >>> metrics_emergency = result.metrics(account="Emergency")
-    >>> 
+    >>>
     >>> # Statistical summary
     >>> summary = result.summary(confidence=0.95)
     >>> print(summary)
-    >>> 
+    >>>
     >>> # Verify reproducibility
     >>> result2 = model.simulate(T=24, X=X, n_sims=500, seed=42)
     >>> np.allclose(result.wealth, result2.wealth)  # True
@@ -215,88 +215,88 @@ class SimulationResult:
     def metrics(self, account: Optional[str] = None) -> pd.DataFrame:
         """
         Compute per-simulation financial metrics by account.
-        
+
         Computes standard risk-adjusted performance metrics for each simulation:
         - CAGR: Compound Annual Growth Rate
         - Volatility: Standard deviation of monthly returns
         - Sharpe Ratio: Mean return / volatility
         - Sortino Ratio: Mean return / downside deviation
         - Max Drawdown: Maximum peak-to-trough decline
-        
+
         For distribution-level metrics (VaR, CVaR, final wealth statistics),
         use `aggregate_metrics()` instead.
-        
+
         Results are cached on first call for efficiency.
-        
+
         Parameters
         ----------
         account : str, optional
             Account name to compute metrics for.
             If None, returns concatenated metrics for all accounts.
-        
+
         Returns
         -------
         pd.DataFrame
             Metrics with shape (n_sims, n_metrics) if account specified,
             or MultiIndex DataFrame with level 0 = account if None.
-        
+
         See Also
         --------
         aggregate_metrics : Distribution-level metrics (VaR, CVaR, etc.)
-        
+
         Examples
         --------
         >>> # All accounts
         >>> metrics_all = result.metrics()
         >>> print(metrics_all.groupby(level=0).mean())
-        
+
         >>> # Specific account
         >>> metrics_emerg = result.metrics(account="Emergency")
         >>> print(f"Mean Sharpe: {metrics_emerg['sharpe'].mean():.3f}")
-        
+
         >>> # Distribution of CAGR
         >>> import matplotlib.pyplot as plt
         >>> result.metrics(account="Housing")['cagr'].hist(bins=30)
         """
         if self._metrics is None:
             self._compute_metrics()
-        
+
         if account is not None:
             if account not in self._metrics:
                 valid = ", ".join(self._metrics.keys())
                 raise ValueError(f"Account '{account}' not found. Valid: {valid}")
             return self._metrics[account]
-        
+
         # Return concatenated DataFrame with account as level 0 index
         return pd.concat(self._metrics, names=['account'])
-    
+
     def _compute_metrics(self):
         """Lazy computation of financial metrics."""
         self._metrics = {}
         self._aggregate_metrics = {}
-        
+
         for m, acc_name in enumerate(self.account_names):
             W = self.wealth[:, :, m]  # (n_sims, T+1)
-            
+
             # Monthly returns (handle W_t = 0 gracefully)
             with np.errstate(divide='ignore', invalid='ignore'):
                 R = np.diff(W, axis=1) / W[:, :-1]
             R = np.where(np.isfinite(R), R, 0.0)
-            
+
             # CAGR per simulation
             cagr_values = np.array([
-                compute_cagr(pd.Series(W[i]), periods_per_year=12) 
+                compute_cagr(pd.Series(W[i]), periods_per_year=12)
                 for i in range(self.n_sims)
             ])
-            
+
             # Volatility
             volatility = R.std(axis=1, ddof=1)
-            
+
             # Sharpe ratio (avoid division by zero)
             with np.errstate(divide='ignore', invalid='ignore'):
                 sharpe = R.mean(axis=1) / volatility
             sharpe = np.where(np.isfinite(sharpe), sharpe, 0.0)
-            
+
             # Sortino ratio (downside deviation)
             downside_returns = R.copy()
             downside_returns[downside_returns > 0] = 0
@@ -304,13 +304,13 @@ class SimulationResult:
             with np.errstate(divide='ignore', invalid='ignore'):
                 sortino = R.mean(axis=1) / downside_dev
             sortino = np.where(np.isfinite(sortino), sortino, 0.0)
-            
+
             # Max drawdown per simulation
             max_dd = np.array([
-                drawdown(pd.Series(W[i])).min() 
+                drawdown(pd.Series(W[i])).min()
                 for i in range(self.n_sims)
             ])
-            
+
             # Store per-simulation metrics
             self._metrics[acc_name] = pd.DataFrame({
                 'cagr': cagr_values,
@@ -319,11 +319,11 @@ class SimulationResult:
                 'sortino': sortino,
                 'max_drawdown': max_dd,
             })
-            
+
             # Aggregate metrics (distribution-level)
             W_final = W[:, -1]
             var_95_val = np.percentile(W_final, 5)
-            
+
             self._aggregate_metrics[acc_name] = {
                 'var_95': var_95_val,
                 'cvar_95': W_final[W_final <= var_95_val].mean(),
@@ -337,30 +337,30 @@ class SimulationResult:
     def aggregate_metrics(self, account: Optional[str] = None) -> pd.Series | pd.DataFrame:
         """
         Compute distribution-level metrics (VaR, CVaR, final wealth statistics).
-        
+
         These metrics characterize the entire distribution of outcomes across
         simulations, not individual simulation paths. Includes risk measures
         and summary statistics of terminal wealth.
-        
+
         Parameters
         ----------
         account : str, optional
             Account name to compute metrics for.
             If None, returns metrics for all accounts.
-        
+
         Returns
         -------
         pd.Series or pd.DataFrame
-            If account specified: Series with keys ['var_95', 'cvar_95', 
+            If account specified: Series with keys ['var_95', 'cvar_95',
             'mean_final', 'median_final', 'std_final', 'min_final', 'max_final'].
             If None: DataFrame with accounts as rows, metrics as columns.
-        
+
         Notes
         -----
         - VaR₉₅: Value at Risk at 5% confidence (5th percentile of final wealth)
         - CVaR₉₅: Conditional VaR (mean of worst 5% outcomes)
         - Results cached on first call; recomputed when wealth changes
-        
+
         Examples
         --------
         >>> # All accounts
@@ -369,7 +369,7 @@ class SimulationResult:
                     var_95    cvar_95  mean_final  median_final  std_final
         Emergency  2280000.0  2150000.0   2500000.0     2480000.0  120000.0
         Housing   11700000.0 11200000.0  12800000.0    12750000.0  580000.0
-        
+
         >>> # Specific account
         >>> emerg_agg = result.aggregate_metrics(account="Emergency")
         >>> print(f"VaR₉₅: ${emerg_agg['var_95']:,.0f}")
@@ -377,35 +377,35 @@ class SimulationResult:
         """
         if self._metrics is None:
             self._compute_metrics()
-        
+
         if account is not None:
             if account not in self._aggregate_metrics:
                 valid = ", ".join(self._aggregate_metrics.keys())
                 raise ValueError(f"Account '{account}' not found. Valid: {valid}")
             return pd.Series(self._aggregate_metrics[account], name=account)
-        
+
         return pd.DataFrame(self._aggregate_metrics).T
-    
+
     def summary(self, confidence: float = 0.95) -> pd.DataFrame:
         """
         Statistical summary of final wealth with confidence intervals.
-        
+
         Computes summary statistics across Monte Carlo simulations:
         - Mean, median, standard deviation of final wealth
         - Confidence intervals at specified level
         - Per-account and total portfolio
-        
+
         Parameters
         ----------
         confidence : float, default 0.95
             Confidence level for intervals (between 0 and 1).
-        
+
         Returns
         -------
         pd.DataFrame
             Summary statistics indexed by account name.
             Columns: mean, median, std, CI_lower_{conf}, CI_upper_{conf}
-        
+
         Examples
         --------
         >>> summary = result.summary(confidence=0.95)
@@ -416,9 +416,9 @@ class SimulationResult:
         Total     15300000.0 15200000.0  650000.0   14100000.0   16500000.0
         """
         alpha = (1 - confidence) / 2
-        
+
         rows = []
-        
+
         # Per-account statistics
         for m, acc_name in enumerate(self.account_names):
             W_final = self.wealth[:, -1, m]
@@ -430,7 +430,7 @@ class SimulationResult:
                 f'CI_lower_{int(confidence*100)}': np.percentile(W_final, alpha*100),
                 f'CI_upper_{int(confidence*100)}': np.percentile(W_final, (1-alpha)*100)
             })
-        
+
         # Total portfolio
         W_total_final = self.total_wealth[:, -1]
         rows.append({
@@ -441,17 +441,17 @@ class SimulationResult:
             f'CI_lower_{int(confidence*100)}': np.percentile(W_total_final, alpha*100),
             f'CI_upper_{int(confidence*100)}': np.percentile(W_total_final, (1-alpha)*100)
         })
-        
+
         return pd.DataFrame(rows).set_index('account')
-    
+
     def convergence_analysis(self) -> pd.DataFrame:
         """
         Analyze Monte Carlo convergence: standard error vs n_sims.
-        
+
         Computes mean and standard error of final total wealth for
         increasing subsample sizes. Useful for diagnosing if n_sims
         is sufficient for stable estimates.
-        
+
         Returns
         -------
         pd.DataFrame
@@ -459,12 +459,12 @@ class SimulationResult:
             - n_sims: subsample size (log-spaced)
             - mean: mean final wealth
             - std_error: standard error of mean
-        
+
         Notes
         -----
         Standard error should decay as 1/sqrt(n_sims). If std_error
         is still large at n_sims, consider increasing simulation count.
-        
+
         Examples
         --------
         >>> conv = result.convergence_analysis()
@@ -475,7 +475,7 @@ class SimulationResult:
         2     100  15295000.0     65000.00
         3     316  15300000.0     36547.01
         4    1000  15302000.0     20562.31
-        >>> 
+        >>>
         >>> # Plot convergence
         >>> import matplotlib.pyplot as plt
         >>> plt.loglog(conv['n_sims'], conv['std_error'])
@@ -485,7 +485,7 @@ class SimulationResult:
         # Log-spaced subsample sizes
         block_sizes = np.logspace(1, np.log10(self.n_sims), 10).astype(int)
         block_sizes = np.unique(block_sizes)
-        
+
         rows = []
         for n in block_sizes:
             W_subsample = self.total_wealth[:n, -1]
@@ -494,7 +494,7 @@ class SimulationResult:
                 'mean': W_subsample.mean(),
                 'std_error': W_subsample.std() / np.sqrt(n)
             })
-        
+
         return pd.DataFrame(rows)
 
 
@@ -505,16 +505,16 @@ class SimulationResult:
 class FinancialModel(ModelPlottingMixin):
     """
     Unified financial modeling orchestrator for Monte Carlo simulation.
-    
+
     Integrates income generation, return modeling, and portfolio dynamics
     into a single coherent interface. Coordinates the flow:
-    
+
         income → contributions (A) → returns (R) → wealth (W)
-    
+
     Manages seed propagation for reproducible stochastic simulations,
     provides intelligent caching to avoid redundant computation, and
     offers unified plot() method with automatic simulation.
-    
+
     Parameters
     ----------
     income : IncomeModel
@@ -530,7 +530,7 @@ class FinancialModel(ModelPlottingMixin):
     enable_cache : bool, default True
         If True, caches simulation results by parameter hash.
         Set to False to disable caching (saves memory for large grids).
-    
+
     Attributes
     ----------
     income : IncomeModel
@@ -543,7 +543,7 @@ class FinancialModel(ModelPlottingMixin):
         Wealth dynamics executor.
     M : int
         Number of accounts.
-    
+
     Methods
     -------
     simulate(T, X, n_sims, start, seed, use_cache) -> SimulationResult
@@ -560,7 +560,7 @@ class FinancialModel(ModelPlottingMixin):
         Get cache statistics (size, memory usage).
     clear_cache()
         Clear simulation cache to free memory.
-    
+
     Notes
     -----
     - Components (income, returns, portfolio) remain independently usable
@@ -569,7 +569,7 @@ class FinancialModel(ModelPlottingMixin):
     - Cache key: SHA256 hash of (T, X, n_sims, start, seed)
     - Memory usage: ~(n_sims * T * M * 8 bytes) per cached simulation
     - self.accounts and self.portfolio.accounts share same reference (no duplication)
-    
+
     Examples
     --------
     >>> # 1. Setup
@@ -582,20 +582,20 @@ class FinancialModel(ModelPlottingMixin):
     ...     Account.from_annual("Housing", annual_return=0.07, annual_volatility=0.12)
     ... ]
     >>> model = FinancialModel(income, accounts)
-    >>> 
+    >>>
     >>> # 2. Direct plotting (auto-simulates + caches)
     >>> X = np.tile([0.6, 0.4], (24, 1))
     >>> model.plot("wealth", T=24, X=X, n_sims=500, seed=42)
-    >>> 
+    >>>
     >>> # 3. Explicit simulation (for data access)
     >>> result = model.simulate(T=24, X=X, n_sims=500, seed=42)
     >>> print(result.summary())
-    >>> 
+    >>>
     >>> # 4. Cache management
     >>> print(model.cache_info())  # {'size': 1, 'memory_mb': 9.6}
     >>> model.clear_cache()
     """
-    
+
     def __init__(
         self,
         income: IncomeModel,
@@ -606,21 +606,21 @@ class FinancialModel(ModelPlottingMixin):
         # Validation
         if not accounts:
             raise ValueError("accounts list cannot be empty")
-        
+
         # Store components
         self.income = income
         self.accounts = accounts  # Canonical source (shared with portfolio)
         self.M = len(accounts)
-        
+
         # Build return generator and portfolio executor
         # Note: self.accounts and self.portfolio.accounts are same reference
         self.returns = ReturnModel(accounts, default_correlation)
         self.portfolio = Portfolio(accounts)
-        
+
         # Cache management
         self._cache_enabled = enable_cache
         self._simulation_cache = {}  # {hash: SimulationResult}
-    
+
     def simulate(
         self,
         T: int,
@@ -823,7 +823,7 @@ class FinancialModel(ModelPlottingMixin):
             self._simulation_cache[cache_key] = result
 
         return result
-    
+
     def _hash_simulation_params(
         self,
         T: int,
@@ -859,14 +859,14 @@ class FinancialModel(ModelPlottingMixin):
         # Serialize and hash
         params_serialized = pickle.dumps(params, protocol=pickle.HIGHEST_PROTOCOL)
         return hashlib.sha256(params_serialized).hexdigest()
-    
+
     def clear_cache(self):
         """
         Clear simulation cache to free memory.
-        
+
         Removes all cached SimulationResult objects. Useful when running
         large parameter sweeps or when memory is constrained.
-        
+
         Examples
         --------
         >>> model.simulate(T=24, X=X, n_sims=500)  # cached
@@ -874,23 +874,23 @@ class FinancialModel(ModelPlottingMixin):
         >>> model.simulate(T=24, X=X, n_sims=500)  # re-computes
         """
         self._simulation_cache.clear()
-    
+
     def cache_info(self) -> dict:
         """
         Get cache statistics.
-        
+
         Returns
         -------
         dict
             Keys:
             - 'size': number of cached simulations
             - 'memory_mb': approximate RAM usage (MB)
-        
+
         Notes
         -----
         Memory estimate includes wealth, returns, and contributions arrays.
         Actual memory usage may be higher due to Python overhead.
-        
+
         Examples
         --------
         >>> info = model.cache_info()
@@ -898,7 +898,7 @@ class FinancialModel(ModelPlottingMixin):
         >>> print(f"Memory usage: {info['memory_mb']:.1f} MB")
         """
         size = len(self._simulation_cache)
-        
+
         # Estimate memory (sum of major arrays)
         memory_bytes = sum(
             sys.getsizeof(result.wealth) +
@@ -906,12 +906,12 @@ class FinancialModel(ModelPlottingMixin):
             sys.getsizeof(result.contributions)
             for result in self._simulation_cache.values()
         )
-        
+
         return {
             'size': size,
             'memory_mb': memory_bytes / (1024 ** 2)
         }
-    
+
     def optimize(
         self,
         goals: List[Union[IntermediateGoal, TerminalGoal]],
@@ -975,7 +975,7 @@ class FinancialModel(ModelPlottingMixin):
             - max_iters : int, default 10000
             - abstol : float, default 1e-7
             - reltol : float, default 1e-6
-        
+
         Returns
         -------
         OptimizationResult
@@ -989,7 +989,7 @@ class FinancialModel(ModelPlottingMixin):
             - solve_time : float - total execution time (seconds)
             - n_iterations : int - solver iterations
             - diagnostics : dict - convergence info
-        
+
         Raises
         ------
         ValueError
@@ -997,7 +997,7 @@ class FinancialModel(ModelPlottingMixin):
             If T_min (from intermediate goals) > T_max.
         RuntimeError
             If no feasible solution found in [T_min, T_max].
-        
+
         Notes
         -----
         - Optimization uses model's income/returns generators internally
@@ -1005,7 +1005,7 @@ class FinancialModel(ModelPlottingMixin):
         - Warm start: X policy extended from previous T (faster convergence)
         - Feasibility check: exact SAA validation (non-smoothed indicators)
         - Result.goal_set contains full Account objects for downstream use
-        
+
         Algorithm Overview
         ------------------
         1. Create GoalSeeker with optimizer
@@ -1017,17 +1017,17 @@ class FinancialModel(ModelPlottingMixin):
         d. Check feasibility (exact SAA)
         e. If feasible: return X*, else T++
         4. If T > T_max: raise ValueError (no solution)
-        
+
         Examples
         --------
         >>> from finopt.src.optimization import SAAOptimizer
         >>> from finopt.src.goals import IntermediateGoal, TerminalGoal
         >>> from datetime import date
-        >>> 
+        >>>
         >>> # Define goals
         >>> goals = [
         ...     IntermediateGoal(
-        ...         month=12, 
+        ...         month=12,
         ...         account="Emergency",
         ...         threshold=5_500_000,
         ...         confidence=0.90
@@ -1038,14 +1038,14 @@ class FinancialModel(ModelPlottingMixin):
         ...         confidence=0.90
         ...     )
         ... ]
-        >>> 
+        >>>
         >>> # Create optimizer
         >>> optimizer = SAAOptimizer(
         ...     n_accounts=model.M,
         ...     tau=0.1,
         ...     objective="terminal_wealth"
         ... )
-        >>> 
+        >>>
         >>> # Optimize
         >>> result = model.optimize(
         ...     goals=goals,
@@ -1056,16 +1056,16 @@ class FinancialModel(ModelPlottingMixin):
         ...     start=date(2025, 1, 1),
         ...     verbose=True
         ... )
-        >>> 
+        >>>
         >>> print(f"Optimal horizon: T*={result.T} months")
         >>> print(f"Feasible: {result.feasible}")
         >>> print(result.summary())
-        >>> 
+        >>>
         >>> # Simulate with optimal policy for validation
         >>> sim_result = model.simulate_from_optimization(result, n_sims=1000, seed=100)
         >>> status = model.verify_goals(sim_result, goals)
         """
-        from .optimization import GoalSeeker, AllocationOptimizer, OptimizationResult
+        from .optimization import GoalSeeker
 
         # Validate inputs
         if not goals:
@@ -1208,10 +1208,10 @@ class FinancialModel(ModelPlottingMixin):
     ) -> Dict[Union[IntermediateGoal, TerminalGoal], Dict[str, float]]:
         """
         Verify goal satisfaction in simulation/optimization result.
-        
+
         Computes empirical violation rates and compares against goal
         confidence levels. Handles both result types automatically.
-        
+
         Parameters
         ----------
         result : SimulationResult or OptimizationResult
@@ -1222,7 +1222,7 @@ class FinancialModel(ModelPlottingMixin):
         start : date, optional
             Calendar start date for intermediate goal resolution.
             If None, extracts from result (SimulationResult) or uses today.
-        
+
         Returns
         -------
         dict : {Goal: metrics}
@@ -1233,18 +1233,18 @@ class FinancialModel(ModelPlottingMixin):
             - margin : float (positive → satisfied)
             - median_shortfall : float
             - n_violations : int
-        
+
         Examples
         --------
         >>> opt_result = model.optimize(goals, optimizer)
         >>> status = model.verify_goals(opt_result, goals)
-        >>> 
+        >>>
         >>> for goal, metrics in status.items():
         ...     if not metrics['satisfied']:
         ...         print(f"VIOLATED: {goal}")
         ...         print(f"  Violation rate: {metrics['violation_rate']:.2%}")
         ...         print(f"  Shortfall: ${metrics['median_shortfall']:,.0f}")
-        
+
         Notes
         -----
         OptimizationResult is automatically converted to SimulationResult internally
@@ -1261,7 +1261,7 @@ class FinancialModel(ModelPlottingMixin):
         # Handle OptimizationResult: simulate first
         if isinstance(result, OptimizationResult):
             sim_result = self.simulate_from_optimization(
-                result, 
+                result,
                 n_sims=500,  # Default for validation
                 seed=None  # Fresh scenarios
             )
@@ -1272,10 +1272,10 @@ class FinancialModel(ModelPlottingMixin):
                 f"result must be SimulationResult or OptimizationResult, "
                 f"got {type(result)}"
             )
-        
+
         # Extract start date
         start_date = start if start is not None else sim_result.start
-        
+
         return check_goals(
             sim_result,
             goals,
@@ -1297,69 +1297,71 @@ class FinancialModel(ModelPlottingMixin):
 
 if __name__ == "__main__":
     from datetime import date
+
     import numpy as np
-    from .income import FixedIncome, VariableIncome, IncomeModel
+
+    from .income import FixedIncome, IncomeModel, VariableIncome
     from .portfolio import Account
-    
+
     print("=== FinancialModel Sanity Check ===\n")
-    
+
     # 1. Setup
     print("1. Creating components...")
     income = IncomeModel(
         fixed=FixedIncome(base=1_400_000, annual_growth=0.03),
         variable=VariableIncome(base=200_000, sigma=0.10, seed=42)
     )
-    
+
     accounts = [
         Account.from_annual("Emergency", annual_return=0.04, annual_volatility=0.05),
         Account.from_annual("Housing", annual_return=0.07, annual_volatility=0.12)
     ]
-    
+
     model = FinancialModel(income, accounts)
     print(f"   {model}\n")
-    
+
     # 2. Test caching
     print("2. Testing simulation cache...")
     T = 6
     X = np.tile([0.6, 0.4], (T, 1))
-    
+
     import time
-    
+
     start = time.time()
     result1 = model.simulate(T=T, X=X, n_sims=100, seed=123)
     time1 = time.time() - start
-    
+
     start = time.time()
     result2 = model.simulate(T=T, X=X, n_sims=100, seed=123)  # cached
     time2 = time.time() - start
-    
+
     print(f"   First call: {time1*1000:.1f} ms")
     print(f"   Second call (cached): {time2*1000:.1f} ms")
     print(f"   Speedup: {time1/time2:.0f}x")
     print(f"   Same object: {result1 is result2}")
     print(f"   Cache info: {model.cache_info()}\n")
-    
+
     # 3. Test SimulationResult methods
     print("3. Testing SimulationResult methods...")
     summary = result1.summary(confidence=0.95)
     print("   Summary statistics:")
     print(summary)
     print()
-    
+
     metrics = result1.metrics(account="Emergency")
     print(f"   Emergency account - Mean Sharpe: {metrics['sharpe'].mean():.3f}")
     print()
-    
+
     # 4. Test plot() with auto-simulation
     print("4. Testing plot() with auto-simulation...")
     try:
         # This should use cached result
-        model.plot("wealth", T=T, X=X, n_sims=100, seed=123, 
+        model.plot("wealth", T=T, X=X, n_sims=100, seed=123,
                   title="Test Plot", save_path=None, return_fig_ax=False)
         print("   ✓ plot('wealth') executed successfully\n")
     except Exception as e:
         print(f"   ✗ plot('wealth') failed: {e}\n")
-    
+
     # 5. Test plot() with pre-computed result
     print("5. Testing plot() with pre-computed result...")
     try:
@@ -1367,12 +1369,12 @@ if __name__ == "__main__":
         print("   ✓ plot('wealth', result=...) executed successfully\n")
     except Exception as e:
         print(f"   ✗ plot('wealth', result=...) failed: {e}\n")
-    
+
     # 6. Test comparison mode
     print("6. Testing comparison mode...")
     X2 = np.tile([0.4, 0.6], (T, 1))  # different allocation
     result3 = model.simulate(T=T, X=X2, n_sims=100, seed=456)
-    
+
     try:
         model.plot("comparison", results={
             "60-40": result1,
@@ -1381,11 +1383,11 @@ if __name__ == "__main__":
         print("   ✓ plot('comparison') executed successfully\n")
     except Exception as e:
         print(f"   ✗ plot('comparison') failed: {e}\n")
-    
+
     # 7. Final cache info
     print("7. Final cache info:")
     info = model.cache_info()
     print(f"   Cached simulations: {info['size']}")
     print(f"   Memory usage: {info['memory_mb']:.2f} MB\n")
-    
+
     print("✓ All sanity checks completed!")

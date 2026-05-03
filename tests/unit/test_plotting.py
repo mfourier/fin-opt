@@ -8,20 +8,20 @@ Tests ModelPlottingMixin visualization methods including:
 - Delegate methods to component plotters
 """
 
-import pytest
-import numpy as np
 from datetime import date
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
 # Use non-interactive backend for testing
 import matplotlib
+import numpy as np
+import pytest
+
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-from finopt.income import IncomeModel, FixedIncome, VariableIncome
+from finopt.income import FixedIncome, IncomeModel, VariableIncome
+from finopt.model import FinancialModel
 from finopt.portfolio import Account
-from finopt.model import FinancialModel, SimulationResult
-
 
 # ============================================================================
 # FIXTURES

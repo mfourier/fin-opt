@@ -35,10 +35,11 @@ GoalMetricsDict
     Goal satisfaction metrics: {"satisfied", "achieved_pct", "var", ...}
 """
 
-from typing import List, Union, Any, TYPE_CHECKING
-from typing_extensions import TypedDict, NotRequired
+from typing import Any
+
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
+from typing_extensions import TypedDict
 
 __all__ = [
     "ReturnStrategyDict",
@@ -108,7 +109,7 @@ class AnnualParamsDict(TypedDict):
 
 # Workaround: TypedDict doesn't allow "return" as key name directly
 # We use a functional form to define this properly
-AnnualParamsDict = TypedDict(
+AnnualParamsDict = TypedDict(  # noqa: F811
     "AnnualParamsDict",
     {"return": float, "volatility": float},
 )

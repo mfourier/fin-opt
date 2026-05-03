@@ -8,18 +8,18 @@ Tests all components:
 - WithdrawalModel: Unified facade combining both types
 """
 
-import pytest
-import numpy as np
 from datetime import date
 
-from finopt.withdrawal import (
-    WithdrawalEvent,
-    WithdrawalSchedule,
-    StochasticWithdrawal,
-    WithdrawalModel
-)
-from finopt.portfolio import Account
+import numpy as np
+import pytest
 
+from finopt.portfolio import Account
+from finopt.withdrawal import (
+    StochasticWithdrawal,
+    WithdrawalEvent,
+    WithdrawalModel,
+    WithdrawalSchedule,
+)
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -124,7 +124,7 @@ class TestWithdrawalSchedule:
         """Test empty schedule returns zeros."""
         schedule = WithdrawalSchedule(events=[])
         D = schedule.to_array(T=12, start_date=start_date, accounts=accounts)
-        
+
         assert D.shape == (12, 2)
         assert np.allclose(D, 0)
 
@@ -134,7 +134,7 @@ class TestWithdrawalSchedule:
             WithdrawalEvent("Conservador", 400_000, date(2025, 6, 1))
         ])
         D = schedule.to_array(T=12, start_date=start_date, accounts=accounts)
-        
+
         assert D.shape == (12, 2)
         assert D[5, 0] == 400_000  # June (month 5), account 0
         assert D[5, 1] == 0
@@ -146,7 +146,7 @@ class TestWithdrawalSchedule:
             WithdrawalEvent(1, 2_000_000, date(2025, 12, 1))
         ])
         D = schedule.to_array(T=12, start_date=start_date, accounts=accounts)
-        
+
         assert D[11, 1] == 2_000_000  # December (month 11), account 1
         assert D[11, 0] == 0
 
@@ -157,7 +157,7 @@ class TestWithdrawalSchedule:
             WithdrawalEvent("Agresivo", 2_000_000, date(2025, 12, 1))
         ])
         D = schedule.to_array(T=24, start_date=start_date, accounts=accounts)
-        
+
         assert D[5, 0] == 400_000
         assert D[11, 1] == 2_000_000
         assert np.sum(D) == 2_400_000
@@ -169,7 +169,7 @@ class TestWithdrawalSchedule:
             WithdrawalEvent("Conservador", 100_000, date(2025, 6, 1))
         ])
         D = schedule.to_array(T=12, start_date=start_date, accounts=accounts)
-        
+
         assert D[5, 0] == 500_000  # Sum of both
 
     def test_withdrawal_before_start_ignored(self, accounts, start_date):
@@ -177,10 +177,10 @@ class TestWithdrawalSchedule:
         schedule = WithdrawalSchedule(events=[
             WithdrawalEvent("Conservador", 400_000, date(2024, 11, 1))
         ])
-        
+
         with pytest.warns(UserWarning, match="before simulation start"):
             D = schedule.to_array(T=12, start_date=start_date, accounts=accounts)
-        
+
         assert np.allclose(D, 0)
 
     def test_withdrawal_beyond_horizon_ignored(self, accounts, start_date):
@@ -188,10 +188,10 @@ class TestWithdrawalSchedule:
         schedule = WithdrawalSchedule(events=[
             WithdrawalEvent("Conservador", 400_000, date(2027, 1, 1))
         ])
-        
+
         with pytest.warns(UserWarning, match="beyond horizon"):
             D = schedule.to_array(T=12, start_date=start_date, accounts=accounts)
-        
+
         assert np.allclose(D, 0)
 
     def test_invalid_account_name_raises(self, accounts, start_date):
@@ -199,7 +199,7 @@ class TestWithdrawalSchedule:
         schedule = WithdrawalSchedule(events=[
             WithdrawalEvent("NonExistent", 400_000, date(2025, 6, 1))
         ])
-        
+
         with pytest.raises(ValueError, match="Account name.*not found"):
             schedule.to_array(T=12, start_date=start_date, accounts=accounts)
 
@@ -208,7 +208,7 @@ class TestWithdrawalSchedule:
         schedule = WithdrawalSchedule(events=[
             WithdrawalEvent(5, 400_000, date(2025, 6, 1))
         ])
-        
+
         with pytest.raises(ValueError, match="Account index.*out of range"):
             schedule.to_array(T=12, start_date=start_date, accounts=accounts)
 
@@ -219,7 +219,7 @@ class TestWithdrawalSchedule:
             WithdrawalEvent("Conservador", 100_000, date(2025, 9, 1)),
             WithdrawalEvent("Agresivo", 2_000_000, date(2025, 12, 1))
         ])
-        
+
         totals = schedule.total_by_account(accounts)
         assert totals["Conservador"] == 500_000
         assert totals["Agresivo"] == 2_000_000
@@ -231,7 +231,7 @@ class TestWithdrawalSchedule:
             WithdrawalEvent("Agresivo", 2_000_000, date(2025, 12, 1)),
             WithdrawalEvent("Conservador", 100_000, date(2025, 9, 1))
         ])
-        
+
         events = schedule.get_events_for_account("Conservador")
         assert len(events) == 2
         assert all(e.account == "Conservador" for e in events)
@@ -241,13 +241,13 @@ class TestWithdrawalSchedule:
         schedule = WithdrawalSchedule(events=[
             WithdrawalEvent("Conservador", 400_000, date(2025, 6, 1), "Bicicleta")
         ])
-        
+
         # Serialize
         payload = schedule.to_dict()
-        
+
         # Deserialize
         restored = WithdrawalSchedule.from_dict(payload)
-        
+
         # Verify
         assert len(restored.events) == 1
         assert restored.events[0].account == "Conservador"
@@ -391,10 +391,10 @@ class TestStochasticWithdrawal:
             month=6,
             seed=42
         )
-        
+
         samples1 = withdrawal1.sample(n_sims=100)
         samples2 = withdrawal2.sample(n_sims=100)
-        
+
         assert np.allclose(samples1, samples2)
 
     def test_resolve_month_with_month_param(self, start_date):
@@ -454,7 +454,7 @@ class TestWithdrawalModel:
         """Test empty model returns zeros."""
         model = WithdrawalModel()
         D = model.to_array(T=12, start_date=start_date, accounts=accounts, n_sims=10)
-        
+
         assert D.shape == (10, 12, 2)
         assert np.allclose(D, 0)
 
@@ -466,7 +466,7 @@ class TestWithdrawalModel:
             ])
         )
         D = model.to_array(T=12, start_date=start_date, accounts=accounts, n_sims=10, seed=42)
-        
+
         assert D.shape == (10, 12, 2)
         # All scenarios should have same withdrawal (deterministic)
         assert np.allclose(D[:, 5, 0], 400_000)
@@ -486,7 +486,7 @@ class TestWithdrawalModel:
             ]
         )
         D = model.to_array(T=12, start_date=start_date, accounts=accounts, n_sims=100, seed=42)
-        
+
         assert D.shape == (100, 12, 2)
         # Should have variance across scenarios
         assert D[:, 8, 0].std() > 0
@@ -510,7 +510,7 @@ class TestWithdrawalModel:
             ]
         )
         D = model.to_array(T=12, start_date=start_date, accounts=accounts, n_sims=100, seed=42)
-        
+
         assert D.shape == (100, 12, 2)
         # June: deterministic
         assert np.allclose(D[:, 5, 0], 400_000)
@@ -532,7 +532,7 @@ class TestWithdrawalModel:
                 )
             ]
         )
-        
+
         totals = model.total_expected(accounts)
         assert totals["Conservador"] == 700_000  # 400k + 300k
         assert totals["Agresivo"] == 0
@@ -586,7 +586,7 @@ class TestFinancialModelWithdrawalIntegration:
     @pytest.fixture
     def financial_model(self):
         """Create a FinancialModel for integration tests."""
-        from finopt.income import IncomeModel, FixedIncome
+        from finopt.income import FixedIncome, IncomeModel
         from finopt.model import FinancialModel
 
         income = IncomeModel(

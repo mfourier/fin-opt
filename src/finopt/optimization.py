@@ -55,20 +55,22 @@ All objectives maintain convexity via:
 """
 
 from __future__ import annotations
-from dataclasses import dataclass
-from typing import List, Optional, Callable, Dict, Any, Union, Literal, TYPE_CHECKING
-from abc import ABC, abstractmethod
-from datetime import date
+
 import math
 import time
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from datetime import date
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Literal, Optional, Union
+
 import numpy as np
 
-from .goals import IntermediateGoal, TerminalGoal, GoalSet, check_goals
+from .goals import GoalSet, IntermediateGoal, TerminalGoal, check_goals
 from .portfolio import Portfolio
+
 if TYPE_CHECKING:
     from .model import SimulationResult
     from .portfolio import Account
-from .goals import GoalSet, TerminalGoal, IntermediateGoal
 from .exceptions import InfeasibleError
 
 __all__ = [
@@ -143,10 +145,10 @@ ObjectiveType = Union[
 class OptimizationResult:
     """
     Container for allocation optimization output.
-    
+
     Immutable dataclass holding optimal policy X*, horizon T*, objective value,
     feasibility status, goal_set reference, and solver diagnostics.
-    
+
     Attributes
     ----------
     X : np.ndarray, shape (T, M)
@@ -178,12 +180,12 @@ class OptimizationResult:
         - confidence_gap: difference from specified confidence (CVaR conservatism)
         - note: explanation of CVaR conservatism
         Populated when result is validated against simulation data.
-    
+
     Examples
     --------
     >>> from finopt.src.portfolio import Account
     >>> accounts = [Account.from_annual("Emergency", 0.04, 0.05)]
-    >>> result = optimizer.solve(T=24, A=A, R=R, initial_wealth=initial_wealth, goals=goals, 
+    >>> result = optimizer.solve(T=24, A=A, R=R, initial_wealth=initial_wealth, goals=goals,
     ...                          accounts=accounts, start_date=date(2025,1,1))
     >>> print(result.summary())
     OptimizationResult(
@@ -194,7 +196,7 @@ class OptimizationResult:
       Solve time: 0.342s
       Iterations: 18
     )
-    >>> 
+    >>>
     >>> # Access accounts via goal_set
     >>> result.goal_set.accounts
     [Account('Emergency': 4.0%/year, ...)]
@@ -209,7 +211,7 @@ class OptimizationResult:
     n_iterations: Optional[int] = None
     diagnostics: Optional[Dict[str, Any]] = None
     goal_metrics: Optional[Dict[Union[IntermediateGoal, TerminalGoal], Dict[str, Any]]] = None
-    
+
     def __post_init__(self):
         """Validate result structure at construction."""
         if self.X.ndim != 2:
@@ -217,14 +219,14 @@ class OptimizationResult:
         T_X, M = self.X.shape
         if T_X != self.T:
             raise ValueError(f"X.shape[0]={T_X} != T={self.T}")
-        
+
         if not isinstance(self.T, int) or self.T < 1:
             raise ValueError(f"T must be positive int, got {self.T}")
         if not isinstance(self.feasible, bool):
             raise TypeError(f"feasible must be bool, got {type(self.feasible)}")
         if not isinstance(self.solve_time, (int, float)) or self.solve_time < 0:
             raise ValueError(f"solve_time must be non-negative, got {self.solve_time}")
-        
+
         # Validate goal_set consistency
         if not isinstance(self.goal_set, GoalSet):
             raise TypeError(f"goal_set must be GoalSet, got {type(self.goal_set)}")
@@ -232,14 +234,14 @@ class OptimizationResult:
             raise ValueError(
                 f"goal_set.M={self.goal_set.M} != X.shape[1]={M}"
             )
-    
+
     def summary(self) -> str:
         """Human-readable optimization summary."""
         status = "✓ Feasible" if self.feasible else "✗ Infeasible"
-        
+
         n_intermediate = sum(1 for g in self.goals if isinstance(g, IntermediateGoal))
         n_terminal = sum(1 for g in self.goals if isinstance(g, TerminalGoal))
-        
+
         lines = [
             "OptimizationResult(",
             f"  Status: {status}",
@@ -250,33 +252,33 @@ class OptimizationResult:
             f"  Solve time: {self.solve_time:.3f}s",
             f"  Iterations: {self.n_iterations if self.n_iterations is not None else 'N/A'}",
         ]
-        
+
         if self.diagnostics:
             if 'duality_gap' in self.diagnostics:
                 lines.append(f"  Duality gap: {self.diagnostics['duality_gap']:.2e}")
             if 'convergence_status' in self.diagnostics:
                 lines.append(f"  Convergence: {self.diagnostics['convergence_status']}")
-        
+
         lines.append(")")
         return "\n".join(lines)
-    
+
     def validate_goals(
         self,
         result: SimulationResult
     ) -> Dict[Union[IntermediateGoal, TerminalGoal], Dict[str, float]]:
         """
         Validate goal satisfaction in simulation result using X*.
-        
+
         Parameters
         ----------
         result : SimulationResult
             Simulation output to validate against goals
-        
+
         Returns
         -------
         dict
             Goal satisfaction metrics (from check_goals)
-        
+
         Notes
         -----
         Uses self.goal_set.accounts and self.goal_set.start_date internally,
@@ -286,25 +288,25 @@ class OptimizationResult:
             raise ValueError(
                 f"Result horizon mismatch: result.T={result.T} != self.T={self.T}"
             )
-        
+
         return check_goals(
-            result, 
-            self.goals, 
+            result,
+            self.goals,
             self.goal_set.accounts,
             self.goal_set.start_date
         )
-    
+
     def is_valid_allocation(self, tol: float = 1e-6) -> bool:
         """Check if X satisfies allocation constraints."""
         if np.any(self.X < -tol):
             return False
-        
+
         row_sums = self.X.sum(axis=1)
         if not np.allclose(row_sums, 1.0, atol=tol):
             return False
-        
+
         return True
-    
+
     @property
     def M(self) -> int:
         """Number of accounts (portfolio size)."""
@@ -318,18 +320,18 @@ class OptimizationResult:
 class AllocationOptimizer(ABC):
     """
     Abstract base class for allocation policy optimizers.
-    
+
     Defines interface for inner problem solvers in bilevel optimization.
     Subclasses implement specific formulations (CVaR, SAA, etc.) by
     providing concrete solve() method.
-    
+
     Supports parametrizable objectives f(X):
     - "risky": E[Σ_m W_T^m]
     - "balanced": E[W_T] - λ·Σ_{t,m}|x_{t+1,m} - x_t^m| (default)
     - "conservative": E[W_T] - λ·Std(W_T)
     - "risky_turnover": E[W_T] - λ·Σ_{t,m}|x_{t+1,m} - x_t^m|
     - Custom callable: f(W, X, T, M) → float
-    
+
     Parameters
     ----------
     n_accounts : int
@@ -340,18 +342,18 @@ class AllocationOptimizer(ABC):
         Parameters for objective function (e.g., {"lambda": 0.1})
     account_names : List[str], optional
         Account name labels for goal resolution
-    
+
     Notes
     -----
     Subclasses must implement:
     - solve(T, A, R, initial_wealth, goal_set, X_init, **kwargs) → OptimizationResult
-    
+
     Provided utilities:
     - _validate_inputs(...) → GoalSet
     - _check_feasibility(...) → bool
     - _compute_objective(W, X, T, M) → float (dispatches to objective functions)
     """
-    
+
     def __init__(
         self,
         n_accounts: int,
@@ -361,18 +363,18 @@ class AllocationOptimizer(ABC):
     ):
         if n_accounts < 1:
             raise ValueError(f"n_accounts must be ≥ 1, got {n_accounts}")
-        
+
         self.M = n_accounts
         self.objective = objective
         self.objective_params = objective_params or {}
         self.account_names = account_names or [f"Account_{i}" for i in range(n_accounts)]
-        
+
         if len(self.account_names) != n_accounts:
             raise ValueError(
                 f"account_names length {len(self.account_names)} != "
                 f"n_accounts {n_accounts}"
             )
-    
+
     @abstractmethod
     def solve(
         self,
@@ -386,9 +388,9 @@ class AllocationOptimizer(ABC):
     ) -> OptimizationResult:
         """
         Solve allocation optimization problem for fixed horizon T.
-        
+
         Caller (typically GoalSeeker) is responsible for creating GoalSet once.
-        
+
         Parameters
         ----------
         T : int
@@ -406,14 +408,14 @@ class AllocationOptimizer(ABC):
             Warm start allocation (T, M)
         **solver_kwargs
             Solver-specific parameters
-        
+
         Returns
         -------
         OptimizationResult
             Optimal X*, objective value, feasibility, goal_set, diagnostics
         """
         pass
-    
+
     def _check_feasibility(
         self,
         X: np.ndarray,
@@ -520,7 +522,7 @@ class AllocationOptimizer(ABC):
                             return False
 
         return True
-    
+
     def _compute_objective(
         self,
         W: np.ndarray,
@@ -530,7 +532,7 @@ class AllocationOptimizer(ABC):
     ) -> float:
         """
         Compute objective function value (to be MAXIMIZED).
-        
+
         Parameters
         ----------
         W : np.ndarray, shape (n_sims, T+1, M)
@@ -541,7 +543,7 @@ class AllocationOptimizer(ABC):
             Horizon
         M : int
             Number of accounts
-        
+
         Returns
         -------
         float
@@ -549,7 +551,7 @@ class AllocationOptimizer(ABC):
         """
         if callable(self.objective):
             return self.objective(W, X, T, M)
-        
+
         # Dispatch to predefined objectives
         if self.objective == "risky":
             return self._objective_risky(W, X, T, M)
@@ -561,7 +563,7 @@ class AllocationOptimizer(ABC):
             return self._objective_conservative(W, X, T, M)
         else:
             raise ValueError(f"Unknown objective: {self.objective}")
-    
+
     def _objective_risky(
         self,
         W: np.ndarray,
@@ -571,7 +573,7 @@ class AllocationOptimizer(ABC):
     ) -> float:
         """Expected total terminal wealth: E[Σ_m W_T^m]."""
         return W[:, T, :].sum(axis=1).mean()
-    
+
     def _objective_balanced(
         self,
         W: np.ndarray,
@@ -581,14 +583,14 @@ class AllocationOptimizer(ABC):
     ) -> float:
         """
         Turnover penalty.
-        
+
         f(X) = - Σ_{t,m} (x_{t+1,m} - x_t^m)^2
         """
         if T > 1:
             turnover = ((X[1:, :] - X[:-1, :]) ** 2).sum()
         else:
             turnover = 0.0
-        
+
         return -turnover
 
     def _objective_risky_turnover(
@@ -600,11 +602,11 @@ class AllocationOptimizer(ABC):
     ) -> float:
         """
         Terminal wealth with turnover penalty.
-        
+
         f(X) = E[W_T] - λ·Σ_{t,m} (x_{t+1,m} - x_t^m)^2
         """
         lambda_ = self.objective_params.get("lambda", 0.5)
-        
+
         W_T_total = W[:, T, :].sum(axis=1)
         mean_wealth = W_T_total.mean()
 
@@ -613,7 +615,7 @@ class AllocationOptimizer(ABC):
         else:
             turnover = 0.0
         return mean_wealth - lambda_ * turnover
-    
+
     def _objective_conservative(
         self,
         W: np.ndarray,
@@ -623,15 +625,15 @@ class AllocationOptimizer(ABC):
     ) -> float:
         """
         Mean-variance objective.
-        
+
         f(X) = E[W_T] - λ·Std(W_T)
         """
         lambda_ = self.objective_params.get("lambda", 0.5)
-        
+
         W_T_total = W[:, T, :].sum(axis=1)
         mean_wealth = W_T_total.mean()
         std_wealth = W_T_total.std()
-        
+
         return mean_wealth - lambda_ * std_wealth
 
 
@@ -642,53 +644,53 @@ class AllocationOptimizer(ABC):
 class CVaROptimizer(AllocationOptimizer):
     """
     CVaR-based portfolio allocation optimizer using convex programming.
-    
+
     Reformulates chance constraints P(W >= threshold) >= 1-ε as CVaR constraints:
         CVaR_ε(threshold - W) <= 0
-    
+
     Uses the epigraphic formulation of Rockafellar & Uryasev (2000):
         CVaR_α(L) = min_{γ,z} { γ + (1/αN) Σ_i z^i }
         subject to: z^i >= L^i - γ, z^i >= 0, ∀i
-    
+
     where L^i = threshold - W^i is the shortfall in scenario i.
-    
+
     Mathematical Formulation
     ------------------------
     Decision variables:
         X[t,m] : allocation fraction to account m at time t
                  satisfying Σ_m X[t,m] = 1 (simplex) and X[t,m] >= 0
-    
+
     Wealth dynamics (affine in X):
         W[:,t,m] = initial_wealth[m] * F[:,0,t,m] + Σ_{s<t} (A[i,s] * X[s,m] - D[i,s,m]) * F[:,s,t,m]
-        
+
         where:
         - F[i,s,t,m] = ∏_{τ=s+1}^t (1 + R[i,τ,m]) is the accumulation factor
         - A[i,s] is the contribution at time s in scenario i
         - D[i,s,m] is the withdrawal from account m at time s in scenario i
         - initial_wealth[m] is the initial wealth in account m
-    
+
     CVaR constraints (per goal):
         γ_g + (1/(ε_g * N)) * Σ_i z^i_g <= 0
         z^i_g >= (threshold_g - W[i,T,m_g]) - γ_g
         z^i_g >= 0
-    
+
     Supported Convex Objectives
     ----------------------------
     All objectives exploit affine wealth structure for convexity:
-    
+
     1. risky: max E[Σ_m W_T^m]
        - Linear program (fastest)
        - Maximizes expected total final wealth
        - Use case: Wealth accumulation without risk considerations
-    
+
     2. balanced: -||ΔX||_2
        - Reduces transaction costs via L2 penalty on allocation changes
-    
+
     3. conservative: max E[W_T] - λ·Var(W_T)
        - Mean-variance tradeoff (uses variance, not std, for convexity)
        - λ controls risk aversion (typical: 0.1-1.0)
        - Use case: Markowitz-style optimization
-    
+
     Parameters
     ----------
     n_accounts : int
@@ -703,29 +705,29 @@ class CVaROptimizer(AllocationOptimizer):
         - conservative: {'lambda': 0.3}
     account_names : list of str, optional
         Names of accounts for improved diagnostics
-    
+
     Attributes
     ----------
     cp : module
         CVXPY module (imported at initialization)
-    
+
     Notes
     -----
     Complexity:
         Variables: T*M + G*(1 + N) + (objective-dependent)
         Constraints: T + G*(N + 1) + (objective-dependent)
         Solve time: O(n^{3.5}) where n = number of variables
-        
+
         For typical parameters (T=24, M=3, G=3, N=300):
         - Variables: ~900
         - Constraints: ~900
         - Solve time: 30-80ms depending on objective (ECOS solver)
-    
+
     The formulation is a pure convex program (LP or SOCP), solved efficiently
     using interior-point methods (ECOS, SCS, or CLARABEL). All objectives
     maintain convexity and global optimality guarantees.
     """
-    
+
     def __init__(
         self,
         n_accounts: int,
@@ -734,7 +736,7 @@ class CVaROptimizer(AllocationOptimizer):
         account_names: Optional[List[str]] = None
     ):
         super().__init__(n_accounts, objective, objective_params, account_names)
-        
+
         # Validate objective
         valid_objectives = [
             'risky', 'balanced', 'risky_turnover', 'conservative'
@@ -744,7 +746,7 @@ class CVaROptimizer(AllocationOptimizer):
                 f"Invalid objective '{objective}'. "
                 f"Valid options: {', '.join(valid_objectives)}"
             )
-        
+
         # Validate and import CVXPY
         try:
             import cvxpy as cp
@@ -754,7 +756,7 @@ class CVaROptimizer(AllocationOptimizer):
                 "CVaROptimizer requires cvxpy. "
                 "Install with: pip install cvxpy"
             )
-    
+
     def solve(
         self,
         T: int,
@@ -840,33 +842,32 @@ class CVaROptimizer(AllocationOptimizer):
         - SCS: More robust, handles ill-conditioned problems
         - CLARABEL: Modern, balanced performance
         """
-        import time
         cp = self.cp
-        
+
         start_time = time.time()
-        
+
         # Validation of inputs
         if not isinstance(goal_set, GoalSet):
             raise TypeError(
                 f"goal_set must be GoalSet instance, got {type(goal_set)}"
             )
-        
+
         if T < goal_set.T_min:
             raise ValueError(
                 f"T={T} < goal_set.T_min={goal_set.T_min} "
                 f"(required by intermediate goals)"
             )
-        
+
         n_sims = A.shape[0]
         M = self.M
-        
+
         if A.shape != (n_sims, T):
             raise ValueError(f"A must have shape ({n_sims}, {T}), got {A.shape}")
         if R.shape != (n_sims, T, M):
             raise ValueError(f"R must have shape ({n_sims}, {T}, {M}), got {R.shape}")
         if initial_wealth.shape != (M,):
             raise ValueError(f"initial_wealth must have shape ({M},), got {initial_wealth.shape}")
-        
+
         if goal_set.M != M:
             raise ValueError(
                 f"goal_set.M={goal_set.M} != n_accounts={M}"
@@ -907,17 +908,17 @@ class CVaROptimizer(AllocationOptimizer):
         # Precompute accumulation factors: (n_sims, T+1, T+1, M)
         portfolio = Portfolio(goal_set.accounts)
         F = portfolio.compute_accumulation_factors(R)
-        
+
         # ============= DECISION VARIABLES =============
-        
+
         # X[t,m]: allocation fraction to account m at time t
         # Constraints: X[t,m] >= 0 and Σ_m X[t,m] = 1 (defined below)
         X = cp.Variable((T, M), nonneg=True, name="allocations")
-        
+
         # CVaR auxiliary variables (one set per goal)
         gamma = {}  # γ: VaR level (scalar per goal)
         z = {}      # z^i: excess over VaR in scenario i (vector per goal)
-        
+
         # ============= HELPER FUNCTION: AFFINE WEALTH =============
 
         def build_wealth_affine(t: int, m: int):
@@ -974,32 +975,32 @@ class CVaROptimizer(AllocationOptimizer):
 
             # Wealth = initial + contributions - withdrawals (all compounded)
             return b + contrib_term - withdrawal_term
-        
+
         # ============= CONSTRAINTS =============
-        
+
         constraints = []
-        
+
         # 1. Simplex constraint: Σ_m X[t,m] = 1 for all t
         #    Ensures allocations sum to 100% at each time period
         constraints.append(cp.sum(X, axis=1) == 1)
-        
+
         # 2. CVaR constraints for terminal goals
         for goal in goal_set.terminal_goals:
             m = goal_set.get_account_index(goal)
-            
+
             # Compute terminal wealth W[:,T,m] as affine expression
             W_T_m = build_wealth_affine(T, m)
-            
+
             # Shortfall: L[i] = threshold - W[i,T,m]
             # Positive values indicate goal violation in scenario i
             shortfall = goal.threshold - W_T_m
-            
+
             # Create CVaR auxiliary variables
             # γ: VaR at level ε (scalar)
             # z: excess shortfall over VaR (vector, one per scenario)
             gamma[goal] = cp.Variable(name=f"gamma_terminal_{m}")
             z[goal] = cp.Variable(n_sims, nonneg=True, name=f"z_terminal_{m}")
-            
+
             # CVaR epigraphic constraints:
             # (1) z[i] >= L[i] - γ  for all i (defines excess over VaR)
             # (2) z[i] >= 0         for all i (non-negativity)
@@ -1008,28 +1009,28 @@ class CVaROptimizer(AllocationOptimizer):
             constraints.append(
                 gamma[goal] + cp.sum(z[goal]) / (goal.epsilon * n_sims) <= 0
             )
-        
+
         # 3. CVaR constraints for intermediate goals
         for goal in goal_set.intermediate_goals:
             m = goal_set.get_account_index(goal)
             t = goal_set.get_resolved_month(goal)
-            
+
             # Validate temporal consistency
             if t > T:
                 raise ValueError(
                     f"Intermediate goal at month {t} exceeds horizon T={T}"
                 )
-            
+
             # Compute wealth at intermediate time t
             W_t_m = build_wealth_affine(t, m)
-            
+
             # Shortfall at time t
             shortfall = goal.threshold - W_t_m
-            
+
             # CVaR auxiliary variables for intermediate goal
             gamma[goal] = cp.Variable(name=f"gamma_intermediate_{m}_{t}")
             z[goal] = cp.Variable(n_sims, nonneg=True, name=f"z_intermediate_{m}_{t}")
-            
+
             # Same epigraphic constraints as terminal goals
             constraints.append(z[goal] >= shortfall - gamma[goal])
             constraints.append(
@@ -1077,60 +1078,60 @@ class CVaROptimizer(AllocationOptimizer):
                         )
 
         # ============= OBJECTIVE FUNCTION =============
-        
+
         # Pre-compute total terminal wealth (used by multiple objectives)
         W_T_per_account = [build_wealth_affine(T, m) for m in range(M)]
         W_T_total_per_scenario = sum(W_T_per_account)  # (n_sims,) - element-wise sum
         mean_wealth = cp.sum(W_T_total_per_scenario) / n_sims
-        
+
         # Build objective based on self.objective
         if self.objective == "risky":
             # Maximize expected total terminal wealth: E[Σ_m W[T,m]]
             # Linear program - fastest option
             objective = cp.Maximize(mean_wealth)
-        
+
         elif self.objective == "conservative":
             # Maximize E[W_T] - λ·Var(W_T)
             # Variance formulated as sum of squared deviations for DCP compliance
             lambda_ = self.objective_params.get("lambda", 0.5)
-            
+
             # Var(W) = (1/N) Σ_i (W_i - mean_W)²
             # DCP-compliant: sum_squares of affine expressions is convex
             variance = cp.sum_squares(W_T_total_per_scenario - mean_wealth) / n_sims
-            
+
             objective = cp.Maximize(mean_wealth - lambda_ * variance)
-        
+
         elif self.objective == "risky_turnover":
             # Maximize E[W_T] - λ·||ΔX||_2
             lambda_ = self.objective_params.get("lambda", 15000)
             turnover = cp.sum_squares(X[1:, :] - X[:-1, :]) if T > 1 else 0.0
 
             objective = cp.Maximize(mean_wealth - lambda_ * turnover)
-        
+
         elif self.objective == "balanced":
             # Penalty on allocation changes ||ΔX||_2
             # Turnover component
             turnover = cp.sum_squares(X[1:, :] - X[:-1, :]) if T > 1 else 0.0
-            
+
             objective = cp.Maximize(-turnover)
-        
+
         else:
             raise ValueError(
                 f"Unknown objective '{self.objective}'. "
                 f"Valid options: 'risky', 'balanced', 'conservative'"
             )
-        
+
         # ============= SOLVE CONVEX PROGRAM =============
-        
+
         prob = cp.Problem(objective, constraints)
-        
+
         # Configure solver
         solver_options = {
             'max_iters': max_iters,
             'abstol': abstol,
             'reltol': reltol,
         }
-        
+
         # Select solver and solve
         if solver_name.upper() == 'ECOS':
             prob.solve(solver=cp.ECOS, verbose=verbose, **solver_options)
@@ -1148,7 +1149,7 @@ class CVaROptimizer(AllocationOptimizer):
         elif solver_name.upper() == 'CLARABEL':
             # Clarabel options mapping
             clarabel_opts = solver_options.copy()
-            
+
             # Map standard options to Clarabel specific ones
             if 'max_iters' in clarabel_opts:
                 clarabel_opts['max_iter'] = clarabel_opts.pop('max_iters')
@@ -1156,33 +1157,33 @@ class CVaROptimizer(AllocationOptimizer):
                 clarabel_opts['tol_gap_abs'] = clarabel_opts.pop('abstol')
             if 'reltol' in clarabel_opts:
                 clarabel_opts['tol_gap_rel'] = clarabel_opts.pop('reltol')
-                
+
             prob.solve(solver=cp.CLARABEL, verbose=verbose, **clarabel_opts)
         else:
             # Let CVXPY auto-select solver
             prob.solve(verbose=verbose, **solver_options)
-        
+
         solve_time = time.time() - start_time
-        
+
         # ============= EXTRACT AND VALIDATE SOLUTION =============
-        
+
         # Check solver status
         if prob.status not in [cp.OPTIMAL, cp.OPTIMAL_INACCURATE]:
             # Problem is infeasible or solver failed
             if verbose:
                 print(f"\n[CVXPY Status] {prob.status}")
-                print(f"  Problem is infeasible or solver failed.")
-            
+                print("  Problem is infeasible or solver failed.")
+
             # Return infeasible result with uniform allocation fallback
             X_star = np.ones((T, M)) / M
-            
+
             diagnostics = {
                 'solver_status': prob.status,
                 'solver_time': solve_time,
                 'optimal_value': None,
                 'solver_name': solver_name,
             }
-            
+
             return OptimizationResult(
                 X=X_star,
                 T=T,
@@ -1194,16 +1195,16 @@ class CVaROptimizer(AllocationOptimizer):
                 n_iterations=0,
                 diagnostics=diagnostics
             )
-        
+
         # Extract optimal allocation
         X_star = X.value
-        
+
         if X_star is None:
             raise RuntimeError(
                 f"Solver returned status '{prob.status}' but X.value is None. "
                 f"This should not happen. Check CVXPY installation."
             )
-        
+
         # Project to simplex if numerical violations exist
         # (Due to finite solver tolerance, Σ_m X[t,m] may be ≈ 1.0 ± 1e-8)
         for t in range(T):
@@ -1212,29 +1213,29 @@ class CVaROptimizer(AllocationOptimizer):
                 # Renormalize: ensures exact simplex satisfaction
                 X_star[t, :] = np.maximum(X_star[t, :], 0)  # Clip negatives
                 X_star[t, :] /= X_star[t, :].sum()
-        
+
         obj_value = prob.value
-        
+
         # ============= DIAGNOSTICS =============
-        
+
         if verbose:
-            print(f"\n[CVXPY Solution]")
+            print("\n[CVXPY Solution]")
             print(f"  Status: {prob.status}")
             print(f"  Objective: {obj_value:,.2f}")
             print(f"  Solve time: {solve_time:.3f}s")
-            
+
             # Validate simplex constraint
             X_sums = X_star.sum(axis=1)
             simplex_violations = np.abs(X_sums - 1.0)
             max_simplex_error = simplex_violations.max()
-            
-            print(f"\n[Simplex Validation]")
+
+            print("\n[Simplex Validation]")
             print(f"  Max |Σx_t - 1|: {max_simplex_error:.2e}")
             print(f"  X bounds: [{X_star.min():.4f}, {X_star.max():.4f}]")
-            
+
             if max_simplex_error > 1e-4:
-                print(f"Minor simplex violations detected (auto-corrected)")
-            
+                print("Minor simplex violations detected (auto-corrected)")
+
             # Compute wealth using NumPy for validation
             def compute_wealth_numpy(X, t, m):
                 """Compute W[:,t,m] using NumPy (for diagnostic validation)"""
@@ -1247,44 +1248,44 @@ class CVaROptimizer(AllocationOptimizer):
                     else:
                         W += contrib
                 return W
-            
+
             # Validate CVaR constraints and goal satisfaction
-            print(f"\n[Goal Satisfaction Diagnostics]")
-            
+            print("\n[Goal Satisfaction Diagnostics]")
+
             for goal in goal_set.terminal_goals:
                 m = goal_set.get_account_index(goal)
                 W_T_m = compute_wealth_numpy(X_star, T, m)
-                
+
                 violations = W_T_m < goal.threshold
                 violation_rate = violations.mean()
-                
+
                 # Compute actual CVaR value
                 shortfall = goal.threshold - W_T_m
                 gamma_val = gamma[goal].value
                 z_val = z[goal].value
                 cvar_val = gamma_val + z_val.sum() / (goal.epsilon * n_sims)
-                
+
                 print(f"  Account {m} ({goal.account}):")
                 print(f"    Threshold:      {goal.threshold:>12,.0f}")
                 print(f"    Mean wealth:    {W_T_m.mean():>12,.0f}")
                 print(f"    Violation rate: {violation_rate:.2%} (max: {goal.epsilon:.2%})")
                 print(f"    CVaR value:     {cvar_val:>12,.2f} (target: ≤ 0)")
-                
+
                 if cvar_val > 1e-4:
-                    print(f"    ⚠️  CVaR constraint not satisfied within tolerance!")
-            
+                    print("    ⚠️  CVaR constraint not satisfied within tolerance!")
+
             for goal in goal_set.intermediate_goals:
                 m = goal_set.get_account_index(goal)
                 t = goal_set.get_resolved_month(goal)
                 W_t_m = compute_wealth_numpy(X_star, t, m)
-                
+
                 violations = W_t_m < goal.threshold
                 violation_rate = violations.mean()
-                
+
                 gamma_val = gamma[goal].value
                 z_val = z[goal].value
                 cvar_val = gamma_val + z_val.sum() / (goal.epsilon * n_sims)
-                
+
                 print(f"  Account {m} at month {t} ({goal.account}):")
                 print(f"    Threshold:      {goal.threshold:>12,.0f}")
                 print(f"    Mean wealth:    {W_t_m.mean():>12,.0f}")
@@ -1293,7 +1294,7 @@ class CVaROptimizer(AllocationOptimizer):
 
             # Withdrawal feasibility diagnostics
             if D_expanded is not None and gamma_withdrawal:
-                print(f"\n[Withdrawal Feasibility Diagnostics]")
+                print("\n[Withdrawal Feasibility Diagnostics]")
                 print(f"  Confidence level: {1 - withdrawal_epsilon:.0%} (ε={withdrawal_epsilon:.0%})")
 
                 for (t, m), gamma_var in gamma_withdrawal.items():
@@ -1337,7 +1338,7 @@ class CVaROptimizer(AllocationOptimizer):
             'n_withdrawal_constraints': n_withdrawal_constraints,
             'withdrawal_epsilon': withdrawal_epsilon if D_expanded is not None else None,
         }
-        
+
         return OptimizationResult(
             X=X_star,
             T=T,
@@ -1366,9 +1367,9 @@ class GoalSeeker:
                               ℙ(W_t^m(X) ≥ b_t^m) ≥ 1-ε_t^m  ∀ intermediate goals
                               ℙ(W_T^m(X) ≥ b^m) ≥ 1-ε^m      ∀ terminal goals
                               ℙ(W_t^m(X) ≥ D_t^m) ≥ 1-δ      ∀ withdrawals
-    
+
     Supports linear and binary search strategies with warm start.
-    
+
     Parameters
     ----------
     optimizer : AllocationOptimizer
@@ -1377,7 +1378,7 @@ class GoalSeeker:
         Maximum search horizon (20 years)
     verbose : bool, default True
         Print iteration progress
-    
+
     Examples
     --------
     >>> from finopt.src.portfolio import Account
@@ -1385,21 +1386,21 @@ class GoalSeeker:
     ...     Account.from_annual("Emergency", 0.04, 0.05),
     ...     Account.from_annual("Housing", 0.07, 0.12)
     ... ]
-    >>> 
+    >>>
     >>> optimizer = CVaROptimizer(n_accounts=model.M, objective='terminal_wealth')
     >>> seeker = GoalSeeker(optimizer, T_max=120, verbose=True)
-    >>> 
+    >>>
     >>> def A_gen(T, n, s):
     ...     return model.income.contributions(T, n_sims=n, seed=s, output="array")
     >>> def R_gen(T, n, s):
     ...     return model.returns.generate(T, n_sims=n, seed=s)
-    >>> 
+    >>>
     >>> result = seeker.seek(goals, A_gen, R_gen, initial_wealth, accounts,
     ...                     start_date=date(2025, 1, 1),
     ...                     n_sims=500, seed=42, search_method="binary")
     >>> print(f"Optimal horizon: T*={result.T} months")
     """
-    
+
     def __init__(
         self,
         optimizer: AllocationOptimizer,
@@ -1486,28 +1487,28 @@ class GoalSeeker:
         """
         if not goals:
             raise ValueError("goals list cannot be empty")
-        
+
         if not accounts:
             raise ValueError("accounts list cannot be empty")
-        
+
         goal_set = GoalSet(goals, accounts, start_date)
-        
+
         # Determine intelligent starting horizon
         if goal_set.terminal_goals and not goal_set.intermediate_goals:
             if self.verbose:
                 print("\n=== Estimating minimum horizon (terminal goals only) ===")
-            
+
             # Sample contributions
             sample_months = 12
             sample_sims = min(100, n_sims)
-            
+
             A_sample = A_generator(sample_months, sample_sims, seed)
             avg_contrib = float(np.mean(A_sample))
-            
+
             if self.verbose:
                 print(f"  Sampled contributions: {sample_sims} scenarios × {sample_months} months")
                 print(f"  Average monthly contribution: ${avg_contrib:,.2f}")
-            
+
             # Use improved heuristic with account information
             T_start = goal_set.estimate_minimum_horizon(
                 monthly_contribution=avg_contrib,
@@ -1516,26 +1517,26 @@ class GoalSeeker:
                 safety_margin=0.75,
                 T_max=self.T_max
             )
-            
+
             if self.verbose:
                 print(f"  Estimated minimum horizon: T={T_start} months")
-                print(f"  (using account-specific returns and safety_margin=0.75)")
+                print("  (using account-specific returns and safety_margin=0.75)")
         else:
             T_start = goal_set.T_min
-        
+
         # Validate starting horizon
         if T_start > self.T_max:
             raise ValueError(
                 f"Estimated T_start={T_start} > T_max={self.T_max}. "
                 f"Increase T_max or reduce goal thresholds."
             )
-        
+
         # Display search range
         if self.verbose:
             print(f"\n=== GoalSeeker: {search_method.upper()} search T ∈ [{T_start}, {self.T_max}] ===")
             if T_start > goal_set.T_min:
                 print(f"    (T_start={T_start} from heuristic, T_min={goal_set.T_min} from constraints)")
-        
+
         # Dispatch to search method
         if search_method == "linear":
             return self._linear_search(
