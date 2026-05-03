@@ -163,6 +163,67 @@ def test_compute_goal_status_from_result_mixed_goals():
     assert status[1]["type"] == "terminal"
 
 
+def test_compute_goal_status_from_result_includes_dual_metrics():
+    """Test that compute_goal_status_from_result includes CVaR dual metric fields."""
+    import numpy as np
+    from api.services.optimization import compute_goal_status_from_result
+    from finopt import FinancialModel, TerminalGoal
+    from finopt.income import IncomeModel, FixedIncome
+    from finopt.portfolio import Account
+
+    income = IncomeModel(fixed=FixedIncome(base=1_000_000))
+    accounts = [Account.from_annual("Retirement", 0.10, 0.15, 0)]
+    model = FinancialModel(income=income, accounts=accounts)
+
+    goal = TerminalGoal(account="Retirement", threshold=10_000_000, confidence=0.80)
+
+    opt_result = type("OptResult", (), {"T": 24, "feasible": True, "goals": [goal]})()
+
+    # 90% of scenarios above threshold — empirical 90%, specified 80%
+    wealth = np.zeros((100, 25, 1))
+    wealth[:90, -1, 0] = 12_000_000
+    wealth[10:, -1, 0] = 12_000_000
+    sim_result = type("SimResult", (), {"wealth": np.full((100, 25, 1), 12_000_000.0)})()
+
+    status = compute_goal_status_from_result(opt_result, model, sim_result, date(2025, 1, 1))
+
+    s = status[0]
+    assert "empirical_probability" in s
+    assert "confidence_gap" in s
+    assert "note" in s
+
+    assert s["empirical_probability"] == 1.0
+    assert abs(s["confidence_gap"] - 0.20) < 1e-9
+    assert "CVaR" in s["note"]
+
+
+def test_compute_goal_status_from_result_dual_metrics_with_actual_prob_none():
+    """Test dual metrics are None when actual_probability cannot be computed."""
+    import numpy as np
+    from api.services.optimization import compute_goal_status_from_result
+    from finopt import FinancialModel, IntermediateGoal
+    from finopt.income import IncomeModel, FixedIncome
+    from finopt.portfolio import Account
+
+    income = IncomeModel(fixed=FixedIncome(base=1_000_000))
+    accounts = [Account.from_annual("Emergency", 0.04, 0.05, 0)]
+    model = FinancialModel(income=income, accounts=accounts)
+
+    # Goal at month 6, but sim_result only has T=5 (month 6 out of bounds)
+    goal = IntermediateGoal(date=date(2025, 7, 1), account="Emergency", threshold=5_000_000, confidence=0.80)
+
+    opt_result = type("OptResult", (), {"T": 5, "feasible": True, "goals": [goal]})()
+    # wealth shape (n_sims, 6, M) — index 6 is out of range → actual_prob = None
+    sim_result = type("SimResult", (), {"wealth": np.full((100, 6, 1), 6_000_000.0)})()
+
+    status = compute_goal_status_from_result(opt_result, model, sim_result, date(2025, 1, 1))
+
+    s = status[0]
+    assert s["empirical_probability"] is None
+    assert s["confidence_gap"] is None
+    assert s["note"] is None
+
+
 @pytest.mark.asyncio
 async def test_run_optimization_updates_job_status(mocker, sample_scenario_data, mock_env_vars):
     """Test run_optimization updates job status throughout execution."""

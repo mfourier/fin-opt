@@ -162,6 +162,10 @@ export interface GoalStatus {
   required_confidence: number
   satisfied: boolean
   actual_probability?: number
+  // CVaR transparency metrics (added in v0.2)
+  empirical_probability?: number   // same as actual_probability — made explicit
+  confidence_gap?: number          // empirical_probability - required_confidence (positive = conservative)
+  note?: string                    // explanation of CVaR conservatism
 }
 
 // -----------------------------------------------------------------------------

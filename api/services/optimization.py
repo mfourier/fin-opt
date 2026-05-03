@@ -19,6 +19,7 @@ from api.supabase_client import (
     update_job,
 )
 from api.services.reconstruction import reconstruct_from_scenario
+from api.services._goal_metrics import compute_dual_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +86,11 @@ def compute_goal_status_from_result(
             wealth_at_T = sim_result.wealth[:, -1, account_idx]
             actual_prob = float(np.mean(wealth_at_T >= goal.threshold))
 
+        if actual_prob is not None:
+            dual = compute_dual_metrics(actual_prob, goal.confidence)
+        else:
+            dual = {"empirical_probability": None, "confidence_gap": None, "note": None}
+
         status_list.append({
             "goal": goal_desc,
             "type": goal_type,
@@ -93,6 +99,10 @@ def compute_goal_status_from_result(
             "required_confidence": goal.confidence,
             "satisfied": actual_prob >= goal.confidence if actual_prob is not None else opt_result.feasible,
             "actual_probability": actual_prob,
+            # CVaR transparency metrics
+            "empirical_probability": dual["empirical_probability"],
+            "confidence_gap": dual["confidence_gap"],
+            "note": dual["note"],
         })
 
     return status_list

@@ -181,6 +181,75 @@ def test_compute_goal_status_mixed_goals():
     assert all(s["satisfied"] for s in status)
 
 
+def test_compute_goal_status_includes_dual_metrics():
+    """Test that compute_goal_status includes CVaR dual metric fields."""
+    from api.services.simulation import compute_goal_status
+    from finopt import TerminalGoal
+    import numpy as np
+
+    wealth = np.zeros((100, 25, 1))
+    # 90% of scenarios above threshold — empirical 90%, specified 80%
+    wealth[:90, -1, 0] = 6_000_000
+    wealth[90:, -1, 0] = 4_000_000
+
+    goals = [TerminalGoal(account=0, threshold=5_000_000, confidence=0.80)]
+    accounts = [type("Account", (), {"name": "Conservative"})()]
+
+    status = compute_goal_status(wealth, goals, accounts, date(2025, 1, 1))
+
+    s = status[0]
+    assert "empirical_probability" in s
+    assert "confidence_gap" in s
+    assert "note" in s
+
+    assert abs(s["empirical_probability"] - 0.90) < 1e-9
+    assert abs(s["confidence_gap"] - 0.10) < 1e-9
+    assert "CVaR" in s["note"]
+
+
+def test_compute_goal_status_dual_metrics_violation_note():
+    """Test that violated goal produces warning note."""
+    from api.services.simulation import compute_goal_status
+    from finopt import TerminalGoal
+    import numpy as np
+
+    wealth = np.zeros((100, 25, 1))
+    # 70% success, requires 85% → gap = -15%
+    wealth[:70, -1, 0] = 6_000_000
+    wealth[70:, -1, 0] = 4_000_000
+
+    goals = [TerminalGoal(account=0, threshold=5_000_000, confidence=0.85)]
+    accounts = [type("Account", (), {"name": "Conservative"})()]
+
+    status = compute_goal_status(wealth, goals, accounts, date(2025, 1, 1))
+
+    s = status[0]
+    assert s["satisfied"] is False
+    assert s["confidence_gap"] < 0
+    assert "Warning" in s["note"]
+
+
+def test_compute_goal_status_dual_metrics_mild_conservatism():
+    """Test that mild conservatism (gap < 1%) produces simpler note."""
+    from api.services.simulation import compute_goal_status
+    from finopt import TerminalGoal
+    import numpy as np
+
+    # 200 scenarios: 162 pass → 81%, specified 80.5% → gap = 0.5%
+    wealth = np.zeros((200, 25, 1))
+    wealth[:162, -1, 0] = 6_000_000
+    wealth[162:, -1, 0] = 4_000_000
+
+    goals = [TerminalGoal(account=0, threshold=5_000_000, confidence=0.805)]
+    accounts = [type("Account", (), {"name": "Conservative"})()]
+
+    status = compute_goal_status(wealth, goals, accounts, date(2025, 1, 1))
+
+    s = status[0]
+    assert s["confidence_gap"] < 0.01
+    assert "CVaR constraint satisfied" in s["note"]
+
+
 @pytest.mark.asyncio
 async def test_run_simulation_updates_job_status(mocker, sample_scenario_data, mock_env_vars):
     """Test run_simulation updates job status throughout execution."""

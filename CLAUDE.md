@@ -458,6 +458,83 @@ If `GoalSeeker` reports all horizons infeasible:
 
 For large wealth values (>100M), use relative thresholds in goals or scale all monetary values by 1e6 internally.
 
+## API Layer (`api/`)
+
+FastAPI service that exposes the `finopt` core library over HTTP, persists jobs and results in Supabase (JSONB), and runs optimization/simulation asynchronously.
+
+### Directory structure
+
+```
+api/
+├── main.py              # FastAPI app, endpoints, request/response models
+├── config.py            # Settings (env vars via FINOPT_* prefix + .env)
+├── supabase_client.py   # Supabase helpers: fetch, update_job, save_*_result
+└── services/
+    ├── _goal_metrics.py # Shared CVaR dual-metric helper
+    ├── simulation.py    # Simulation service + goal status formatting
+    ├── optimization.py  # Optimization service + goal status formatting
+    └── reconstruction.py# Reconstructs FinancialModel from Supabase profile/scenario rows
+```
+
+### Endpoints (`api/main.py`)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/health` | Liveness check |
+| `POST` | `/simulate` | Enqueue simulation job, run async via `run_simulation()` |
+| `POST` | `/optimize` | Enqueue optimization job, run async via `run_optimization()` |
+
+Both `/simulate` and `/optimize` accept a `JobRequest` body (`scenario_id`, `job_id`) and return a `JobResponse`. The heavy work runs in a background task — callers poll Supabase for job status.
+
+### Services
+
+**`services/simulation.py`**
+- `compute_goal_status(result, goals, accounts, start_date)` → `list[dict]` — evaluates each goal against the simulation wealth array; includes dual metric fields.
+- `compute_summary_stats(sim_result, accounts, start_date)` → `SummaryStats` dict.
+- `run_simulation(scenario_id, job_id)` — async entry point; fetches scenario, runs `FinancialModel.simulate()`, saves result to Supabase.
+
+**`services/optimization.py`**
+- `compute_goal_status_from_result(opt_result, model, sim_result, start_date)` → `list[dict]` — like the simulation variant but operates on `OptimizationResult`; handles `actual_prob = None` (goal month out of range) by setting all dual metric fields to `None`.
+- `compute_cash_flow_stats(sim_result, accounts)` → cash flow dict.
+- `compute_wealth_percentiles(sim_result, accounts)` → percentile dict.
+- `run_optimization(scenario_id, job_id)` — async entry point; fetches scenario, runs `FinancialModel.optimize()` then `simulate_from_optimization()`, saves result to Supabase.
+
+**`services/_goal_metrics.py`** — shared helper used by both services:
+```python
+compute_dual_metrics(empirical_probability: float, specified_confidence: float) -> dict
+# Returns: {"empirical_probability": float, "confidence_gap": float, "note": str}
+# note categories:
+#   gap > 0.01  → "CVaR optimization yields conservative estimates..." (significant conservatism)
+#   0 ≤ gap ≤ 0.01 → "CVaR constraint satisfied..." (mild conservatism)
+#   gap < 0     → "Warning: Empirical probability ... below specified confidence..." (violation)
+```
+
+### `GoalStatus` output schema
+
+Every `GoalStatus` dict in the API response contains:
+
+```python
+{
+    "goal": str,                    # human-readable description
+    "type": "terminal" | "intermediate",
+    "account": str,
+    "threshold": float,
+    "required_confidence": float,   # specified confidence (CVaR guarantee)
+    "actual_probability": float,    # empirical success rate (observed)
+    "satisfied": bool,
+    # CVaR transparency fields (v0.2+):
+    "empirical_probability": float | None,   # same as actual_probability, explicit
+    "confidence_gap": float | None,          # empirical - required (positive = conservative)
+    "note": str | None,                      # human-readable explanation
+}
+```
+
+These fields are mirrored in the TypeScript interface `GoalStatus` in `web/src/types/database.ts` as optional fields (`?:`).
+
+### Supabase persistence
+
+Results are stored as JSONB in the `results` table — no schema migration is needed when adding new optional fields to `goal_status` entries. The `web/` frontend reads `result.goal_status` and renders it via `GoalProgressCard`.
+
 ## References
 
 The mathematical framework is based on:
