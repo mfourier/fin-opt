@@ -357,7 +357,7 @@ class GoalSet:
 
         self._validate()
 
-    def _validate(self):
+    def _validate(self) -> None:
         """Validate goal collection for conflicts and invalid references."""
         # Validate intermediate goals
         seen_intermediate = set()
@@ -882,8 +882,8 @@ def print_goal_status(
     result: SimulationResult,
     goals: List[Union[IntermediateGoal, TerminalGoal]],
     accounts: List[Account],
-    start_date: date  # ✅ MEJORA 4: Type hint explícito
-):
+    start_date: date,
+) -> None:
     """
     Pretty-print goal satisfaction status.
 

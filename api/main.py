@@ -16,10 +16,11 @@ which the frontend monitors via Supabase Realtime.
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from typing import Annotated
 
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -41,7 +42,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """
     Application lifespan handler.
 
@@ -78,14 +79,14 @@ app = FastAPI(
 # ---------------------------------------------------------------------------
 
 @app.middleware("http")
-async def add_settings_to_request(request, call_next):
+async def add_settings_to_request(request: Request, call_next: Callable) -> Response:
     """Add settings to request state for access in routes."""
     request.state.settings = get_settings()
     response = await call_next(request)
     return response
 
 
-def setup_cors(app: FastAPI, settings: Settings):
+def setup_cors(app: FastAPI, settings: Settings) -> None:
     """Configure CORS middleware."""
     app.add_middleware(
         CORSMiddleware,
@@ -301,14 +302,14 @@ async def optimize(
 # ---------------------------------------------------------------------------
 
 @app.exception_handler(ValueError)
-async def value_error_handler(request, exc: ValueError):
+async def value_error_handler(request: Request, exc: ValueError) -> None:
     """Handle ValueError as 400 Bad Request."""
     logger.warning(f"ValueError: {exc}")
     raise HTTPException(status_code=400, detail=str(exc))
 
 
 @app.exception_handler(Exception)
-async def general_exception_handler(request, exc: Exception):
+async def general_exception_handler(request: Request, exc: Exception) -> None:
     """Handle unexpected errors."""
     logger.exception(f"Unexpected error: {exc}")
     raise HTTPException(

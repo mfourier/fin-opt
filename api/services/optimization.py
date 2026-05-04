@@ -9,7 +9,11 @@ from __future__ import annotations
 
 import logging
 from datetime import date
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from finopt.model import FinancialModel, SimulationResult
+    from finopt.optimization import OptimizationResult
 
 import numpy as np
 
@@ -25,9 +29,9 @@ logger = logging.getLogger(__name__)
 
 
 def compute_goal_status_from_result(
-    opt_result,
-    model,
-    sim_result,
+    opt_result: OptimizationResult,
+    model: FinancialModel,
+    sim_result: SimulationResult,
     start_date: date,
 ) -> list[dict[str, Any]]:
     """
@@ -106,8 +110,8 @@ def compute_goal_status_from_result(
 
 
 def compute_cash_flow_stats(
-    sim_result,
-    model,
+    sim_result: SimulationResult,
+    model: FinancialModel,
 ) -> dict[str, Any]:
     """
     Compute cash flow statistics (contributions and withdrawals) for visualization.
@@ -183,8 +187,8 @@ def compute_cash_flow_stats(
 
 
 def compute_wealth_percentiles(
-    sim_result,
-    model,
+    sim_result: SimulationResult,
+    model: FinancialModel,
 ) -> dict[str, Any]:
     """
     Compute wealth trajectory percentiles for visualization.
@@ -358,7 +362,7 @@ async def run_optimization(scenario_id: str, job_id: str) -> None:
         current_step = "running optimization"
         update_job(job_id, progress=20, step="Starting goal-seeking optimization")
 
-        def _optimization_progress(info):
+        def _optimization_progress(info: Any) -> None:
             try:
                 if info.phase != "solving":
                     return

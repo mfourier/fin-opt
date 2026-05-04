@@ -702,5 +702,198 @@ class TestIncomeModelOptionalComponents:
         assert restored.variable.sigma == original.variable.sigma
 
 
+# ============================================================================
+# VARIABLEINCOME VALIDATION EDGE CASES
+# ============================================================================
+
+class TestVariableIncomeValidation:
+    """Test VariableIncome.__post_init__ validation."""
+
+    def test_seasonality_wrong_length_raises(self):
+        """seasonality with length != 12 raises ValueError."""
+        with pytest.raises(ValueError, match="length 12"):
+            VariableIncome(base=100_000, sigma=0.1, seasonality=[1.0] * 6)
+
+    def test_seasonality_negative_factor_raises(self):
+        """seasonality with a negative factor raises ValueError."""
+        factors = [1.0] * 12
+        factors[3] = -0.5
+        with pytest.raises(ValueError, match="non-negative"):
+            VariableIncome(base=100_000, sigma=0.1, seasonality=factors)
+
+    def test_seasonality_valid_stored_as_tuple(self):
+        """Valid seasonality is stored as a tuple of 12 floats."""
+        factors = [float(i + 1) for i in range(12)]
+        vi = VariableIncome(base=100_000, sigma=0.0, seasonality=factors)
+        assert isinstance(vi.seasonality, tuple)
+        assert len(vi.seasonality) == 12
+
+
+# ============================================================================
+# FIXEDINCOME.PROJECT EDGE CASES
+# ============================================================================
+
+class TestFixedIncomeProjectEdgeCases:
+    """Test FixedIncome.project() error and edge-case paths."""
+
+    def test_n_sims_not_int_raises(self):
+        fi = FixedIncome(base=1_000_000)
+        with pytest.raises(ValueError, match="n_sims"):
+            fi.project(12, n_sims=1.5)
+
+    def test_n_sims_zero_raises(self):
+        fi = FixedIncome(base=1_000_000)
+        with pytest.raises(ValueError, match="n_sims"):
+            fi.project(12, n_sims=0)
+
+    def test_invalid_output_raises(self):
+        fi = FixedIncome(base=1_000_000)
+        with pytest.raises(ValueError, match="output"):
+            fi.project(12, output="invalid")
+
+    def test_months_zero_returns_empty_array(self):
+        fi = FixedIncome(base=1_000_000)
+        result = fi.project(0)
+        assert result.shape == (0,)
+
+    def test_months_negative_returns_empty_array(self):
+        fi = FixedIncome(base=1_000_000)
+        result = fi.project(-5)
+        assert result.shape == (0,)
+
+    def test_salary_raises_without_start_raises(self):
+        """salary_raises requires a start date."""
+        raises = {date(2025, 7, 1): 200_000}
+        fi = FixedIncome(base=1_000_000, salary_raises=raises)
+        with pytest.raises(ValueError, match="start date"):
+            fi.project(12, start=None)
+
+    def test_salary_raises_with_start(self):
+        """salary_raises with start date works correctly."""
+        raises = {date(2025, 7, 1): 200_000}
+        fi = FixedIncome(base=1_000_000, salary_raises=raises)
+        result = fi.project(12, start=date(2025, 1, 1))
+        assert result.shape == (12,)
+        # Raise at month 6 → salary from month 6 onward should be higher
+        assert result[6] > result[5]
+
+    def test_n_sims_gt_1_with_series_raises(self):
+        fi = FixedIncome(base=1_000_000)
+        with pytest.raises(ValueError, match="series"):
+            fi.project(12, n_sims=3, output="series")
+
+
+# ============================================================================
+# VARIABLEINCOME.PROJECT EDGE CASES
+# ============================================================================
+
+class TestVariableIncomeProjectEdgeCases:
+    """Test VariableIncome.project() error and edge-case paths."""
+
+    def test_n_sims_not_int_raises(self):
+        vi = VariableIncome(base=100_000, sigma=0.0)
+        with pytest.raises(ValueError, match="n_sims"):
+            vi.project(12, n_sims=2.5)
+
+    def test_invalid_output_raises(self):
+        vi = VariableIncome(base=100_000, sigma=0.0)
+        with pytest.raises(ValueError, match="output"):
+            vi.project(12, output="bad")
+
+    def test_months_zero_returns_empty(self):
+        vi = VariableIncome(base=100_000, sigma=0.0)
+        result = vi.project(0)
+        assert result.shape == (0,)
+
+    def test_months_zero_series_output(self):
+        vi = VariableIncome(base=100_000, sigma=0.0)
+        result = vi.project(0, output="series")
+        assert len(result) == 0
+
+    def test_months_zero_n_sims_gt1_series_raises(self):
+        vi = VariableIncome(base=100_000, sigma=0.0)
+        with pytest.raises(ValueError, match="series"):
+            vi.project(0, n_sims=3, output="series")
+
+    def test_n_sims_gt1_series_raises(self):
+        vi = VariableIncome(base=100_000, sigma=0.0)
+        with pytest.raises(ValueError, match="series"):
+            vi.project(12, n_sims=3, output="series")
+
+    def test_with_seasonality(self):
+        """VariableIncome with seasonality applies multipliers."""
+        factors = [float(i + 1) for i in range(12)]  # Jan=1, Feb=2, ..., Dec=12
+        vi = VariableIncome(base=100_000, sigma=0.0, seasonality=factors)
+        result = vi.project(12, start=date(2025, 1, 1))
+        assert result.shape == (12,)
+        # January factor is 1.0, July factor is 7.0 → July > January
+        assert result[6] > result[0]
+
+    def test_with_floor_guardrail(self):
+        """Floor guardrail prevents values below minimum."""
+        vi = VariableIncome(base=100_000, sigma=5.0, floor=50_000, seed=42)
+        result = vi.project(24, n_sims=100)
+        assert np.all(result >= 50_000)
+
+    def test_with_cap_guardrail(self):
+        """Cap guardrail prevents values above maximum."""
+        vi = VariableIncome(base=100_000, sigma=5.0, cap=200_000, seed=42)
+        result = vi.project(24, n_sims=100)
+        assert np.all(result <= 200_000)
+
+
+# ============================================================================
+# INCOMEMODEL.CONTRIBUTIONS EDGE CASES
+# ============================================================================
+
+class TestIncomeModelContributionsEdgeCases:
+    """Test IncomeModel.contributions() error and edge-case paths."""
+
+    def test_n_sims_not_int_raises(self):
+        fi = FixedIncome(base=1_000_000)
+        model = IncomeModel(fixed=fi)
+        with pytest.raises(ValueError, match="n_sims"):
+            model.contributions(12, n_sims=1.5)
+
+    def test_invalid_output_raises(self):
+        fi = FixedIncome(base=1_000_000)
+        model = IncomeModel(fixed=fi)
+        with pytest.raises(ValueError, match="output"):
+            model.contributions(12, output="xml")
+
+    def test_n_sims_gt1_with_series_raises(self):
+        fi = FixedIncome(base=1_000_000)
+        model = IncomeModel(fixed=fi)
+        with pytest.raises(ValueError, match="series"):
+            model.contributions(12, n_sims=3, output="series")
+
+    def test_months_zero_returns_empty(self):
+        fi = FixedIncome(base=1_000_000)
+        model = IncomeModel(fixed=fi)
+        result = model.contributions(0)
+        assert result.shape == (0,)
+
+    def test_months_zero_series_output(self):
+        fi = FixedIncome(base=1_000_000)
+        model = IncomeModel(fixed=fi)
+        result = model.contributions(0, output="series")
+        assert len(result) == 0
+
+    def test_monthly_contribution_wrong_length_raises(self):
+        fi = FixedIncome(base=1_000_000)
+        model = IncomeModel(fixed=fi, monthly_contribution={"fixed": [0.3] * 6})
+        with pytest.raises(ValueError, match="length 12"):
+            model.contributions(12)
+
+    def test_custom_monthly_contribution_fractions(self):
+        """Custom 12-element fractions are applied correctly."""
+        fi = FixedIncome(base=1_000_000)
+        fracs = [0.5] * 12
+        model = IncomeModel(fixed=fi, monthly_contribution={"fixed": fracs})
+        result = model.contributions(12)
+        assert result.shape == (12,)
+        assert np.all(result > 0)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

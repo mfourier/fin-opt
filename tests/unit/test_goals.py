@@ -681,5 +681,297 @@ class TestCheckGoalsDualMetrics:
         assert metrics["satisfied"]
 
 
+# ============================================================================
+# GOALSET INIT AND VALIDATION EDGE CASES
+# ============================================================================
+
+class TestGoalSetInitEdgeCases:
+    """Test GoalSet.__init__ and _validate error paths."""
+
+    def test_empty_accounts_raises(self):
+        """GoalSet requires at least one account."""
+        goal = TerminalGoal(account=0, threshold=1_000_000, confidence=0.80)
+        with pytest.raises(ValueError, match="accounts list cannot be empty"):
+            GoalSet([goal], [], date(2025, 1, 1))
+
+    def test_unknown_goal_type_raises(self):
+        """GoalSet rejects objects that are not IntermediateGoal or TerminalGoal."""
+        accounts = [Account.from_annual("Acc", 0.08, 0.10)]
+
+        class FakeGoal:
+            pass
+
+        with pytest.raises(TypeError, match="Goal must be"):
+            GoalSet([FakeGoal()], accounts, date(2025, 1, 1))
+
+    def test_duplicate_intermediate_goal_raises(self):
+        """Two IntermediateGoals at same (month, account) pair should raise."""
+        accounts = [Account.from_annual("Acc", 0.08, 0.10)]
+        g1 = IntermediateGoal(date=date(2025, 7, 1), account="Acc",
+                               threshold=1_000_000, confidence=0.80)
+        g2 = IntermediateGoal(date=date(2025, 7, 1), account="Acc",
+                               threshold=2_000_000, confidence=0.70)
+        with pytest.raises(ValueError, match="Duplicate IntermediateGoal"):
+            GoalSet([g1, g2], accounts, date(2025, 1, 1))
+
+    def test_duplicate_terminal_goal_raises(self):
+        """Two TerminalGoals targeting the same account should raise."""
+        accounts = [Account.from_annual("Acc", 0.08, 0.10)]
+        g1 = TerminalGoal(account="Acc", threshold=1_000_000, confidence=0.80)
+        g2 = TerminalGoal(account="Acc", threshold=2_000_000, confidence=0.70)
+        with pytest.raises(ValueError, match="Duplicate TerminalGoal"):
+            GoalSet([g1, g2], accounts, date(2025, 1, 1))
+
+    def test_account_index_out_of_range_raises(self):
+        """Integer account index beyond M should raise."""
+        accounts = [Account.from_annual("Acc", 0.08, 0.10)]
+        goal = TerminalGoal(account=5, threshold=1_000_000, confidence=0.80)
+        with pytest.raises(ValueError, match="out of range"):
+            GoalSet([goal], accounts, date(2025, 1, 1))
+
+    def test_account_name_not_found_raises(self):
+        """Unknown account name should raise."""
+        accounts = [Account.from_annual("Acc", 0.08, 0.10)]
+        goal = TerminalGoal(account="Unknown", threshold=1_000_000, confidence=0.80)
+        with pytest.raises(ValueError, match="not found"):
+            GoalSet([goal], accounts, date(2025, 1, 1))
+
+    def test_get_account_index_unknown_type_raises(self):
+        """get_account_index raises TypeError for unsupported goal type."""
+        accounts = [Account.from_annual("Acc", 0.08, 0.10)]
+        goal = TerminalGoal(account="Acc", threshold=1_000_000, confidence=0.80)
+        goal_set = GoalSet([goal], accounts, date(2025, 1, 1))
+
+        class FakeGoal:
+            pass
+
+        with pytest.raises(TypeError, match="Unknown goal type"):
+            goal_set.get_account_index(FakeGoal())
+
+
+class TestGoalSetEstimateMinHorizon:
+    """Test GoalSet.estimate_minimum_horizon edge cases."""
+
+    def test_no_terminal_goals_returns_t_min(self):
+        """With only intermediate goals, estimate returns T_min."""
+        accounts = [Account.from_annual("Acc", 0.08, 0.10)]
+        goal = IntermediateGoal(date=date(2025, 7, 1), account="Acc",
+                                threshold=500_000, confidence=0.80)
+        goal_set = GoalSet([goal], accounts, date(2025, 1, 1))
+
+        result = goal_set.estimate_minimum_horizon(
+            monthly_contribution=100_000, accounts=accounts
+        )
+        assert result == goal_set.T_min
+
+    def test_unknown_account_in_terminal_goal_raises(self):
+        """estimate_minimum_horizon raises if terminal goal account not in accounts."""
+        accounts = [Account.from_annual("Acc", 0.08, 0.10)]
+        goal = TerminalGoal(account="Acc", threshold=1_000_000, confidence=0.80)
+        goal_set = GoalSet([goal], accounts, date(2025, 1, 1))
+
+        # Pass a different accounts list that doesn't include the goal's account
+        other_accounts = [Account.from_annual("Other", 0.05, 0.08)]
+        with pytest.raises(ValueError, match="unknown account"):
+            goal_set.estimate_minimum_horizon(
+                monthly_contribution=100_000, accounts=other_accounts
+            )
+
+    def test_goal_already_satisfied_gives_small_horizon(self):
+        """When initial wealth exceeds threshold, estimate returns a small horizon."""
+        accounts = [Account.from_annual("Rich", 0.08, 0.10, initial_wealth=10_000_000)]
+        goal = TerminalGoal(account="Rich", threshold=1_000_000, confidence=0.80)
+        goal_set = GoalSet([goal], accounts, date(2025, 1, 1))
+
+        result = goal_set.estimate_minimum_horizon(
+            monthly_contribution=100_000, accounts=accounts
+        )
+        # Should return a small value (goal is easy to satisfy)
+        assert result >= 1
+
+    def test_multiple_terminal_goals_infer_allocation(self):
+        """Multiple terminal goals exercise _infer_allocation_fraction branches."""
+        accounts = [
+            Account.from_annual("Low", 0.05, 0.08),
+            Account.from_annual("High", 0.12, 0.15),
+        ]
+        goals = [
+            TerminalGoal(account="Low", threshold=500_000, confidence=0.80),
+            TerminalGoal(account="High", threshold=2_000_000, confidence=0.80),
+        ]
+        goal_set = GoalSet(goals, accounts, date(2025, 1, 1))
+
+        result = goal_set.estimate_minimum_horizon(
+            monthly_contribution=100_000, accounts=accounts
+        )
+        assert result >= 1
+
+    def test_intermediate_goal_reduces_allocation_fraction(self):
+        """Intermediate goal on same account reduces allocation fraction via *0.8."""
+        accounts = [Account.from_annual("Acc", 0.08, 0.10)]
+        goals = [
+            IntermediateGoal(date=date(2026, 1, 1), account="Acc",
+                             threshold=200_000, confidence=0.80),
+            TerminalGoal(account="Acc", threshold=1_000_000, confidence=0.80),
+        ]
+        goal_set = GoalSet(goals, accounts, date(2025, 1, 1))
+
+        result = goal_set.estimate_minimum_horizon(
+            monthly_contribution=100_000, accounts=accounts
+        )
+        assert result >= 1
+
+
+# ============================================================================
+# CHECK_GOALS EDGE CASES
+# ============================================================================
+
+class TestCheckGoalsEdgeCases:
+    """Test check_goals() error paths."""
+
+    def _make_result(self, T=12, n_sims=50, M=1, start_date=None):
+        from finopt.model import SimulationResult
+        if start_date is None:
+            start_date = date(2025, 1, 1)
+        wealth = np.ones((n_sims, T + 1, M)) * 1_000_000
+        return SimulationResult(
+            wealth=wealth,
+            total_wealth=wealth.sum(axis=2),
+            contributions=np.ones((n_sims, T)),
+            returns=np.zeros((n_sims, T, M)),
+            income={"fixed": np.ones((n_sims, T)), "variable": np.zeros((n_sims, T)),
+                    "total": np.ones((n_sims, T))},
+            allocation=np.ones((T, M)),
+            withdrawals=None,
+            T=T,
+            n_sims=n_sims,
+            M=M,
+            start=start_date,
+            seed=None,
+            account_names=["Acc"],
+        )
+
+    def test_t_min_exceeds_result_t_raises(self):
+        """check_goals raises when intermediate goal requires T > result.T."""
+        from finopt.goals import check_goals
+
+        accounts = [Account.from_annual("Acc", 0.08, 0.10)]
+        # Intermediate goal at month 24, but result only has T=12
+        goal = IntermediateGoal(
+            date=date(2027, 1, 1),  # 24 months from start
+            account="Acc",
+            threshold=500_000,
+            confidence=0.80,
+        )
+        result = self._make_result(T=12)
+
+        with pytest.raises(ValueError, match="Intermediate goals require T"):
+            check_goals(result, [goal], accounts, date(2025, 1, 1))
+
+
+# ============================================================================
+# GOAL_PROGRESS TESTS
+# ============================================================================
+
+class TestGoalProgress:
+    """Test goal_progress() function."""
+
+    def _make_result(self, T=12, n_sims=100, M=2, start_date=None):
+        from finopt.model import SimulationResult
+        if start_date is None:
+            start_date = date(2025, 1, 1)
+        wealth = np.ones((n_sims, T + 1, M)) * 1_000_000
+        return SimulationResult(
+            wealth=wealth,
+            total_wealth=wealth.sum(axis=2),
+            contributions=np.ones((n_sims, T)),
+            returns=np.zeros((n_sims, T, M)),
+            income={"fixed": np.ones((n_sims, T)), "variable": np.zeros((n_sims, T)),
+                    "total": np.ones((n_sims, T))},
+            allocation=np.tile([0.5, 0.5], (T, 1)),
+            withdrawals=None,
+            T=T,
+            n_sims=n_sims,
+            M=M,
+            start=start_date,
+            seed=None,
+            account_names=["Conservative", "Aggressive"],
+        )
+
+    def test_goal_progress_below_threshold(self):
+        """Progress < 1.0 when VaR is below threshold."""
+        from finopt.goals import goal_progress
+
+        accounts = [
+            Account.from_annual("Conservative", 0.04, 0.05),
+            Account.from_annual("Aggressive", 0.12, 0.15),
+        ]
+        result = self._make_result()
+
+        # Threshold twice the current wealth → progress ≈ 0.5
+        goal = TerminalGoal(account="Conservative", threshold=2_000_000, confidence=0.80)
+        progress = goal_progress(result, [goal], accounts, date(2025, 1, 1))
+
+        assert goal in progress
+        assert 0.0 < progress[goal] < 1.0
+
+    def test_goal_progress_capped_at_one(self):
+        """Progress is capped at 1.0 when VaR exceeds threshold."""
+        from finopt.goals import goal_progress
+
+        accounts = [
+            Account.from_annual("Conservative", 0.04, 0.05),
+            Account.from_annual("Aggressive", 0.12, 0.15),
+        ]
+        result = self._make_result()
+
+        # Threshold well below wealth → progress = 1.0
+        goal = TerminalGoal(account="Conservative", threshold=100_000, confidence=0.80)
+        progress = goal_progress(result, [goal], accounts, date(2025, 1, 1))
+
+        assert progress[goal] == 1.0
+
+    def test_goal_progress_intermediate_goal(self):
+        """goal_progress works with IntermediateGoal."""
+        from finopt.goals import goal_progress
+
+        accounts = [
+            Account.from_annual("Conservative", 0.04, 0.05),
+            Account.from_annual("Aggressive", 0.12, 0.15),
+        ]
+        result = self._make_result()
+
+        goal = IntermediateGoal(
+            date=date(2025, 7, 1),
+            account="Conservative",
+            threshold=100_000,
+            confidence=0.80,
+        )
+        progress = goal_progress(result, [goal], accounts, date(2025, 1, 1))
+
+        assert goal in progress
+        assert progress[goal] == 1.0
+
+    def test_goal_progress_multiple_goals(self):
+        """goal_progress returns entry for each goal."""
+        from finopt.goals import goal_progress
+
+        accounts = [
+            Account.from_annual("Conservative", 0.04, 0.05),
+            Account.from_annual("Aggressive", 0.12, 0.15),
+        ]
+        result = self._make_result()
+
+        goals = [
+            TerminalGoal(account="Conservative", threshold=500_000, confidence=0.80),
+            TerminalGoal(account="Aggressive", threshold=500_000, confidence=0.80),
+        ]
+        progress = goal_progress(result, goals, accounts, date(2025, 1, 1))
+
+        assert len(progress) == 2
+        for g in goals:
+            assert g in progress
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

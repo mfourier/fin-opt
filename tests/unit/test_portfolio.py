@@ -881,5 +881,149 @@ class TestPortfolioAffineMethod:
         )
 
 
+# ============================================================================
+# ACCOUNT VALIDATION EDGE CASES
+# ============================================================================
+
+class TestAccountValidation:
+    """Test Account.__post_init__ error paths."""
+
+    def test_missing_mu_key_raises(self):
+        """return_strategy missing 'mu' raises ValueError."""
+        with pytest.raises(ValueError, match="must contain"):
+            Account(name="X", initial_wealth=0.0, return_strategy={"sigma": 0.01})
+
+    def test_missing_sigma_key_raises(self):
+        """return_strategy missing 'sigma' raises ValueError."""
+        with pytest.raises(ValueError, match="must contain"):
+            Account(name="X", initial_wealth=0.0, return_strategy={"mu": 0.005})
+
+    def test_negative_sigma_raises(self):
+        """Negative sigma raises ValueError."""
+        with pytest.raises(ValueError, match="sigma must be non-negative"):
+            Account(name="X", initial_wealth=0.0, return_strategy={"mu": 0.005, "sigma": -0.01})
+
+
+# ============================================================================
+# PORTFOLIO INIT EDGE CASE
+# ============================================================================
+
+class TestPortfolioInitEdgeCases:
+    """Test Portfolio.__init__ validation."""
+
+    def test_empty_accounts_raises(self):
+        """Portfolio requires at least one account."""
+        with pytest.raises(ValueError, match="at least one account"):
+            Portfolio([])
+
+
+# ============================================================================
+# PORTFOLIO.SIMULATE VALIDATION EDGE CASES
+# ============================================================================
+
+class TestPortfolioSimulateValidation:
+    """Test Portfolio.simulate() input validation."""
+
+    @pytest.fixture
+    def portfolio(self):
+        accounts = [
+            Account.from_annual("A", annual_return=0.06, annual_volatility=0.10),
+            Account.from_annual("B", annual_return=0.10, annual_volatility=0.15),
+        ]
+        return Portfolio(accounts)
+
+    def _make_inputs(self, T=12, n_sims=10, M=2):
+        A = np.full(T, 100_000.0)
+        R = np.random.default_rng(0).normal(0.005, 0.02, (n_sims, T, M))
+        X = np.tile([0.5, 0.5], (T, 1))
+        return A, R, X
+
+    def test_r_wrong_account_count_raises(self, portfolio):
+        A, R, X = self._make_inputs()
+        R_bad = R[:, :, :1]  # only 1 account instead of 2
+        with pytest.raises(ValueError, match="accounts"):
+            portfolio.simulate(A=A, R=R_bad, X=X)
+
+    def test_x_wrong_shape_raises(self, portfolio):
+        A, R, X = self._make_inputs()
+        X_bad = X[:, :1]  # (T, 1) instead of (T, 2)
+        with pytest.raises(ValueError, match="shape"):
+            portfolio.simulate(A=A, R=R, X=X_bad)
+
+    def test_initial_wealth_wrong_shape_raises(self, portfolio):
+        A, R, X = self._make_inputs()
+        with pytest.raises(ValueError, match="shape"):
+            portfolio.simulate(A=A, R=R, X=X, initial_wealth=np.array([1_000_000.0]))
+
+    def test_initial_wealth_negative_raises(self, portfolio):
+        A, R, X = self._make_inputs()
+        with pytest.raises(ValueError, match="non-negative"):
+            portfolio.simulate(A=A, R=R, X=X, initial_wealth=np.array([-1.0, 0.0]))
+
+    def test_x_negative_raises(self, portfolio):
+        from finopt.exceptions import AllocationConstraintError
+        A, R, X = self._make_inputs()
+        X_bad = X.copy()
+        X_bad[0, 0] = -0.1
+        X_bad[0, 1] = 1.1
+        with pytest.raises(AllocationConstraintError):
+            portfolio.simulate(A=A, R=R, X=X_bad)
+
+    def test_x_rows_not_summing_to_one_raises(self, portfolio):
+        from finopt.exceptions import AllocationConstraintError
+        A, R, X = self._make_inputs()
+        X_bad = X.copy()
+        X_bad[0, 0] = 0.3  # row sum = 0.8
+        with pytest.raises(AllocationConstraintError):
+            portfolio.simulate(A=A, R=R, X=X_bad)
+
+    def test_a_1d_wrong_length_raises(self, portfolio):
+        _, R, X = self._make_inputs()
+        A_bad = np.full(5, 100_000.0)  # wrong length
+        with pytest.raises(ValueError, match="shape"):
+            portfolio.simulate(A=A_bad, R=R, X=X)
+
+    def test_a_2d_wrong_shape_raises(self, portfolio):
+        _, R, X = self._make_inputs()
+        A_bad = np.full((5, 12), 100_000.0)  # wrong n_sims
+        with pytest.raises(ValueError, match="shape"):
+            portfolio.simulate(A=A_bad, R=R, X=X)
+
+    def test_a_3d_raises(self, portfolio):
+        _, R, X = self._make_inputs()
+        A_bad = np.ones((10, 12, 2))
+        with pytest.raises(ValueError, match="1D or 2D"):
+            portfolio.simulate(A=A_bad, R=R, X=X)
+
+    def test_d_2d_wrong_shape_raises(self, portfolio):
+        A, R, X = self._make_inputs()
+        D_bad = np.zeros((5, 2))  # wrong T
+        with pytest.raises(ValueError, match="shape"):
+            portfolio.simulate(A=A, R=R, X=X, D=D_bad)
+
+    def test_d_3d_wrong_shape_raises(self, portfolio):
+        A, R, X = self._make_inputs()
+        D_bad = np.zeros((10, 5, 2))  # wrong T
+        with pytest.raises(ValueError, match="shape"):
+            portfolio.simulate(A=A, R=R, X=X, D=D_bad)
+
+    def test_d_1d_raises(self, portfolio):
+        A, R, X = self._make_inputs()
+        D_bad = np.zeros(12)
+        with pytest.raises(ValueError, match="2D or 3D"):
+            portfolio.simulate(A=A, R=R, X=X, D=D_bad)
+
+    def test_d_negative_raises(self, portfolio):
+        A, R, X = self._make_inputs()
+        D_bad = np.full((12, 2), -1.0)  # negative withdrawals
+        with pytest.raises(ValueError, match="non-negative"):
+            portfolio.simulate(A=A, R=R, X=X, D=D_bad)
+
+    def test_invalid_method_raises(self, portfolio):
+        A, R, X = self._make_inputs()
+        with pytest.raises(ValueError, match="method"):
+            portfolio.simulate(A=A, R=R, X=X, method="unknown")
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
