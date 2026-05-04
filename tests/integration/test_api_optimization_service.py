@@ -345,3 +345,106 @@ async def test_run_optimization_saves_allocation_policy(mocker, sample_scenario_
     assert "allocation_policy" in call_kwargs
     assert isinstance(call_kwargs["allocation_policy"], list)
     assert len(call_kwargs["allocation_policy"]) == 24
+
+
+# ---------------------------------------------------------------------------
+# _parse_opt_params() validation tests
+# ---------------------------------------------------------------------------
+
+def test_parse_opt_params_valid():
+    """Test _parse_opt_params returns correct values for valid input."""
+    from api.services.optimization import _parse_opt_params
+
+    data = {
+        "n_sims": 300, "t_max": 120, "t_min": 12,
+        "solver": "ECOS", "objective": "balanced",
+        "seed": 7, "start_date": "2025-06-01",
+    }
+    n_sims, t_max, t_min, solver, objective, seed, start_date = _parse_opt_params(data)
+
+    assert n_sims == 300
+    assert t_max == 120
+    assert t_min == 12
+    assert solver == "ECOS"
+    assert objective == "balanced"
+    assert seed == 7
+    assert str(start_date) == "2025-06-01"
+
+
+def test_parse_opt_params_invalid_solver():
+    """Test _parse_opt_params raises ValueError for unknown solver."""
+    from api.services.optimization import _parse_opt_params
+
+    with pytest.raises(ValueError, match="solver must be one of"):
+        _parse_opt_params({
+            "n_sims": 100, "t_max": 120, "t_min": 12,
+            "solver": "UNKNOWN_SOLVER", "objective": "balanced",
+        })
+
+
+def test_parse_opt_params_invalid_objective():
+    """Test _parse_opt_params raises ValueError for unknown objective."""
+    from api.services.optimization import _parse_opt_params
+
+    with pytest.raises(ValueError, match="objective must be one of"):
+        _parse_opt_params({
+            "n_sims": 100, "t_max": 120, "t_min": 12,
+            "solver": "ECOS", "objective": "aggressive_growth",
+        })
+
+
+def test_parse_opt_params_t_min_ge_t_max():
+    """Test _parse_opt_params raises ValueError when t_min >= t_max."""
+    from api.services.optimization import _parse_opt_params
+
+    with pytest.raises(ValueError, match="t_min must be in"):
+        _parse_opt_params({
+            "n_sims": 100, "t_max": 12, "t_min": 12,
+            "solver": "ECOS", "objective": "balanced",
+        })
+
+
+def test_parse_opt_params_negative_n_sims():
+    """Test _parse_opt_params raises ValueError for non-positive n_sims."""
+    from api.services.optimization import _parse_opt_params
+
+    with pytest.raises(ValueError, match="n_sims must be positive"):
+        _parse_opt_params({
+            "n_sims": 0, "t_max": 120, "t_min": 12,
+            "solver": "ECOS", "objective": "balanced",
+        })
+
+
+def test_parse_opt_params_defaults():
+    """Test _parse_opt_params applies sensible defaults when keys are absent."""
+    from api.services.optimization import _parse_opt_params
+
+    n_sims, t_max, t_min, solver, objective, seed, start_date = _parse_opt_params({})
+
+    assert n_sims == 500
+    assert t_max == 240
+    assert t_min == 12
+    assert solver == "ECOS"
+    assert objective == "balanced"
+    assert seed is None
+    assert start_date is None
+
+
+@pytest.mark.asyncio
+async def test_run_optimization_error_message_includes_step(mocker, mock_env_vars):
+    """Test that error_message in failed job includes the step name."""
+    mocker.patch(
+        "api.services.optimization.fetch_scenario_with_profile",
+        side_effect=ConnectionError("DB unreachable"),
+    )
+    mock_update_job = mocker.patch("api.services.optimization.update_job")
+
+    from api.services.optimization import run_optimization
+
+    with pytest.raises(ConnectionError):
+        await run_optimization(scenario_id="s1", job_id="j1")
+
+    failed_call = next(
+        c for c in mock_update_job.call_args_list if c[1].get("status") == "failed"
+    )
+    assert "[loading scenario]" in failed_call[1]["error_message"]

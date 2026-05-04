@@ -290,3 +290,84 @@ async def test_run_simulation_handles_error(mocker, sample_scenario_data, mock_e
     calls = [call for call in mock_update_job.call_args_list if 'status' in call[1]]
     failed_calls = [call for call in calls if call[1]['status'] == 'failed']
     assert len(failed_calls) > 0
+
+
+# ---------------------------------------------------------------------------
+# _parse_sim_params() validation tests
+# ---------------------------------------------------------------------------
+
+def test_parse_sim_params_valid():
+    """Test _parse_sim_params returns correct values for valid input."""
+    from api.services.simulation import _parse_sim_params
+
+    data = {"n_sims": 200, "t_max": 60, "seed": 42, "start_date": "2025-01-01"}
+    n_sims, t_max, seed, start_date = _parse_sim_params(data)
+
+    assert n_sims == 200
+    assert t_max == 60
+    assert seed == 42
+    assert str(start_date) == "2025-01-01"
+
+
+def test_parse_sim_params_invalid_n_sims_type():
+    """Test _parse_sim_params raises ValueError for non-integer n_sims."""
+    from api.services.simulation import _parse_sim_params
+
+    with pytest.raises(ValueError, match="n_sims must be an integer"):
+        _parse_sim_params({"n_sims": "many", "t_max": 60, "start_date": "2025-01-01"})
+
+
+def test_parse_sim_params_negative_n_sims():
+    """Test _parse_sim_params raises ValueError for non-positive n_sims."""
+    from api.services.simulation import _parse_sim_params
+
+    with pytest.raises(ValueError, match="n_sims must be positive"):
+        _parse_sim_params({"n_sims": -10, "t_max": 60, "start_date": "2025-01-01"})
+
+
+def test_parse_sim_params_invalid_t_max_type():
+    """Test _parse_sim_params raises ValueError for non-integer t_max."""
+    from api.services.simulation import _parse_sim_params
+
+    with pytest.raises(ValueError, match="t_max must be an integer"):
+        _parse_sim_params({"n_sims": 100, "t_max": "long", "start_date": "2025-01-01"})
+
+
+def test_parse_sim_params_invalid_start_date():
+    """Test _parse_sim_params raises ValueError for malformed start_date."""
+    from api.services.simulation import _parse_sim_params
+
+    with pytest.raises(ValueError, match="start_date is not a valid ISO date"):
+        _parse_sim_params({"n_sims": 100, "t_max": 60, "start_date": "not-a-date"})
+
+
+def test_parse_sim_params_defaults():
+    """Test _parse_sim_params applies sensible defaults when keys are absent."""
+    from api.services.simulation import _parse_sim_params
+
+    n_sims, t_max, seed, start_date = _parse_sim_params({})
+
+    assert n_sims == 500
+    assert t_max == 120
+    assert seed is None
+    assert start_date is None
+
+
+@pytest.mark.asyncio
+async def test_run_simulation_error_message_includes_step(mocker, mock_env_vars):
+    """Test that error_message in failed job includes the step name."""
+    mocker.patch(
+        "api.services.simulation.fetch_scenario_with_profile",
+        side_effect=ConnectionError("DB unreachable"),
+    )
+    mock_update_job = mocker.patch("api.services.simulation.update_job")
+
+    from api.services.simulation import run_simulation
+
+    with pytest.raises(ConnectionError):
+        await run_simulation(scenario_id="s1", job_id="j1")
+
+    failed_call = next(
+        c for c in mock_update_job.call_args_list if c[1].get("status") == "failed"
+    )
+    assert "[loading scenario]" in failed_call[1]["error_message"]

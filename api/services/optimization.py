@@ -263,6 +263,55 @@ def compute_wealth_percentiles(
     }
 
 
+_VALID_SOLVERS = {"ECOS", "SCS", "CLARABEL", "MOSEK"}
+_VALID_OBJECTIVES = {"risky", "balanced", "risky_turnover", "conservative"}
+
+
+def _parse_opt_params(scenario_data: dict) -> tuple:
+    """Extract and validate optimization parameters from scenario data."""
+    raw_n_sims = scenario_data.get("n_sims", 500)
+    raw_t_max = scenario_data.get("t_max", 240)
+    raw_t_min = scenario_data.get("t_min", 12)
+    solver = scenario_data.get("solver", "ECOS")
+    objective = scenario_data.get("objective", "balanced")
+    seed = scenario_data.get("seed")
+    start_date_str = scenario_data.get("start_date")
+
+    try:
+        n_sims = int(raw_n_sims)
+    except (TypeError, ValueError):
+        raise ValueError(f"n_sims must be an integer, got {raw_n_sims!r}")
+    if n_sims <= 0:
+        raise ValueError(f"n_sims must be positive, got {n_sims}")
+
+    try:
+        t_max = int(raw_t_max)
+    except (TypeError, ValueError):
+        raise ValueError(f"t_max must be an integer, got {raw_t_max!r}")
+    if t_max <= 0:
+        raise ValueError(f"t_max must be positive, got {t_max}")
+
+    try:
+        t_min = int(raw_t_min)
+    except (TypeError, ValueError):
+        raise ValueError(f"t_min must be an integer, got {raw_t_min!r}")
+    if t_min <= 0 or t_min >= t_max:
+        raise ValueError(f"t_min must be in (0, t_max={t_max}), got {t_min}")
+
+    if not isinstance(solver, str) or solver.upper() not in _VALID_SOLVERS:
+        raise ValueError(f"solver must be one of {sorted(_VALID_SOLVERS)}, got {solver!r}")
+
+    if objective not in _VALID_OBJECTIVES:
+        raise ValueError(f"objective must be one of {sorted(_VALID_OBJECTIVES)}, got {objective!r}")
+
+    try:
+        start_date = date.fromisoformat(start_date_str) if isinstance(start_date_str, str) else start_date_str
+    except ValueError:
+        raise ValueError(f"start_date is not a valid ISO date: {start_date_str!r}")
+
+    return n_sims, t_max, t_min, solver, objective, seed, start_date
+
+
 async def run_optimization(scenario_id: str, job_id: str) -> None:
     """
     Run CVaR optimization with goal-seeking for a scenario.
@@ -279,65 +328,51 @@ async def run_optimization(scenario_id: str, job_id: str) -> None:
     job_id : str
         UUID of the job for progress tracking.
     """
+    current_step = "initializing"
     try:
-        # Update job status
         update_job(job_id, status="running", progress=5, step="Loading scenario")
         logger.info(f"Starting optimization job {job_id} for scenario {scenario_id}")
 
-        # Fetch scenario with profile
+        current_step = "loading scenario"
         scenario_data = fetch_scenario_with_profile(scenario_id)
 
+        current_step = "reconstructing model"
         update_job(job_id, progress=10, step="Reconstructing model")
-
-        # Reconstruct model and goals
         model, goals, withdrawals = reconstruct_from_scenario(scenario_data)
 
         if not goals:
             raise ValueError("No goals defined for optimization")
 
-        # Get optimization parameters
-        n_sims = scenario_data.get("n_sims", 500)
-        seed = scenario_data.get("seed")
-        t_max = scenario_data.get("t_max", 240)
-        t_min = scenario_data.get("t_min", 12)
-        solver = scenario_data.get("solver", "ECOS")
-        objective = scenario_data.get("objective", "balanced")
-        start_date_str = scenario_data.get("start_date")
-        start_date = date.fromisoformat(start_date_str) if isinstance(start_date_str, str) else start_date_str
+        current_step = "parsing parameters"
+        n_sims, t_max, t_min, solver, objective, seed, start_date = _parse_opt_params(scenario_data)
 
+        current_step = "initializing optimizer"
         update_job(job_id, progress=15, step="Initializing optimizer")
-
-        # Import CVaROptimizer (lazy loaded to avoid cvxpy import at module level)
         from finopt import CVaROptimizer
-
-        # Create optimizer
         optimizer = CVaROptimizer(
             n_accounts=len(model.accounts),
             objective=objective,
             account_names=[acc.name for acc in model.accounts],
         )
 
+        current_step = "running optimization"
         update_job(job_id, progress=20, step="Starting goal-seeking optimization")
 
-        # Build progress callback to report binary search iterations
         def _optimization_progress(info):
-            """Map search iterations to progress range 20-70%."""
             try:
                 if info.phase != "solving":
                     return
                 fraction = min(info.iteration / max(info.total_estimated, 1), 1.0)
-                progress = 20 + int(fraction * 50)  # 20 → 70
-                progress = min(progress, 69)  # Reserve 70 for post-optimization
-                step = (
-                    f"Testing horizon T={info.current_T} months "
-                    f"[{info.iteration}/{info.total_estimated}]"
+                progress = 20 + int(fraction * 50)
+                progress = min(progress, 69)
+                update_job(
+                    job_id,
+                    progress=progress,
+                    step=f"Testing horizon T={info.current_T} months [{info.iteration}/{info.total_estimated}]",
                 )
-                update_job(job_id, progress=progress, step=step)
             except Exception as exc:
                 logger.warning(f"Progress update failed (non-fatal): {exc}")
 
-        # Run optimization with goal-seeking
-        # This uses bilevel optimization: binary search over T, convex solve for X
         opt_result = model.optimize(
             goals=goals,
             optimizer=optimizer,
@@ -345,7 +380,7 @@ async def run_optimization(scenario_id: str, job_id: str) -> None:
             n_sims=n_sims,
             seed=seed,
             start=start_date,
-            verbose=False,  # Don't print to console
+            verbose=False,
             search_method="binary",
             withdrawals=withdrawals,
             withdrawal_epsilon=0.05,
@@ -353,9 +388,8 @@ async def run_optimization(scenario_id: str, job_id: str) -> None:
             progress_callback=_optimization_progress,
         )
 
+        current_step = "simulating wealth trajectories"
         update_job(job_id, progress=70, step="Simulating wealth trajectories")
-
-        # Re-simulate with optimal allocation to get wealth trajectories
         sim_result = model.simulate_from_optimization(
             opt_result,
             n_sims=n_sims,
@@ -364,32 +398,16 @@ async def run_optimization(scenario_id: str, job_id: str) -> None:
             withdrawals=withdrawals,
         )
 
+        current_step = "processing results"
         update_job(job_id, progress=85, step="Processing results")
-
-        # Prepare allocation policy for storage
         allocation_policy = opt_result.X.tolist()
 
-        # Compute goal status with actual probabilities from simulation
         goal_status = compute_goal_status_from_result(
-            opt_result,
-            model,
-            sim_result,
-            start_date,
+            opt_result, model, sim_result, start_date,
         )
+        summary_stats = compute_wealth_percentiles(sim_result, model)
+        summary_stats["cash_flow"] = compute_cash_flow_stats(sim_result, model)
 
-        # Compute wealth trajectory percentiles for visualization
-        summary_stats = compute_wealth_percentiles(
-            sim_result,
-            model,
-        )
-
-        # Compute cash flow statistics (contributions + withdrawals)
-        summary_stats["cash_flow"] = compute_cash_flow_stats(
-            sim_result,
-            model,
-        )
-
-        # Prepare diagnostics
         diagnostics = {
             "solver": solver,
             "objective": objective,
@@ -399,9 +417,8 @@ async def run_optimization(scenario_id: str, job_id: str) -> None:
         if opt_result.diagnostics:
             diagnostics.update(opt_result.diagnostics)
 
+        current_step = "saving results"
         update_job(job_id, progress=95, step="Saving results")
-
-        # Save results to Supabase
         save_optimization_result(
             job_id=job_id,
             allocation_policy=allocation_policy,
@@ -414,7 +431,6 @@ async def run_optimization(scenario_id: str, job_id: str) -> None:
             summary_stats=summary_stats,
         )
 
-        # Mark job complete
         update_job(job_id, status="completed", progress=100, step="Done")
         logger.info(
             f"Optimization job {job_id} completed: "
@@ -422,6 +438,6 @@ async def run_optimization(scenario_id: str, job_id: str) -> None:
         )
 
     except Exception as e:
-        logger.exception(f"Optimization job {job_id} failed: {e}")
-        update_job(job_id, status="failed", error_message=str(e))
+        logger.exception(f"Optimization job {job_id} failed at '{current_step}': {e}")
+        update_job(job_id, status="failed", error_message=f"[{current_step}] {e}")
         raise

@@ -203,6 +203,35 @@ def compute_goal_status(
     return status_list
 
 
+def _parse_sim_params(scenario_data: dict) -> tuple:
+    """Extract and validate simulation parameters from scenario data."""
+    raw_n_sims = scenario_data.get("n_sims", 500)
+    raw_t_max = scenario_data.get("t_max", 120)
+    seed = scenario_data.get("seed")
+    start_date_str = scenario_data.get("start_date")
+
+    try:
+        n_sims = int(raw_n_sims)
+    except (TypeError, ValueError):
+        raise ValueError(f"n_sims must be an integer, got {raw_n_sims!r}")
+    if n_sims <= 0:
+        raise ValueError(f"n_sims must be positive, got {n_sims}")
+
+    try:
+        t_max = int(raw_t_max)
+    except (TypeError, ValueError):
+        raise ValueError(f"t_max must be an integer, got {raw_t_max!r}")
+    if t_max <= 0:
+        raise ValueError(f"t_max must be positive, got {t_max}")
+
+    try:
+        start_date = date.fromisoformat(start_date_str) if isinstance(start_date_str, str) else start_date_str
+    except ValueError:
+        raise ValueError(f"start_date is not a valid ISO date: {start_date_str!r}")
+
+    return n_sims, t_max, seed, start_date
+
+
 async def run_simulation(scenario_id: str, job_id: str) -> None:
     """
     Run a Monte Carlo simulation for a scenario.
@@ -217,33 +246,25 @@ async def run_simulation(scenario_id: str, job_id: str) -> None:
     job_id : str
         UUID of the job for progress tracking.
     """
+    current_step = "initializing"
     try:
-        # Update job status
         update_job(job_id, status="running", progress=5, step="Loading scenario")
         logger.info(f"Starting simulation job {job_id} for scenario {scenario_id}")
 
-        # Fetch scenario with profile
+        current_step = "loading scenario"
         scenario_data = fetch_scenario_with_profile(scenario_id)
 
+        current_step = "reconstructing model"
         update_job(job_id, progress=10, step="Reconstructing model")
-
-        # Reconstruct model and goals
         model, goals, withdrawals = reconstruct_from_scenario(scenario_data)
 
-        # Get simulation parameters
-        n_sims = scenario_data.get("n_sims", 500)
-        seed = scenario_data.get("seed")
-        t_max = scenario_data.get("t_max", 120)
-        start_date_str = scenario_data.get("start_date")
-        start_date = date.fromisoformat(start_date_str) if isinstance(start_date_str, str) else start_date_str
+        current_step = "parsing parameters"
+        n_sims, t_max, seed, start_date = _parse_sim_params(scenario_data)
 
+        current_step = "running Monte Carlo simulation"
         update_job(job_id, progress=20, step="Running Monte Carlo simulation")
-
-        # Create default allocation (equal weights)
         M = len(model.accounts)
         X = np.ones((t_max, M)) / M
-
-        # Run simulation
         result = model.simulate(
             T=t_max,
             X=X,
@@ -253,13 +274,11 @@ async def run_simulation(scenario_id: str, job_id: str) -> None:
             withdrawals=withdrawals,
         )
 
+        current_step = "computing statistics"
         update_job(job_id, progress=80, step="Computing statistics")
-
-        # Compute summary stats
         account_names = [acc.name for acc in model.accounts]
         summary_stats = compute_summary_stats(result.wealth, account_names)
 
-        # Compute goal status
         goal_status = None
         if goals:
             goal_status = compute_goal_status(
@@ -269,20 +288,18 @@ async def run_simulation(scenario_id: str, job_id: str) -> None:
                 start_date,
             )
 
+        current_step = "saving results"
         update_job(job_id, progress=95, step="Saving results")
-
-        # Save results to Supabase
         save_simulation_result(
             job_id=job_id,
             summary_stats=summary_stats,
             goal_status=goal_status,
         )
 
-        # Mark job complete
         update_job(job_id, status="completed", progress=100, step="Done")
         logger.info(f"Simulation job {job_id} completed successfully")
 
     except Exception as e:
-        logger.exception(f"Simulation job {job_id} failed: {e}")
-        update_job(job_id, status="failed", error_message=str(e))
+        logger.exception(f"Simulation job {job_id} failed at '{current_step}': {e}")
+        update_job(job_id, status="failed", error_message=f"[{current_step}] {e}")
         raise
