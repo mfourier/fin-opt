@@ -9,7 +9,7 @@ services:
   - type: web
     name: finopt-api
     runtime: python
-    region: oregon  # or your preferred region
+    region: oregon
 
     # Build configuration
     buildCommand: |
@@ -27,23 +27,20 @@ services:
       - key: ENVIRONMENT
         value: production
       - key: SUPABASE_URL
-        sync: false  # Set manually in dashboard
+        sync: false
       - key: SUPABASE_ANON_KEY
         sync: false
       - key: SUPABASE_SERVICE_KEY
         sync: false
       - key: CORS_ORIGINS
-        sync: false  # Set to your frontend URL
+        sync: false
       - key: LOG_LEVEL
         value: INFO
       - key: PYTHON_VERSION
         value: "3.11"
 
-    # Auto-scaling (adjust based on needs)
     plan: free
     numInstances: 1
-
-    # Auto-deploy on push to main
     autoDeploy: true
     branch: main
 
@@ -73,6 +70,5 @@ services:
         source: /*
         destination: /index.html
 
-    plan: free
     autoDeploy: true
     branch: main
