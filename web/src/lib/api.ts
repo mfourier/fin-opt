@@ -1,4 +1,5 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const _rawApiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API_URL = _rawApiUrl.startsWith('http') ? _rawApiUrl : `https://${_rawApiUrl}`
 
 interface JobRequest {
   scenario_id: string

@@ -65,10 +65,7 @@ services:
       - key: VITE_SUPABASE_ANON_KEY
         sync: false
       - key: VITE_API_URL
-        fromService:
-          type: web
-          name: finopt-api
-          property: url
+        sync: false  # Set to: https://finopt-api.onrender.com
 
     # Routing for SPA
     routes:
