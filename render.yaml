@@ -40,7 +40,7 @@ services:
         value: "3.11"
 
     # Auto-scaling (adjust based on needs)
-    plan: starter  # free, starter, standard, pro
+    plan: free
     numInstances: 1
 
     # Auto-deploy on push to main
@@ -73,6 +73,6 @@ services:
         source: /*
         destination: /index.html
 
-    plan: starter
+    plan: free
     autoDeploy: true
     branch: main
