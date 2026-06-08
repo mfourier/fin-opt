@@ -68,6 +68,7 @@ web = [
     "supabase>=2.0.0",
     "python-dotenv>=1.0.0",
     "httpx>=0.25.0",
+    "ecos>=2.0.0",
 ]
 
 # CLI application dependencies

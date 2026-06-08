@@ -1,6 +1,7 @@
 -- ============================================================================
 -- FinOpt Database Schema v0.1.0
 -- Compatible with serialization.py schema version 0.2.0
+-- Idempotent: safe to run multiple times
 -- ============================================================================
 
 -- ============================================================================
@@ -8,7 +9,7 @@
 -- Stores FinancialModel configuration (income + accounts + correlation)
 -- JSON columns match the format from src/serialization.py
 -- ============================================================================
-CREATE TABLE profiles (
+CREATE TABLE IF NOT EXISTS profiles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
     name VARCHAR(100) NOT NULL,
@@ -42,13 +43,13 @@ CREATE TABLE profiles (
 );
 
 -- Index for faster user lookups
-CREATE INDEX idx_profiles_user_id ON profiles(user_id);
+CREATE INDEX IF NOT EXISTS idx_profiles_user_id ON profiles(user_id);
 
 -- ============================================================================
 -- SCENARIOS TABLE
 -- Stores optimization scenarios (goals + parameters) linked to a profile
 -- ============================================================================
-CREATE TABLE scenarios (
+CREATE TABLE IF NOT EXISTS scenarios (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
     name VARCHAR(100) NOT NULL,
@@ -74,7 +75,7 @@ CREATE TABLE scenarios (
 
     -- Simulation parameters
     start_date DATE NOT NULL,
-    n_sims INTEGER DEFAULT 500 NOT NULL CHECK (n_sims >= 100 AND n_sims <= 10000),
+    n_sims INTEGER DEFAULT 300 NOT NULL CHECK (n_sims >= 100 AND n_sims <= 10000),
     seed INTEGER,
 
     -- Optimization parameters
@@ -92,13 +93,13 @@ CREATE TABLE scenarios (
 );
 
 -- Index for faster profile lookups
-CREATE INDEX idx_scenarios_profile_id ON scenarios(profile_id);
+CREATE INDEX IF NOT EXISTS idx_scenarios_profile_id ON scenarios(profile_id);
 
 -- ============================================================================
 -- JOBS TABLE
 -- Tracks async simulation/optimization jobs with progress
 -- ============================================================================
-CREATE TABLE jobs (
+CREATE TABLE IF NOT EXISTS jobs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     scenario_id UUID REFERENCES scenarios(id) ON DELETE CASCADE NOT NULL,
 
@@ -123,15 +124,15 @@ CREATE TABLE jobs (
 );
 
 -- Indexes for common queries
-CREATE INDEX idx_jobs_scenario_id ON jobs(scenario_id);
-CREATE INDEX idx_jobs_status ON jobs(status);
-CREATE INDEX idx_jobs_created_at ON jobs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_jobs_scenario_id ON jobs(scenario_id);
+CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
+CREATE INDEX IF NOT EXISTS idx_jobs_created_at ON jobs(created_at DESC);
 
 -- ============================================================================
 -- RESULTS TABLE
 -- Stores simulation/optimization results
 -- ============================================================================
-CREATE TABLE results (
+CREATE TABLE IF NOT EXISTS results (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     job_id UUID REFERENCES jobs(id) ON DELETE CASCADE NOT NULL UNIQUE,
 
@@ -161,54 +162,69 @@ CREATE TABLE results (
 );
 
 -- Index for job lookup
-CREATE INDEX idx_results_job_id ON results(job_id);
+CREATE INDEX IF NOT EXISTS idx_results_job_id ON results(job_id);
 
 -- ============================================================================
 -- ROW LEVEL SECURITY (RLS)
 -- Ensures users can only access their own data
 -- ============================================================================
 
--- Enable RLS on all tables
+-- Enable RLS on all tables (idempotent)
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE scenarios ENABLE ROW LEVEL SECURITY;
 ALTER TABLE jobs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE results ENABLE ROW LEVEL SECURITY;
 
--- Profiles: Users can only access their own profiles
+-- ============================================================================
+-- POLICIES — profiles
+-- ============================================================================
+DROP POLICY IF EXISTS "Users can view own profiles" ON profiles;
 CREATE POLICY "Users can view own profiles" ON profiles
     FOR SELECT USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can insert own profiles" ON profiles;
 CREATE POLICY "Users can insert own profiles" ON profiles
     FOR INSERT WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update own profiles" ON profiles;
 CREATE POLICY "Users can update own profiles" ON profiles
     FOR UPDATE USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete own profiles" ON profiles;
 CREATE POLICY "Users can delete own profiles" ON profiles
     FOR DELETE USING (auth.uid() = user_id);
 
--- Scenarios: Users can access scenarios of their profiles
+-- ============================================================================
+-- POLICIES — scenarios
+-- ============================================================================
+DROP POLICY IF EXISTS "Users can view own scenarios" ON scenarios;
 CREATE POLICY "Users can view own scenarios" ON scenarios
     FOR SELECT USING (
         profile_id IN (SELECT id FROM profiles WHERE user_id = auth.uid())
     );
 
+DROP POLICY IF EXISTS "Users can insert own scenarios" ON scenarios;
 CREATE POLICY "Users can insert own scenarios" ON scenarios
     FOR INSERT WITH CHECK (
         profile_id IN (SELECT id FROM profiles WHERE user_id = auth.uid())
     );
 
+DROP POLICY IF EXISTS "Users can update own scenarios" ON scenarios;
 CREATE POLICY "Users can update own scenarios" ON scenarios
     FOR UPDATE USING (
         profile_id IN (SELECT id FROM profiles WHERE user_id = auth.uid())
     );
 
+DROP POLICY IF EXISTS "Users can delete own scenarios" ON scenarios;
 CREATE POLICY "Users can delete own scenarios" ON scenarios
     FOR DELETE USING (
         profile_id IN (SELECT id FROM profiles WHERE user_id = auth.uid())
     );
 
--- Jobs: Users can access jobs of their scenarios
+-- ============================================================================
+-- POLICIES — jobs
+-- ============================================================================
+DROP POLICY IF EXISTS "Users can view own jobs" ON jobs;
 CREATE POLICY "Users can view own jobs" ON jobs
     FOR SELECT USING (
         scenario_id IN (
@@ -218,6 +234,7 @@ CREATE POLICY "Users can view own jobs" ON jobs
         )
     );
 
+DROP POLICY IF EXISTS "Users can insert own jobs" ON jobs;
 CREATE POLICY "Users can insert own jobs" ON jobs
     FOR INSERT WITH CHECK (
         scenario_id IN (
@@ -227,6 +244,7 @@ CREATE POLICY "Users can insert own jobs" ON jobs
         )
     );
 
+DROP POLICY IF EXISTS "Users can update own jobs" ON jobs;
 CREATE POLICY "Users can update own jobs" ON jobs
     FOR UPDATE USING (
         scenario_id IN (
@@ -236,7 +254,10 @@ CREATE POLICY "Users can update own jobs" ON jobs
         )
     );
 
--- Results: Users can access results of their jobs
+-- ============================================================================
+-- POLICIES — results
+-- ============================================================================
+DROP POLICY IF EXISTS "Users can view own results" ON results;
 CREATE POLICY "Users can view own results" ON results
     FOR SELECT USING (
         job_id IN (
@@ -247,6 +268,7 @@ CREATE POLICY "Users can view own results" ON results
         )
     );
 
+DROP POLICY IF EXISTS "Users can insert own results" ON results;
 CREATE POLICY "Users can insert own results" ON results
     FOR INSERT WITH CHECK (
         job_id IN (
@@ -261,12 +283,11 @@ CREATE POLICY "Users can insert own results" ON results
 -- SERVICE ROLE POLICIES
 -- Allow the Python backend (using service_role key) to update jobs/results
 -- ============================================================================
-
--- Jobs: Service role can update any job (for progress updates from Python)
+DROP POLICY IF EXISTS "Service role can update jobs" ON jobs;
 CREATE POLICY "Service role can update jobs" ON jobs
     FOR UPDATE USING (auth.jwt() ->> 'role' = 'service_role');
 
--- Results: Service role can insert results
+DROP POLICY IF EXISTS "Service role can insert results" ON results;
 CREATE POLICY "Service role can insert results" ON results
     FOR INSERT WITH CHECK (auth.jwt() ->> 'role' = 'service_role');
 
@@ -274,7 +295,12 @@ CREATE POLICY "Service role can insert results" ON results
 -- REALTIME
 -- Enable realtime updates for jobs table (for progress tracking)
 -- ============================================================================
-ALTER PUBLICATION supabase_realtime ADD TABLE jobs;
+DO $$
+BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE jobs;
+EXCEPTION WHEN duplicate_object THEN
+    NULL;
+END $$;
 
 -- ============================================================================
 -- FUNCTIONS
@@ -291,12 +317,12 @@ END;
 $$ language 'plpgsql';
 
 -- Triggers for updated_at
-CREATE TRIGGER update_profiles_updated_at
+CREATE OR REPLACE TRIGGER update_profiles_updated_at
     BEFORE UPDATE ON profiles
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER update_scenarios_updated_at
+CREATE OR REPLACE TRIGGER update_scenarios_updated_at
     BEFORE UPDATE ON scenarios
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
