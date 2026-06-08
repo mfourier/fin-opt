@@ -53,7 +53,6 @@ services:
   - type: web
     name: finopt-web
     runtime: static
-    region: oregon
 
     # Build configuration
     buildCommand: cd web && npm ci && npm run build
@@ -69,7 +68,7 @@ services:
         fromService:
           type: web
           name: finopt-api
-          property: host
+          property: url
 
     # Routing for SPA
     routes:

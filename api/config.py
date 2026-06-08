@@ -8,7 +8,7 @@ All settings are loaded from environment variables or .env file.
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -25,6 +25,7 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
+        populate_by_name=True,
         # Disable JSON parsing for environment variables
         # This allows our custom validator to handle list fields
         env_parse_none_str="null",
@@ -69,6 +70,7 @@ class Settings(BaseSettings):
     # -------------------------------------------------------------------------
     cors_origins_str: str = Field(
         default="http://localhost:3000,http://localhost:5173",
+        validation_alias=AliasChoices("CORS_ORIGINS", "CORS_ORIGINS_STR"),
         description="Allowed CORS origins (comma-separated string)"
     )
 
