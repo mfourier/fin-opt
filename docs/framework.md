@@ -656,7 +656,7 @@ Accumulation factors: $F \in \mathbb{R}^{N \times (T+1) \times (T+1) \times M}$
 - Multi-account portfolios with correlated returns
 - Intermediate and terminal goals with CVaR constraints
 - Withdrawal support (scheduled + stochastic)
-- Binary/linear search for horizon optimization
+- Linear/binary/bracketed search for horizon optimization
 - Calendar alignment for seasonality
 - Seed propagation for reproducibility
 - JSON serialization for persistence

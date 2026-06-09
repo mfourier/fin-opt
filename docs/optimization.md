@@ -374,7 +374,7 @@ result = seeker.seek(
     start_date=date(2025, 1, 1),
     n_sims=500,
     seed=42,
-    search_method="binary",        # "binary" or "linear"
+    search_method="binary",        # "linear", "binary", or "bracketed"
     D_generator=D_gen,             # Optional withdrawals
     withdrawal_epsilon=0.05,       # 95% confidence
     solver='CLARABEL',
@@ -440,6 +440,28 @@ return best_result
 - Contributions have sudden drops
 - Pathological goal configurations
 - Safety-critical applications → use linear search
+
+### Bracketed Search (Estimate-Guided)
+
+**Algorithm:**
+```python
+# 1. Estimate a bracket [T_lo, T_hi] from the wealth model — a cheap
+#    all-in VaR/CVaR crossing, no convex solves.
+T_lo, T_hi = estimate_bracket(goal_set, A, R, initial_wealth, ...)
+
+# 2. Gallop outward from the seed until the bracket provably straddles
+#    the feasibility transition (handles multi-goal coupling and
+#    finite-sample bracket error — the estimate is never trusted blindly).
+# 3. Binary-search the validated bracket (memoized solves).
+```
+
+**Complexity:** $O(\log(T_{\text{hi}} - T_{\text{lo}}))$ iterations, with the bracket typically much tighter than $[T_{\text{start}}, T_{\max}]$ — so fewer convex solves than plain binary search when the estimate is good.
+
+**Assumption:** Same monotonicity as binary search ($\mathcal{F}_T \subseteq \mathcal{F}_{T+1}$). Correctness comes from the real solves in the loop, **not** from the estimated bracket — the bracket is only a starting point, so a wrong estimate costs extra iterations but never a wrong $T^*$.
+
+**When to use:**
+- Default-quality results with the fewest solves, when the deterministic horizon estimate is informative
+- Large $T_{\max}$ where binary search would waste iterations on a wide range
 
 ---
 

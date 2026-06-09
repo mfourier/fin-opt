@@ -88,6 +88,7 @@ nav:
   - Home: index.md
   - Getting Started:
       - Quick Start: quickstart.md
+      - Command-Line Interface: cli.md
   - Core Concepts:
       - Framework: framework.md
       - Income Model: income.md
@@ -99,6 +100,8 @@ nav:
       - Scheduled Withdrawals: withdrawal.md
   - Reference:
       - Integration Model: model.md
+      - Configuration: config.md
+      - Plotting: plotting.md
       - Exceptions: exceptions.md
       - Serialization: serialization.md
       - Utilities: utils.md

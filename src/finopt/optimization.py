@@ -1494,6 +1494,9 @@ class GoalSeeker:
             Search strategy:
             - "linear": Sequential T = T_start, T_start+1, ... (safer, slower)
             - "binary": Binary search (faster, requires monotonicity assumption)
+            - "bracketed": Estimate [T_lo, T_hi] from the wealth model, then
+              binary-search the validated bracket (fewest solves when the
+              estimate is informative; same monotonicity assumption as "binary")
         D_generator : callable, optional
             Function (T, n_sims, seed) → D array of shape (n_sims, T, M)
             Generates withdrawal scenarios. If None, no withdrawals.
