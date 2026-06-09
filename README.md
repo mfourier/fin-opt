@@ -14,13 +14,21 @@ FinOpt inverts the classical planning question: instead of *"given horizon T, wh
 
 ## Mathematical Foundation
 
-### Bilevel Problem
+### Minimum-Horizon Problem
 
-The core program minimizes the investment horizon subject to probabilistic goal constraints:
+FinOpt finds the smallest horizon at which the goals are *simultaneously achievable*, then the best allocation at that horizon:
+
+$$T^\star = \min\{\,T \in \mathbb{N} : \mathcal{F}(T) \neq \varnothing\,\}, \qquad \mathcal{F}(T) = \bigl\{\,X \in \Delta^T : \mathbb{P}\!\left(W_t^m(X) \geq b_t^m\right) \geq 1 - \varepsilon_t^m \;\; \forall \text{ goals}\,\bigr\}$$
+
+$$X^\star = \arg\min_{X \in \mathcal{F}(T^\star)} f(X)$$
+
+where $\Delta^T = \{X \in \mathbb{R}_{\geq 0}^{T \times M} : \mathbf{x}_t^\top \mathbf{1} = 1,\; \forall t\}$ is the allocation simplex over $M$ accounts. Equivalently, as one program with $T$ as the sole objective:
 
 $$\min_{T \in \mathbb{N},\; X \in \Delta^T} \; T \qquad \text{s.t.} \quad \mathbb{P}\!\left(W_t^m(X) \geq b_t^m\right) \geq 1 - \varepsilon_t^m \quad \forall \text{ goals}$$
 
-where $\Delta^T = \{X \in \mathbb{R}_{\geq 0}^{T \times M} : \mathbf{x}_t^\top \mathbf{1} = 1,\; \forall t\}$ is the allocation simplex and $M$ is the number of accounts. The outer problem (search over $T$) is solved by binary search; the inner problem (find feasible $X$) by CVXPY.
+Here $T^\star$ is fixed by feasibility alone, and the secondary objective $f(X)$ — turnover, expected wealth, or mean–variance (see the [objective table](#quick-start) below) — only selects *which* optimal-horizon policy to deploy.
+
+`GoalSeeker` runs the outer search over $T$ — `linear` (sequential, safest), `binary` (≈50% fewer iterations, assumes monotonicity), or `bracketed` (two-sided galloping from a computed bracket) — using the inner convex program's solver status (`OPTIMAL` vs `INFEASIBLE`) as the feasibility oracle for $\mathcal{F}(T)$. The inner program, $\min_X f(X)$ subject to the CVaR constraints below, is solved by CVXPY.
 
 ### CVaR Reformulation
 
@@ -55,7 +63,6 @@ pip install -e .
 ```
 
 ```python
-from datetime import date
 from finopt import FinancialModel, Account, IncomeModel, FixedIncome
 from finopt.goals import TerminalGoal
 from finopt.optimization import CVaROptimizer
@@ -84,6 +91,20 @@ The `objective` parameter controls the inner optimization program:
 | `"conservative"` | $\mathbb{E}[W_T] - \lambda\,\mathrm{Std}(W_T)$ | Risk-averse mean-variance |
 | `"risky_turnover"` | $\mathbb{E}[W_T] - \lambda\sum(\Delta x)^2$ | Wealth + stability tradeoff |
 
+### Command-line interface
+
+Installing the package exposes a `finopt` console script for config-driven runs:
+
+```bash
+finopt simulate --config examples/basic_config.json   # Monte Carlo simulation
+finopt optimize --config examples/basic_config.json --goals examples/basic_goals.json
+finopt config validate examples/basic_config.json     # validate a config
+finopt report ...                                     # reports from saved results
+finopt info                                           # system / package info
+```
+
+Run `finopt COMMAND --help` for command-specific options.
+
 ---
 
 ## Project Structure
@@ -95,14 +116,20 @@ finopt/
 │   ├── returns.py       # Correlated lognormal return model
 │   ├── portfolio.py     # Wealth dynamics (recursive + affine)
 │   ├── goals.py         # Goal types, chance-constraint evaluation
-│   ├── optimization.py  # CVaROptimizer + GoalSeeker (bilevel)
+│   ├── optimization.py  # CVaROptimizer + GoalSeeker (horizon search)
 │   ├── model.py         # FinancialModel facade
-│   └── withdrawal.py    # Scheduled and stochastic cash outflows
+│   ├── withdrawal.py    # Scheduled and stochastic cash outflows
+│   ├── plotting.py      # Visualization suite
+│   ├── config.py        # Pydantic type-safe configuration
+│   ├── serialization.py # JSON model/result persistence
+│   └── cli.py           # `finopt` command-line interface
 ├── api/                 # FastAPI backend — async jobs, Supabase persistence
 ├── web/                 # React/Vite frontend
 ├── supabase/            # SQL schema and migrations
 ├── notebooks/           # Jupyter workflow examples
-└── tests/               # 867 tests · 85% coverage
+├── examples/            # Sample config and goal files
+├── docs/                # MkDocs site and figures
+└── tests/               # 911 tests · 85% coverage
 ```
 
 ---
