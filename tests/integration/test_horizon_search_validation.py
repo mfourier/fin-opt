@@ -23,6 +23,7 @@ BENCH_DIR = Path(__file__).resolve().parents[2] / "benchmarks"
 sys.path.insert(0, str(BENCH_DIR))
 
 import bench_horizon_search as bench  # noqa: E402
+
 from finopt.exceptions import InfeasibleError  # noqa: E402
 
 pytestmark = pytest.mark.slow
@@ -84,7 +85,6 @@ def test_infeasible_within_tmax_raises():
 
 def test_infeasible_raises_directly():
     """Direct seek() call raises InfeasibleError (not swallowed)."""
-    from datetime import date
 
     from finopt.optimization import CVaROptimizer, GoalSeeker
 

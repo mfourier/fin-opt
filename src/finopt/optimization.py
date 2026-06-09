@@ -2044,7 +2044,7 @@ class GoalSeeker:
         memo: Dict[int, tuple[Optional[OptimizationResult], bool]] = {}
 
         if self.verbose:
-            print(f"\n=== GoalSeeker: BRACKETED search ===")
+            print("\n=== GoalSeeker: BRACKETED search ===")
             print(f"    Estimated bracket: T_lo={T_lo}, T_hi={T_hi} "
                   f"(floor={floor}, T_max={self.T_max})")
 
