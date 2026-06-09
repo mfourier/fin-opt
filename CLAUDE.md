@@ -176,7 +176,7 @@ JSON serialization for model configurations and optimization results.
 - **`load_model(path)`**: Reconstructs FinancialModel from JSON
 - **`save_optimization_result(result, path)`**: Saves X*, T, goals, diagnostics
 - **`load_optimization_result(path)`**: Returns dict (requires context for full reconstruction)
-- Schema versioning: Currently "0.1.0"
+- Schema versioning: Currently "0.2.0"
 
 ```python
 from finopt.serialization import save_model, load_model
@@ -195,7 +195,7 @@ Click-based CLI for running simulations without Python code.
 finopt simulate --config config.json --output results/ --horizon 36
 
 # Optimize allocation policy
-finopt optimize --config config.json --goal-file goals.yaml --horizon 36
+finopt optimize --config config.json --goals goals.json --max-horizon 120
 
 # Validate configuration
 finopt config validate config.json
