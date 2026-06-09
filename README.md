@@ -18,15 +18,15 @@ FinOpt inverts the classical planning question: instead of *"given horizon T, wh
 
 FinOpt finds the smallest horizon at which the goals are *simultaneously achievable*, then the best allocation at that horizon:
 
-$$T^\star = \min\{\,T \in \mathbb{N} : \mathcal{F}(T) \neq \varnothing\,\}$$
+$$T^\star = \min\lbrace T \in \mathbb{N} : \mathcal{F}(T) \neq \varnothing \rbrace$$
 
-$$\mathcal{F}(T) = \{\,X \in \Delta^T : \mathbb{P}\!\left(W_t^m(X) \geq b_t^m\right) \geq 1 - \varepsilon_t^m \;\; \forall \text{ goals}\,\}$$
+$$\mathcal{F}(T) = \lbrace X \in \Delta^T : \mathbb{P}\left(W_t^m(X) \geq b_t^m\right) \geq 1 - \varepsilon_t^m \quad \forall \text{ goals} \rbrace$$
 
 $$X^\star = \arg\min_{X \in \mathcal{F}(T^\star)} f(X)$$
 
-where $\Delta^T = \{X \in \mathbb{R}_{\geq 0}^{T \times M} : \mathbf{x}_t^\top \mathbf{1} = 1,\; \forall t\}$ is the allocation simplex over $M$ accounts. Equivalently, as one program with $T$ as the sole objective:
+where $\Delta^T = \lbrace X \in \mathbb{R}_{\geq 0}^{T \times M} : \mathbf{x}_t^\top \mathbf{1} = 1, \forall t \rbrace$ is the allocation simplex over $M$ accounts. Equivalently, as one program with $T$ as the sole objective:
 
-$$\min_{T \in \mathbb{N},\; X \in \Delta^T} \; T \qquad \text{s.t.} \quad \mathbb{P}\!\left(W_t^m(X) \geq b_t^m\right) \geq 1 - \varepsilon_t^m \quad \forall \text{ goals}$$
+$$\min_{T \in \mathbb{N}, X \in \Delta^T} \quad T \qquad \text{s.t.} \quad \mathbb{P}\left(W_t^m(X) \geq b_t^m\right) \geq 1 - \varepsilon_t^m \quad \forall \text{ goals}$$
 
 Here $T^\star$ is fixed by feasibility alone, and the secondary objective $f(X)$ — turnover, expected wealth, or mean–variance (see the [objective table](#quick-start) below) — only selects *which* optimal-horizon policy to deploy.
 
@@ -48,7 +48,7 @@ The full problem becomes a linear (or quadratic) program in $(\gamma, z_1, \ldot
 
 Wealth is affine in $X$, which is what makes the CVaR constraint a tractable convex constraint:
 
-$$W_t^m(X) = W_0^m \cdot F_{0,t}^m + \sum_{s=0}^{t-1} \bigl(A_s\, x_s^m - D_s^m\bigr) \cdot F_{s,t}^m$$
+$$W_t^m(X) = W_0^m \cdot F_{0,t}^m + \sum_{s=0}^{t-1} \left(A_s x_s^m - D_s^m\right) \cdot F_{s,t}^m$$
 
 where $F_{s,t}^m = \prod_{\tau=s+1}^{t}(1 + R_\tau^m)$ are stochastic accumulation factors pre-computed from Monte Carlo paths. This gives analytic gradients $\nabla_{x_s^m} W_t^m = A_s \cdot F_{s,t}^m$ and preserves convexity of any DCP-compliant objective.
 
@@ -90,7 +90,7 @@ The `objective` parameter controls the inner optimization program:
 |-------|-------------|----------|
 | `"balanced"` | $-\sum_{t,m}(\Delta x_{t,m})^2$ | Stable allocations (default) |
 | `"risky"` | $\mathbb{E}[\sum_m W_T^m]$ | Maximum wealth accumulation |
-| `"conservative"` | $\mathbb{E}[W_T] - \lambda\,\mathrm{Std}(W_T)$ | Risk-averse mean-variance |
+| `"conservative"` | $\mathbb{E}[W_T] - \lambda \mathrm{Std}(W_T)$ | Risk-averse mean-variance |
 | `"risky_turnover"` | $\mathbb{E}[W_T] - \lambda\sum(\Delta x)^2$ | Wealth + stability tradeoff |
 
 ### Command-line interface
