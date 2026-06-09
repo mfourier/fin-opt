@@ -1,0 +1,101 @@
+{
+  "schema_version": "0.2.0",
+  "income": {
+    "fixed": {
+      "base": 1000000.0,
+      "annual_growth": 0.03,
+      "salary_raises": {
+        "2026-01-01": 200000
+      }
+    },
+    "variable": {
+      "base": 100000.0,
+      "sigma": 0.1,
+      "annual_growth": 0.0,
+      "seasonality": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.5,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        2.0
+      ],
+      "floor": 0.0,
+      "cap": 500000.0
+    },
+    "contribution_rate_fixed": [
+      0.3,
+      0.3,
+      0.3,
+      0.3,
+      0.3,
+      0.3,
+      0.3,
+      0.3,
+      0.3,
+      0.3,
+      0.3,
+      0.3
+    ],
+    "contribution_rate_variable": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ]
+  },
+  "accounts": [
+    {
+      "name": "Emergency",
+      "annual_return": 0.04,
+      "annual_volatility": 0.01,
+      "initial_wealth": 0,
+      "display_name": "Emergency Fund"
+    },
+    {
+      "name": "Housing",
+      "annual_return": 0.07,
+      "annual_volatility": 0.08,
+      "initial_wealth": 0,
+      "display_name": "Housing Savings"
+    },
+    {
+      "name": "Equity",
+      "annual_return": 0.14,
+      "annual_volatility": 0.15,
+      "initial_wealth": 0,
+      "display_name": "Global Equity ETF"
+    }
+  ],
+  "correlation": [
+    [
+      1.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      1.0,
+      0.3
+    ],
+    [
+      0.0,
+      0.3,
+      1.0
+    ]
+  ]
+}

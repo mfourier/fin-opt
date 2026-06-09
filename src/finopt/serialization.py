@@ -685,7 +685,7 @@ def save_scenario(
     ...     scenario_name="Retirement Plan",
     ...     goals=goals,
     ...     path=Path("scenarios/retirement.json"),
-    ...     model_path="profiles/my_profile.json",
+    ...     model_path="profiles/example_profile.json",
     ...     start_date=date(2025, 1, 1)
     ... )
     """

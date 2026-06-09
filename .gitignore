@@ -56,8 +56,10 @@ LINKEDIN_CV.md
 docs/study-plan/
 docs/dev-notes/
 
-# Personal financial data (not for public repo)
-profiles/
+# Personal financial data (not for public repo).
+# Ignore directory contents but keep the anonymized example profile tracked.
+profiles/*
+!profiles/example_profile.json
 scenarios/
 
 # Cache
