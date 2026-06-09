@@ -18,7 +18,9 @@ FinOpt inverts the classical planning question: instead of *"given horizon T, wh
 
 FinOpt finds the smallest horizon at which the goals are *simultaneously achievable*, then the best allocation at that horizon:
 
-$$T^\star = \min\{\,T \in \mathbb{N} : \mathcal{F}(T) \neq \varnothing\,\}, \qquad \mathcal{F}(T) = \bigl\{\,X \in \Delta^T : \mathbb{P}\!\left(W_t^m(X) \geq b_t^m\right) \geq 1 - \varepsilon_t^m \;\; \forall \text{ goals}\,\bigr\}$$
+$$T^\star = \min\{\,T \in \mathbb{N} : \mathcal{F}(T) \neq \varnothing\,\}$$
+
+$$\mathcal{F}(T) = \left\{\,X \in \Delta^T : \mathbb{P}\!\left(W_t^m(X) \geq b_t^m\right) \geq 1 - \varepsilon_t^m \;\; \forall \text{ goals}\,\right\}$$
 
 $$X^\star = \arg\min_{X \in \mathcal{F}(T^\star)} f(X)$$
 
