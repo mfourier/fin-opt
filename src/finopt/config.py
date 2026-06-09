@@ -121,7 +121,7 @@ class OptimizationConfig(BaseModel):
     objective : str
         Optimization objective: "risky", "balanced", "conservative", "risky_turnover".
     search_strategy : str
-        Horizon search method: "binary" or "linear".
+        Horizon search method: "bracketed" (default), "binary", or "linear".
     tolerance : float
         Constraint violation tolerance (1e-6 to 1e-2).
     verbose : bool
@@ -159,8 +159,8 @@ class OptimizationConfig(BaseModel):
         default="balanced",
         description="Optimization objective function"
     )
-    search_strategy: Literal["binary", "linear"] = Field(
-        default="binary",
+    search_strategy: Literal["bracketed", "binary", "linear"] = Field(
+        default="bracketed",
         description="Horizon search strategy"
     )
     tolerance: float = Field(

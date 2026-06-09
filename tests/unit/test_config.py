@@ -82,7 +82,7 @@ class TestOptimizationConfig:
         assert config.T_min == 12
         assert config.solver == "ECOS"
         assert config.objective == "balanced"
-        assert config.search_strategy == "binary"
+        assert config.search_strategy == "bracketed"
 
     def test_T_min_validation(self):
         """Test T_min must be <= T_max."""
