@@ -5,6 +5,14 @@
          <lastmod>2026-06-09</lastmod>
     </url>
     <url>
+         <loc>https://mfourier.github.io/fin-opt/cli/</loc>
+         <lastmod>2026-06-09</lastmod>
+    </url>
+    <url>
+         <loc>https://mfourier.github.io/fin-opt/config/</loc>
+         <lastmod>2026-06-09</lastmod>
+    </url>
+    <url>
          <loc>https://mfourier.github.io/fin-opt/exceptions/</loc>
          <lastmod>2026-06-09</lastmod>
     </url>
@@ -26,6 +34,10 @@
     </url>
     <url>
          <loc>https://mfourier.github.io/fin-opt/optimization/</loc>
+         <lastmod>2026-06-09</lastmod>
+    </url>
+    <url>
+         <loc>https://mfourier.github.io/fin-opt/plotting/</loc>
          <lastmod>2026-06-09</lastmod>
     </url>
     <url>
