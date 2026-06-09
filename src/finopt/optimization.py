@@ -1158,8 +1158,28 @@ class CVaROptimizer(AllocationOptimizer):
 
         # ============= SOLVE CONVEX PROGRAM =============
 
+        # Solve with a fallback chain: interior-point solvers occasionally fail on
+        # specific samples (e.g. CLARABEL raising SolverError or returning a solver-
+        # error status). Rather than crash the bilevel search, fall back to other
+        # solvers and only give up — returning an infeasible result — if all fail.
         prob = cp.Problem(objective, constraints)
-        self._solve_problem(prob, solver_name, verbose, max_iters, abstol, reltol)
+        candidate_solvers = [solver_name]
+        for fallback in ("CLARABEL", "ECOS", "SCS"):
+            if fallback.upper() not in {s.upper() for s in candidate_solvers}:
+                candidate_solvers.append(fallback)
+
+        terminal_statuses = {
+            cp.OPTIMAL, cp.OPTIMAL_INACCURATE, cp.INFEASIBLE, cp.INFEASIBLE_INACCURATE
+        }
+        for sname in candidate_solvers:
+            try:
+                self._solve_problem(prob, sname, verbose, max_iters, abstol, reltol)
+            except self.cp.error.SolverError:
+                continue  # numerical failure — try the next solver
+            if prob.status in terminal_statuses:
+                solver_name = sname  # record the solver that produced the answer
+                break
+            # else: a non-terminal solver-error status — try the next solver
 
         solve_time = time.time() - start_time
 
@@ -1419,6 +1439,21 @@ class GoalSeeker:
         self.verbose = verbose
         self.progress_callback = progress_callback
 
+        # Instrumentation: records every horizon T passed to optimizer.solve()
+        # during a seek() call. Used to benchmark search efficiency.
+        self._horizons_evaluated: List[int] = []
+
+    def _counted_solve(self, **kwargs) -> OptimizationResult:
+        """Wrapper around optimizer.solve() that records the evaluated horizon.
+
+        Every call appends ``kwargs["T"]`` to ``self._horizons_evaluated`` so the
+        total number of inner solves (and the exact horizons visited) can be
+        reported in the final result diagnostics. This is the single choke point
+        for all horizon evaluations across linear and binary search.
+        """
+        self._horizons_evaluated.append(kwargs["T"])
+        return self.optimizer.solve(**kwargs)
+
     def seek(
         self,
         goals: List[Union[IntermediateGoal, TerminalGoal]],
@@ -1429,7 +1464,7 @@ class GoalSeeker:
         start_date: date,
         n_sims: int = 500,
         seed: Optional[int] = None,
-        search_method: Literal["linear", "binary"] = "binary",
+        search_method: Literal["linear", "binary", "bracketed"] = "binary",
         D_generator: Optional[Callable] = None,
         withdrawal_epsilon: float = 0.05,
         **solver_kwargs
@@ -1489,38 +1524,36 @@ class GoalSeeker:
         if not accounts:
             raise ValueError("accounts list cannot be empty")
 
+        # Reset instrumentation for this seek() invocation
+        self._horizons_evaluated = []
+
         goal_set = GoalSet(goals, accounts, start_date)
 
-        # Determine intelligent starting horizon
-        if goal_set.terminal_goals and not goal_set.intermediate_goals:
-            if self.verbose:
-                print("\n=== Estimating minimum horizon (terminal goals only) ===")
-
-            # Sample contributions
-            sample_months = 12
-            sample_sims = min(100, n_sims)
-
-            A_sample = A_generator(sample_months, sample_sims, seed)
-            avg_contrib = float(np.mean(A_sample))
-
-            if self.verbose:
-                print(f"  Sampled contributions: {sample_sims} scenarios × {sample_months} months")
-                print(f"  Average monthly contribution: ${avg_contrib:,.2f}")
-
-            # Use improved heuristic with account information
-            T_start = goal_set.estimate_minimum_horizon(
-                monthly_contribution=avg_contrib,
-                accounts=accounts,
-                expected_return=None,
-                safety_margin=0.75,
-                T_max=self.T_max
+        # The "bracketed" method computes its own [T_lo, T_hi] bracket from the
+        # wealth model (all-in VaR/CVaR crossings) and guards correctness with
+        # two-sided galloping, so it does not use the T_start heuristic below.
+        if search_method == "bracketed":
+            result = self._bracketed_search(
+                goal_set, A_generator, R_generator,
+                initial_wealth, n_sims, seed,
+                D_generator=D_generator,
+                withdrawal_epsilon=withdrawal_epsilon,
+                **solver_kwargs
             )
+            if result.diagnostics is None:
+                object.__setattr__(result, "diagnostics", {})
+            result.diagnostics["n_horizon_evals"] = len(self._horizons_evaluated)
+            result.diagnostics["horizons_evaluated"] = list(self._horizons_evaluated)
+            result.diagnostics["search_method"] = search_method
+            return result
 
-            if self.verbose:
-                print(f"  Estimated minimum horizon: T={T_start} months")
-                print("  (using account-specific returns and safety_margin=0.75)")
-        else:
-            T_start = goal_set.T_min
+        # Linear and binary search from a GUARANTEED lower bound (the floor). The
+        # wealth-model estimate (estimate_minimum_horizon / all-in crossings) is NOT
+        # a guaranteed lower bound — it can overshoot the true minimum — so using it
+        # as a hard search floor would make these methods silently return a
+        # non-minimal horizon. The "bracketed" method (handled above) is the one that
+        # uses the estimate, made correct by two-sided galloping.
+        T_start = max(goal_set.T_min, 1)
 
         # Validate starting horizon
         if T_start > self.T_max:
@@ -1532,12 +1565,10 @@ class GoalSeeker:
         # Display search range
         if self.verbose:
             print(f"\n=== GoalSeeker: {search_method.upper()} search T ∈ [{T_start}, {self.T_max}] ===")
-            if T_start > goal_set.T_min:
-                print(f"    (T_start={T_start} from heuristic, T_min={goal_set.T_min} from constraints)")
 
         # Dispatch to search method
         if search_method == "linear":
-            return self._linear_search(
+            result = self._linear_search(
                 T_start, goal_set, A_generator, R_generator,
                 initial_wealth, n_sims, seed,
                 D_generator=D_generator,
@@ -1545,7 +1576,7 @@ class GoalSeeker:
                 **solver_kwargs
             )
         elif search_method == "binary":
-            return self._binary_search(
+            result = self._binary_search(
                 T_start, goal_set, A_generator, R_generator,
                 initial_wealth, n_sims, seed,
                 D_generator=D_generator,
@@ -1554,6 +1585,17 @@ class GoalSeeker:
             )
         else:
             raise ValueError(f"Unknown search_method: {search_method}")
+
+        # Attach search instrumentation to the result diagnostics.
+        # diagnostics is a mutable dict even though OptimizationResult is frozen.
+        if result.diagnostics is None:
+            object.__setattr__(result, "diagnostics", {})
+        result.diagnostics["n_horizon_evals"] = len(self._horizons_evaluated)
+        result.diagnostics["horizons_evaluated"] = list(self._horizons_evaluated)
+        result.diagnostics["T_start"] = T_start
+        result.diagnostics["search_method"] = search_method
+
+        return result
 
     def _linear_search(
         self,
@@ -1602,7 +1644,7 @@ class GoalSeeker:
             if D_generator is not None:
                 D = D_generator(T, n_sims, seed)
 
-            result = self.optimizer.solve(
+            result = self._counted_solve(
                 T=T, A=A, R=R, initial_wealth=initial_wealth,
                 goal_set=goal_set,
                 X_init=X_prev,
@@ -1718,7 +1760,7 @@ class GoalSeeker:
                     np.tile(best_result.X[-1:, :], (n_extend, 1))
                 ])
 
-            result = self.optimizer.solve(
+            result = self._counted_solve(
                 T=mid, A=A, R=R, initial_wealth=initial_wealth,
                 goal_set=goal_set,
                 X_init=X_init,
@@ -1784,7 +1826,7 @@ class GoalSeeker:
         if D_generator is not None:
             D = D_generator(left, n_sims, seed)
 
-        result = self.optimizer.solve(
+        result = self._counted_solve(
             T=left, A=A, R=R, initial_wealth=initial_wealth,
             goal_set=goal_set,
             X_init=None,
@@ -1802,3 +1844,325 @@ class GoalSeeker:
             f"Binary search failed: T={left} infeasible. "
             f"Monotonicity assumption may be violated."
         )
+
+    # -----------------------------------------------------------------------
+    # Bracketed search (all-in VaR/CVaR heuristic + two-sided galloping)
+    # -----------------------------------------------------------------------
+
+    def _allin_curve(
+        self,
+        goal_set: GoalSet,
+        A: np.ndarray,
+        R: np.ndarray,
+        initial_wealth: np.ndarray,
+        D: Optional[np.ndarray],
+        m: int,
+    ) -> np.ndarray:
+        """All-in wealth trajectory for account ``m`` (100% of contributions to m).
+
+        Returns the wealth column ``W[:, :, m]`` of shape ``(n_sims, T+1)`` obtained
+        by running the validated portfolio dynamics with a one-hot allocation. This
+        is the optimistic upper envelope: for any feasible policy X and any goal on
+        account m, ``W_t^m(X) <= W_t^{all-in,m}`` pathwise (since x ∈ [0,1], A ≥ 0,
+        F ≥ 0). Uses the O(n·T) recursion, not the O(n·T²·M) accumulation tensor.
+        """
+        T = A.shape[1]
+        M = self.optimizer.M
+        X_onehot = np.zeros((T, M))
+        X_onehot[:, m] = 1.0
+        portfolio = Portfolio(goal_set.accounts)
+        W = portfolio.simulate(
+            A=A, R=R, X=X_onehot, D=D, initial_wealth=initial_wealth
+        )["wealth"]
+        return W[:, :, m]
+
+    @staticmethod
+    def _var_cvar_crossing(
+        W_curve: np.ndarray,
+        threshold: float,
+        epsilon: float,
+        t_min: int = 1,
+    ) -> tuple[Optional[int], Optional[int]]:
+        """First horizons where the all-in wealth meets the VaR and CVaR conditions.
+
+        Parameters
+        ----------
+        W_curve : np.ndarray, shape (n_sims, T+1)
+            All-in wealth trajectory for the goal's account.
+        threshold : float
+            Goal threshold b.
+        epsilon : float
+            Violation tolerance ε = 1 - confidence.
+        t_min : int
+            Smallest horizon to consider (≥ 1).
+
+        Returns
+        -------
+        (tau_var, tau_cvar) : tuple of int or None
+            tau_var  = first T with VaR (ε-quantile of W_T) ≥ threshold — necessary
+                       condition, gives the lower bound.
+            tau_cvar = first T with CVaR (mean of the worst ε fraction of W_T) ≥
+                       threshold — sufficient condition (single goal), gives the
+                       upper seed.
+            None if the curve never crosses within the available horizon.
+            Always tau_cvar ≥ tau_var (tail-mean ≤ quantile).
+        """
+        n = W_curve.shape[0]
+        # ε-quantile (VaR) per horizon
+        var_curve = np.quantile(W_curve, epsilon, axis=0)
+        # CVaR: mean of the worst ε fraction (smallest k values) per horizon
+        k = max(1, int(np.ceil(epsilon * n)))
+        sorted_W = np.sort(W_curve, axis=0)  # ascending
+        tail_curve = sorted_W[:k, :].mean(axis=0)
+
+        def first_crossing(curve: np.ndarray) -> Optional[int]:
+            for T in range(t_min, curve.shape[0]):
+                if curve[T] >= threshold:
+                    return T
+            return None
+
+        return first_crossing(var_curve), first_crossing(tail_curve)
+
+    def _estimate_bracket(
+        self,
+        goal_set: GoalSet,
+        A_generator: Callable,
+        R_generator: Callable,
+        initial_wealth: np.ndarray,
+        n_sims: int,
+        seed: Optional[int],
+        D_generator: Optional[Callable] = None,
+    ) -> tuple[int, int]:
+        """Estimate a horizon bracket [T_lo, T_hi] from the wealth model.
+
+        Runs ONE cheap Monte Carlo simulation to T_max (no convex solves) and reads,
+        per terminal goal, the all-in VaR crossing (lower bound) and CVaR crossing
+        (upper seed). Theoretical basis (verified): T* ≥ T_lo always; T* ≤ T_hi for a
+        single goal. For multiple goals T_hi is an optimistic seed corrected by the
+        galloping search.
+        """
+        floor = max(goal_set.T_min, 1)
+
+        if not goal_set.terminal_goals:
+            # Intermediate-only: T* is pinned to T_min.
+            return floor, floor
+
+        eps_min = min(g.epsilon for g in goal_set.terminal_goals)
+        # Resolve the ε-quantile reliably: scale samples with 1/ε, capped.
+        n_cheap = int(min(max(n_sims, 200, int(np.ceil(20 / eps_min))), 2000))
+
+        A = A_generator(self.T_max, n_cheap, seed)
+        R = R_generator(self.T_max, n_cheap, None if seed is None else seed + 1)
+        D = None
+        if D_generator is not None:
+            D = D_generator(self.T_max, n_cheap, seed)
+
+        tau_vars: List[int] = []
+        tau_cvars: List[int] = []
+        for goal in goal_set.terminal_goals:
+            m = goal_set.get_account_index(goal)
+            W_curve = self._allin_curve(goal_set, A, R, initial_wealth, D, m)
+            tau_var, tau_cvar = self._var_cvar_crossing(
+                W_curve, goal.threshold, goal.epsilon, t_min=1
+            )
+            # No crossing within T_max → goal needs at least the full horizon.
+            tau_vars.append(tau_var if tau_var is not None else self.T_max)
+            tau_cvars.append(tau_cvar if tau_cvar is not None else self.T_max)
+
+        T_lo = min(max(max(tau_vars), floor), self.T_max)
+        T_hi = min(max(max(tau_cvars), T_lo), self.T_max)
+        return T_lo, T_hi
+
+    def _necessary_feasible(
+        self,
+        goal_set: GoalSet,
+        A: np.ndarray,
+        R: np.ndarray,
+        initial_wealth: np.ndarray,
+        D: Optional[np.ndarray],
+        T: int,
+    ) -> bool:
+        """Hard necessary-feasibility certificate evaluated on the solve's own sample.
+
+        For each goal, the optimistic all-in policy upper-bounds achievable wealth
+        pathwise on THIS exact (A, R). Mirroring ``_check_feasibility``'s rule, if the
+        all-in violation rate already exceeds ε for any goal, then every policy
+        violates it too → the convex problem is infeasible at T. Returns False in that
+        case (skip the expensive solve); True otherwise (necessary, not sufficient —
+        a real solve is still required).
+        """
+        # Terminal goals are evaluated at the current horizon T.
+        for goal in goal_set.terminal_goals:
+            m = goal_set.get_account_index(goal)
+            W_curve = self._allin_curve(goal_set, A, R, initial_wealth, D, m)
+            violation_rate = (W_curve[:, T] < goal.threshold).mean()
+            if violation_rate > goal.epsilon:
+                return False
+
+        # Intermediate goals at their fixed resolved month (if within horizon).
+        for goal in goal_set.intermediate_goals:
+            t = goal_set.get_resolved_month(goal)
+            if t > T:
+                continue
+            m = goal_set.get_account_index(goal)
+            W_curve = self._allin_curve(goal_set, A, R, initial_wealth, D, m)
+            violation_rate = (W_curve[:, t] < goal.threshold).mean()
+            if violation_rate > goal.epsilon:
+                return False
+
+        return True
+
+    def _bracketed_search(
+        self,
+        goal_set: GoalSet,
+        A_generator: Callable,
+        R_generator: Callable,
+        initial_wealth: np.ndarray,
+        n_sims: int,
+        seed: Optional[int],
+        D_generator: Optional[Callable] = None,
+        withdrawal_epsilon: float = 0.05,
+        **solver_kwargs
+    ) -> OptimizationResult:
+        """Find minimum feasible T* via all-in bracket + two-sided galloping.
+
+        1. Estimate [T_lo, T_hi] from the wealth model (cheap MC, no solves).
+        2. Gallop outward from the seed until the bracket straddles the feasibility
+           transition (handles multi-goal coupling / finite-sample bracket error).
+        3. Binary search the validated bracket.
+
+        Correctness comes from the real solves in the loop (under the same
+        monotonicity assumption as binary search), NOT from trusting the bracket —
+        so the bracket is never truncated, only used as a starting point.
+        """
+        floor = max(goal_set.T_min, 1)
+        T_lo, T_hi = self._estimate_bracket(
+            goal_set, A_generator, R_generator,
+            initial_wealth, n_sims, seed, D_generator
+        )
+        self._n_certificate_skips = 0
+        memo: Dict[int, tuple[Optional[OptimizationResult], bool]] = {}
+
+        if self.verbose:
+            print(f"\n=== GoalSeeker: BRACKETED search ===")
+            print(f"    Estimated bracket: T_lo={T_lo}, T_hi={T_hi} "
+                  f"(floor={floor}, T_max={self.T_max})")
+
+        def evaluate(T: int) -> bool:
+            """Evaluate feasibility at horizon T (memoized, with cheap certificate)."""
+            if T in memo:
+                return memo[T][1]
+
+            A = A_generator(T, n_sims, seed)
+            R = R_generator(T, n_sims, None if seed is None else seed + 1)
+            D = D_generator(T, n_sims, seed) if D_generator is not None else None
+
+            if self.progress_callback is not None:
+                self.progress_callback(SearchProgressInfo(
+                    iteration=len(self._horizons_evaluated) + 1,
+                    total_estimated=math.ceil(math.log2(max(self.T_max - floor, 1))) + 1,
+                    current_T=T, left=T_lo, right=T_hi,
+                    feasible=None, search_method="bracketed", phase="solving",
+                ))
+
+            # Hard infeasibility certificate: skip CVXPY when provably infeasible.
+            if not self._necessary_feasible(goal_set, A, R, initial_wealth, D, T):
+                self._n_certificate_skips += 1
+                if self.verbose:
+                    print(f"    T={T}: ✗ infeasible (necessary-condition certificate, no solve)")
+                memo[T] = (None, False)
+                if self.progress_callback is not None:
+                    self.progress_callback(SearchProgressInfo(
+                        iteration=len(self._horizons_evaluated) + 1,
+                        total_estimated=math.ceil(math.log2(max(self.T_max - floor, 1))) + 1,
+                        current_T=T, left=T_lo, right=T_hi,
+                        feasible=False, search_method="bracketed", phase="solved",
+                    ))
+                return False
+
+            result = self._counted_solve(
+                T=T, A=A, R=R, initial_wealth=initial_wealth,
+                goal_set=goal_set, X_init=None, D=D,
+                withdrawal_epsilon=withdrawal_epsilon, **solver_kwargs
+            )
+            if self.verbose:
+                status = "✓ feasible" if result.feasible else "✗ infeasible"
+                print(f"    T={T}: {status}, obj={result.objective_value:.2f}, "
+                      f"time={result.solve_time:.3f}s")
+            memo[T] = (result, result.feasible)
+            if self.progress_callback is not None:
+                self.progress_callback(SearchProgressInfo(
+                    iteration=len(self._horizons_evaluated),
+                    total_estimated=math.ceil(math.log2(max(self.T_max - floor, 1))) + 1,
+                    current_T=T, left=T_lo, right=T_hi,
+                    feasible=result.feasible, search_method="bracketed", phase="solved",
+                ))
+            return result.feasible
+
+        # ---- Galloping: establish (lo_infeasible, hi_feasible] straddling T* ----
+        seed_T = int(min(max(T_hi, floor), self.T_max))
+
+        if evaluate(seed_T):
+            # Seed feasible: gallop DOWN to find an infeasible point (or hit floor).
+            hi = seed_T
+            if seed_T == floor:
+                lo = floor - 1  # floor feasible → T* = floor
+            else:
+                lo = None
+                step = 1
+                probe = seed_T
+                while True:
+                    nxt = max(floor, probe - step)
+                    if evaluate(nxt):
+                        hi = nxt
+                        if nxt == floor:
+                            lo = floor - 1  # floor feasible → T* = floor
+                            break
+                        probe = nxt
+                        step *= 2
+                    else:
+                        lo = nxt
+                        break
+        else:
+            # Seed infeasible: gallop UP to find a feasible point.
+            lo = seed_T
+            hi = None
+            step = 1
+            probe = seed_T
+            while True:
+                nxt = min(self.T_max, probe + step)
+                if evaluate(nxt):
+                    hi = nxt
+                    break
+                lo = nxt
+                if nxt == self.T_max:
+                    raise InfeasibleError(
+                        f"No feasible solution found in T ∈ [{floor}, {self.T_max}]. "
+                        f"Try increasing T_max or relaxing goal constraints."
+                    )
+                probe = nxt
+                step *= 2
+
+        # ---- Binary search the validated bracket (lo infeasible, hi feasible] ----
+        while hi - lo > 1:
+            mid = (lo + hi) // 2
+            if evaluate(mid):
+                hi = mid
+            else:
+                lo = mid
+
+        T_star = hi
+        result = memo[T_star][0]
+        assert result is not None and result.feasible
+
+        if self.verbose:
+            print(f"=== Optimal: T*={T_star} "
+                  f"({self._n_certificate_skips} solves skipped via certificate) ===\n")
+
+        # Attach bracket diagnostics (n_horizon_evals added by seek()).
+        if result.diagnostics is None:
+            object.__setattr__(result, "diagnostics", {})
+        result.diagnostics["T_lo"] = T_lo
+        result.diagnostics["T_hi"] = T_hi
+        result.diagnostics["n_certificate_skips"] = self._n_certificate_skips
+        return result

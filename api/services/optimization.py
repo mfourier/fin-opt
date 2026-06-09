@@ -385,7 +385,7 @@ async def run_optimization(scenario_id: str, job_id: str) -> None:
             seed=seed,
             start=start_date,
             verbose=False,
-            search_method="binary",
+            search_method="bracketed",
             withdrawals=withdrawals,
             withdrawal_epsilon=0.05,
             solver=solver,
@@ -416,8 +416,10 @@ async def run_optimization(scenario_id: str, job_id: str) -> None:
             "solver": solver,
             "objective": objective,
             "n_iterations": opt_result.n_iterations,
-            "search_method": "binary",
         }
+        # opt_result.diagnostics carries the actual search_method plus the bracketed
+        # search instrumentation (n_horizon_evals, n_certificate_skips, T_lo, T_hi,
+        # horizons_evaluated) and the solver actually used (solver_name).
         if opt_result.diagnostics:
             diagnostics.update(opt_result.diagnostics)
 

@@ -562,14 +562,17 @@ class GoalSet:
                 # No growth case: W_T = W0 + A * T
                 T_analytical = (goal.threshold - W0_m) / A_effective
             else:
-                # With growth: solve via closed-form annuity formula
-                # (1+r)^T = [threshold - A/r + W0] / [W0 - A/r]
+                # With growth: solve the future-value annuity equation for T.
+                # W_T = W0·(1+r)^T + A·[(1+r)^T - 1]/r = b
+                # Let g = (1+r)^T and annuity_pv = A/r:
+                #   g·(W0 + annuity_pv) = b + annuity_pv
+                #   (1+r)^T = (b + annuity_pv) / (W0 + annuity_pv)
 
                 annuity_pv = A_effective / r_monthly
-                ratio = (goal.threshold - annuity_pv + W0_m) / (W0_m - annuity_pv)
+                ratio = (goal.threshold + annuity_pv) / (W0_m + annuity_pv)
 
-                if ratio <= 0:
-                    # Goal already satisfied or infeasible
+                if ratio <= 1:
+                    # Goal already satisfied at T=0 (threshold ≤ initial wealth)
                     T_analytical = 0
                 else:
                     T_analytical = np.log(ratio) / np.log(1 + r_monthly)

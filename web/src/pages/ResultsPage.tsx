@@ -215,11 +215,21 @@ export default function ResultsPage() {
                 {result.solve_time?.toFixed(2) ?? '-'}
                 <span className="ml-1 text-lg font-normal text-gray-500">sec</span>
               </p>
-              {result.diagnostics?.n_iterations !== undefined && (
+              {typeof result.diagnostics?.n_horizon_evals === 'number' ? (
+                <p
+                  className="mt-1 text-xs text-gray-400"
+                  title="Convex solves used by the horizon search (skipped = horizons ruled out by the necessary-feasibility certificate without solving)"
+                >
+                  {result.diagnostics.n_horizon_evals} solves
+                  {typeof result.diagnostics?.n_certificate_skips === 'number' &&
+                    result.diagnostics.n_certificate_skips > 0 &&
+                    ` (+${result.diagnostics.n_certificate_skips} skipped)`}
+                </p>
+              ) : result.diagnostics?.n_iterations !== undefined ? (
                 <p className="mt-1 text-xs text-gray-400">
                   {String(result.diagnostics.n_iterations)} iterations
                 </p>
-              )}
+              ) : null}
             </div>
           </div>
 

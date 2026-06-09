@@ -2606,5 +2606,186 @@ class TestGoalSeekerLinearSearch:
         assert result.T < 30
 
 
+# ============================================================================
+# BRACKETED SEARCH (all-in VaR/CVaR heuristic + galloping)
+# ============================================================================
+
+class TestBracketedSearch:
+    """Test the bracketed search heuristic, certificate, and galloping."""
+
+    @pytest.fixture
+    def lognormal_generators(self, accounts):
+        """Deterministic lognormal A/R generators (realistic compounding)."""
+        mu = np.array([a.monthly_params["mu"] for a in accounts])
+        sigma = np.array([a.monthly_params["sigma"] for a in accounts])
+
+        def A_gen(T, n, s):
+            return np.full((n, T), 500_000.0)
+
+        def R_gen(T, n, s):
+            rng = np.random.default_rng(s)
+            z = rng.standard_normal((n, T, len(accounts)))
+            return np.exp(mu[None, None, :] + sigma[None, None, :] * z) - 1.0
+
+        return A_gen, R_gen
+
+    # ---- _var_cvar_crossing ------------------------------------------------
+
+    def test_var_cvar_crossing_monotone_curve(self):
+        """On a monotone-increasing wealth curve, crossings are correct and ordered."""
+        # Build a deterministic curve W[:, T] = 100 * T (no dispersion) -> VaR==CVaR.
+        n, Tp1 = 50, 21
+        W = np.tile(np.arange(Tp1) * 100.0, (n, 1))  # (n, T+1)
+        tau_var, tau_cvar = GoalSeeker._var_cvar_crossing(W, threshold=550.0, epsilon=0.1)
+        # 100*T >= 550 first at T=6
+        assert tau_var == 6
+        assert tau_cvar == 6  # no dispersion -> equal
+        assert tau_cvar >= tau_var
+
+    def test_var_cvar_crossing_dispersion_orders_var_below_cvar(self):
+        """With left-tail dispersion, CVaR crosses no earlier than VaR."""
+        rng = np.random.default_rng(0)
+        n, Tp1 = 2000, 30
+        base = np.arange(Tp1) * 100.0
+        noise = rng.standard_normal((n, Tp1)) * 50.0
+        W = base[None, :] + noise
+        tau_var, tau_cvar = GoalSeeker._var_cvar_crossing(W, threshold=1000.0, epsilon=0.1)
+        assert tau_var is not None and tau_cvar is not None
+        assert tau_cvar >= tau_var
+
+    def test_var_cvar_crossing_no_crossing_returns_none(self):
+        """Threshold never met within horizon -> None."""
+        W = np.tile(np.arange(10) * 1.0, (20, 1))
+        tau_var, tau_cvar = GoalSeeker._var_cvar_crossing(W, threshold=1e9, epsilon=0.1)
+        assert tau_var is None and tau_cvar is None
+
+    # ---- _estimate_bracket : Theorems 1 & 2a ------------------------------
+
+    def test_bracket_contains_optimum_single_goal(self, accounts, start_date,
+                                                  lognormal_generators):
+        """Single goal: T_lo <= T* <= T_hi (Theorems 1 and 2a) vs linear oracle."""
+        A_gen, R_gen = lognormal_generators
+        goals = [TerminalGoal(account="Aggressive", threshold=8_000_000, confidence=0.80)]
+        iw = np.array([0.0, 0.0])
+
+        opt = CVaROptimizer(n_accounts=2, objective="balanced")
+        seeker = GoalSeeker(opt, T_max=180, verbose=False)
+
+        T_lo, T_hi = seeker._estimate_bracket(
+            GoalSet(goals, accounts, start_date), A_gen, R_gen, iw,
+            n_sims=300, seed=42, D_generator=None,
+        )
+        # True optimum from the brute-force linear oracle.
+        oracle = seeker.seek(
+            goals=goals, A_generator=A_gen, R_generator=R_gen, initial_wealth=iw,
+            accounts=accounts, start_date=start_date, n_sims=300, seed=42,
+            search_method="linear",
+        )
+        assert T_lo <= oracle.T <= T_hi
+
+    # ---- _necessary_feasible certificate ----------------------------------
+
+    def test_certificate_rejects_provably_infeasible(self, accounts, start_date,
+                                                     lognormal_generators):
+        """All-in cannot meet a high threshold at tiny T -> certificate returns False."""
+        A_gen, R_gen = lognormal_generators
+        goals = [TerminalGoal(account="Aggressive", threshold=20_000_000, confidence=0.90)]
+        goal_set = GoalSet(goals, accounts, start_date)
+        seeker = GoalSeeker(CVaROptimizer(n_accounts=2), T_max=240, verbose=False)
+        iw = np.array([0.0, 0.0])
+
+        T = 3
+        A = A_gen(T, 300, 42)
+        R = R_gen(T, 300, 43)
+        assert seeker._necessary_feasible(goal_set, A, R, iw, None, T) is False
+
+    def test_certificate_passes_when_allin_meets_goal(self, accounts, start_date,
+                                                      lognormal_generators):
+        """At a large T, all-in clears an easy goal -> certificate returns True."""
+        A_gen, R_gen = lognormal_generators
+        goals = [TerminalGoal(account="Aggressive", threshold=1_000_000, confidence=0.70)]
+        goal_set = GoalSet(goals, accounts, start_date)
+        seeker = GoalSeeker(CVaROptimizer(n_accounts=2), T_max=240, verbose=False)
+        iw = np.array([0.0, 0.0])
+
+        T = 24
+        A = A_gen(T, 300, 42)
+        R = R_gen(T, 300, 43)
+        assert seeker._necessary_feasible(goal_set, A, R, iw, None, T) is True
+
+    # ---- bracketed == linear oracle (operational guarantee) ---------------
+
+    @pytest.mark.parametrize("threshold,confidence,T_max", [
+        (2_000_000, 0.70, 120),
+        (8_000_000, 0.80, 180),
+        (20_000_000, 0.90, 240),
+    ])
+    def test_bracketed_matches_linear_oracle_single(self, accounts, start_date,
+                                                    lognormal_generators,
+                                                    threshold, confidence, T_max):
+        """Bracketed returns the same T* as the brute-force linear oracle."""
+        A_gen, R_gen = lognormal_generators
+        goals = [TerminalGoal(account="Aggressive", threshold=threshold,
+                              confidence=confidence)]
+        iw = np.array([0.0, 0.0])
+
+        def run(method):
+            seeker = GoalSeeker(CVaROptimizer(n_accounts=2, objective="balanced"),
+                                T_max=T_max, verbose=False)
+            return seeker.seek(
+                goals=goals, A_generator=A_gen, R_generator=R_gen, initial_wealth=iw,
+                accounts=accounts, start_date=start_date, n_sims=300, seed=42,
+                search_method=method,
+            )
+
+        oracle = run("linear")
+        bracketed = run("bracketed")
+        assert bracketed.T == oracle.T
+        assert bracketed.feasible
+        # Bracketed must never do more real solves than the brute-force oracle.
+        assert (bracketed.diagnostics["n_horizon_evals"]
+                <= oracle.diagnostics["n_horizon_evals"])
+
+    def test_bracketed_matches_linear_oracle_multi_goal(self, accounts, start_date,
+                                                        lognormal_generators):
+        """Multi-goal (different accounts): galloping corrects the optimistic seed."""
+        A_gen, R_gen = lognormal_generators
+        goals = [
+            IntermediateGoal(account="Conservative", threshold=3_000_000,
+                             confidence=0.85, date=date(2025, 8, 1)),
+            TerminalGoal(account="Aggressive", threshold=10_000_000, confidence=0.80),
+        ]
+        iw = np.array([0.0, 0.0])
+
+        def run(method):
+            seeker = GoalSeeker(CVaROptimizer(n_accounts=2, objective="balanced"),
+                                T_max=240, verbose=False)
+            return seeker.seek(
+                goals=goals, A_generator=A_gen, R_generator=R_gen, initial_wealth=iw,
+                accounts=accounts, start_date=start_date, n_sims=300, seed=42,
+                search_method=method,
+            )
+
+        oracle = run("linear")
+        bracketed = run("bracketed")
+        assert bracketed.T == oracle.T
+        assert bracketed.feasible
+
+    def test_bracketed_infeasible_raises(self, accounts, start_date,
+                                         lognormal_generators):
+        """Unreachable goal within T_max -> InfeasibleError from upward galloping."""
+        A_gen, R_gen = lognormal_generators
+        goals = [TerminalGoal(account="Aggressive", threshold=500_000_000,
+                              confidence=0.95)]
+        iw = np.array([0.0, 0.0])
+        seeker = GoalSeeker(CVaROptimizer(n_accounts=2), T_max=24, verbose=False)
+        with pytest.raises(InfeasibleError):
+            seeker.seek(
+                goals=goals, A_generator=A_gen, R_generator=R_gen, initial_wealth=iw,
+                accounts=accounts, start_date=start_date, n_sims=200, seed=42,
+                search_method="bracketed",
+            )
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

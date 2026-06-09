@@ -921,7 +921,7 @@ class FinancialModel(ModelPlottingMixin):
         seed: Optional[int] = None,
         start: Optional[date] = None,
         verbose: bool = True,
-        search_method: str = "binary",
+        search_method: str = "bracketed",
         withdrawals: Optional[WithdrawalModel] = None,
         withdrawal_epsilon: float = 0.05,
         progress_callback: Optional[Callable] = None,
@@ -958,10 +958,12 @@ class FinancialModel(ModelPlottingMixin):
             Calendar start date for goal resolution. If None, uses today.
         verbose : bool, default True
             Print iteration progress (horizon testing, feasibility status).
-        search_method : str, default "binary"
+        search_method : str, default "bracketed"
             Horizon search strategy:
-            - "binary": Binary search (faster, ~50% fewer iterations)
-            - "linear": Sequential search (safer, guaranteed to find solution)
+            - "bracketed": All-in VaR/CVaR bracket from the wealth model + two-sided
+              galloping (fastest; ~3x fewer solves than binary). Recommended default.
+            - "binary": Binary search over [T_min, T_max].
+            - "linear": Sequential brute-force from T_min (safest oracle, slowest).
         withdrawals : WithdrawalModel, optional
             Scheduled cash outflows from accounts. If provided, adds
             withdrawal feasibility constraints: ℙ(W_t^m ≥ D_t^m) ≥ 1-ε
