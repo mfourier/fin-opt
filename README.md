@@ -20,7 +20,7 @@ FinOpt finds the smallest horizon at which the goals are *simultaneously achieva
 
 $$T^\star = \min\{\,T \in \mathbb{N} : \mathcal{F}(T) \neq \varnothing\,\}$$
 
-$$\mathcal{F}(T) = \left\{\,X \in \Delta^T : \mathbb{P}\!\left(W_t^m(X) \geq b_t^m\right) \geq 1 - \varepsilon_t^m \;\; \forall \text{ goals}\,\right\}$$
+$$\mathcal{F}(T) = \{\,X \in \Delta^T : \mathbb{P}\!\left(W_t^m(X) \geq b_t^m\right) \geq 1 - \varepsilon_t^m \;\; \forall \text{ goals}\,\}$$
 
 $$X^\star = \arg\min_{X \in \mathcal{F}(T^\star)} f(X)$$
 
