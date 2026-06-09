@@ -16,6 +16,7 @@ build/
 
 # Jupyter
 .ipynb_checkpoints/
+.virtual_documents/
 
 # Testing
 .pytest_cache/
@@ -54,6 +55,10 @@ Thumbs.db
 LINKEDIN_CV.md
 docs/study-plan/
 docs/dev-notes/
+
+# Personal financial data (not for public repo)
+profiles/
+scenarios/
 
 # Cache
 .cache/
