@@ -3,8 +3,8 @@ import { useAuthStore } from '../lib/store'
 
 const navigation = [
   { name: 'Dashboard', href: '/' },
-  { name: 'Profiles', href: '/profiles' },
-  { name: 'Scenarios', href: '/scenarios' },
+  { name: 'My situation', href: '/profiles' },
+  { name: 'Plans', href: '/scenarios' },
 ]
 
 export default function Layout() {

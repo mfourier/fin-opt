@@ -3,6 +3,9 @@ import { useAuthStore } from './lib/store'
 import { ToastProvider } from './components/Toast'
 import Layout from './components/Layout'
 import LoginPage from './pages/LoginPage'
+import PlanPreviewPage from './pages/PlanPreviewPage'
+import GoalsPreviewPage from './pages/GoalsPreviewPage'
+import SituationPreviewPage from './pages/SituationPreviewPage'
 import DashboardPage from './pages/DashboardPage'
 import ProfilesPage from './pages/ProfilesPage'
 import ScenariosPage from './pages/ScenariosPage'
@@ -33,6 +36,9 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/plan-preview" element={<PlanPreviewPage />} />
+          <Route path="/goals-preview" element={<GoalsPreviewPage />} />
+          <Route path="/situation-preview" element={<SituationPreviewPage />} />
           <Route
             path="/"
             element={

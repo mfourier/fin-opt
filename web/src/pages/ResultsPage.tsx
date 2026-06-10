@@ -1,23 +1,16 @@
-import { useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useJobProgress } from '../hooks/useJobProgress'
 import { supabase } from '../lib/supabase'
-import type { Result, Scenario } from '../types/database'
-import AllocationHeatmap from '../components/AllocationHeatmap'
-import AllocationChart from '../components/AllocationChart'
-import GoalProgressCard from '../components/GoalProgressCard'
-import WealthTrajectoryChart from '../components/WealthTrajectoryChart'
-import WithdrawalSummary from '../components/WithdrawalSummary'
-import CashFlowChart from '../components/CashFlowChart'
-import MonthlyInvestmentPlan from '../components/MonthlyInvestmentPlan'
-
-type ViewTab = 'overview' | 'allocation' | 'goals' | 'wealth' | 'cashflow'
+import { queueOptimization } from '../lib/api'
+import type { Result, Scenario, Profile } from '../types/database'
+import type { Scenario as PlanScenario, Result as PlanResult } from '@/mocks/types'
+import { PlanResults } from '@/components/finopt/PlanResults'
 
 export default function ResultsPage() {
   const { jobId } = useParams<{ jobId: string }>()
+  const navigate = useNavigate()
   const { job, loading: jobLoading } = useJobProgress(jobId ?? null)
-  const [activeTab, setActiveTab] = useState<ViewTab>('overview')
 
   const { data: result } = useQuery({
     queryKey: ['result', jobId] as const,
@@ -42,7 +35,7 @@ export default function ResultsPage() {
         .eq('id', job!.scenario_id)
         .single()
       if (error) throw error
-      return data as Scenario & { profiles: { name: string; accounts_config: { name: string; display_name?: string }[] } }
+      return data as Scenario & { profiles: Profile }
     },
     enabled: !!job?.scenario_id,
   })
@@ -83,33 +76,60 @@ export default function ResultsPage() {
 
   const accountNames = scenario?.profiles?.accounts_config?.map(a => a.display_name || a.name) ?? []
 
-  // Calculate years and months from horizon
-  const formatHorizon = (months: number) => {
-    const years = Math.floor(months / 12)
-    const remainingMonths = months % 12
-    if (years === 0) return `${months} months`
-    if (remainingMonths === 0) return `${years} year${years > 1 ? 's' : ''}`
-    return `${years}y ${remainingMonths}m`
+  const handleExportJSON = () => {
+    if (!result) return
+    const blob = new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `finopt-result-${jobId}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleExportCSV = () => {
+    if (!result?.allocation_policy) return
+    const headers = ['Month', ...accountNames]
+    const rows = result.allocation_policy.map((row, t) => [
+      t.toString(),
+      ...row.map(v => (v * 100).toFixed(2)),
+    ])
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `finopt-allocation-${jobId}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleRecalculate = async () => {
+    try {
+      const { data: newJob, error } = await supabase
+        .from('jobs')
+        .insert({ scenario_id: job.scenario_id, job_type: 'optimization', status: 'pending', progress: 0 })
+        .select()
+        .single()
+      if (error) throw error
+      await queueOptimization({ scenario_id: job.scenario_id, job_id: newJob.id })
+      navigate(`/results/${newJob.id}`)
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Failed to recalculate')
+    }
   }
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-gray-900">
-              {job.job_type === 'optimization' ? 'Optimization' : 'Simulation'} Results
-            </h1>
-            <span className={`rounded-full px-3 py-1 text-sm font-medium ${getStatusColor(job.status)}`}>
-              {job.status}
-            </span>
-          </div>
-          {scenario && (
-            <p className="mt-1 text-sm text-gray-500">
-              {scenario.name} • {scenario.profiles?.name}
-            </p>
-          )}
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-gray-900">
+            {job.job_type === 'optimization' ? 'Optimization' : 'Simulation'} Results
+          </h1>
+          <span className={`rounded-full px-3 py-1 text-sm font-medium ${getStatusColor(job.status)}`}>
+            {job.status}
+          </span>
         </div>
         <Link
           to="/scenarios"
@@ -166,350 +186,21 @@ export default function ResultsPage() {
         </div>
       )}
 
-      {/* Results - for completed jobs */}
-      {job.status === 'completed' && result && (
-        <div className="space-y-6">
-          {/* Summary Cards */}
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <div className="rounded-lg bg-white p-5 shadow">
-              <p className="text-sm font-medium text-gray-500">Optimal Horizon</p>
-              <p className="mt-2 text-3xl font-bold text-gray-900">
-                {result.optimal_horizon ? formatHorizon(result.optimal_horizon) : '-'}
-              </p>
-              {result.optimal_horizon && (
-                <p className="mt-1 text-xs text-gray-400">{result.optimal_horizon} months</p>
-              )}
-            </div>
-            <div className="rounded-lg bg-white p-5 shadow">
-              <p className="text-sm font-medium text-gray-500">Feasibility</p>
-              <div className="mt-2 flex items-center gap-2">
-                {result.feasible ? (
-                  <>
-                    <svg className="h-8 w-8 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                    <span className="text-2xl font-bold text-green-600">Feasible</span>
-                  </>
-                ) : (
-                  <>
-                    <svg className="h-8 w-8 text-red-500" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                    </svg>
-                    <span className="text-2xl font-bold text-red-600">Infeasible</span>
-                  </>
-                )}
-              </div>
-            </div>
-            <div className="rounded-lg bg-white p-5 shadow">
-              <p className="text-sm font-medium text-gray-500">Objective Value</p>
-              <p className="mt-2 text-3xl font-bold text-gray-900">
-                {result.objective_value?.toFixed(4) ?? '-'}
-              </p>
-              {scenario && (
-                <p className="mt-1 text-xs text-gray-400">{scenario.objective}</p>
-              )}
-            </div>
-            <div className="rounded-lg bg-white p-5 shadow">
-              <p className="text-sm font-medium text-gray-500">Solve Time</p>
-              <p className="mt-2 text-3xl font-bold text-gray-900">
-                {result.solve_time?.toFixed(2) ?? '-'}
-                <span className="ml-1 text-lg font-normal text-gray-500">sec</span>
-              </p>
-              {typeof result.diagnostics?.n_horizon_evals === 'number' ? (
-                <p
-                  className="mt-1 text-xs text-gray-400"
-                  title="Convex solves used by the horizon search (skipped = horizons ruled out by the necessary-feasibility certificate without solving)"
-                >
-                  {result.diagnostics.n_horizon_evals} solves
-                  {typeof result.diagnostics?.n_certificate_skips === 'number' &&
-                    result.diagnostics.n_certificate_skips > 0 &&
-                    ` (+${result.diagnostics.n_certificate_skips} skipped)`}
-                </p>
-              ) : result.diagnostics?.n_iterations !== undefined ? (
-                <p className="mt-1 text-xs text-gray-400">
-                  {String(result.diagnostics.n_iterations)} iterations
-                </p>
-              ) : null}
-            </div>
-          </div>
-
-          {/* Tab Navigation */}
-          <div className="border-b border-gray-200">
-            <nav className="-mb-px flex space-x-8">
-              {[
-                { id: 'overview', label: 'Overview' },
-                { id: 'wealth', label: 'Wealth Trajectories' },
-                { id: 'cashflow', label: 'Cash Flow' },
-                { id: 'allocation', label: 'Allocation Policy' },
-                { id: 'goals', label: 'Goals' },
-              ].map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id as ViewTab)}
-                  className={`whitespace-nowrap border-b-2 px-1 py-4 text-sm font-medium transition-colors ${
-                    activeTab === tab.id
-                      ? 'border-primary-500 text-primary-600'
-                      : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </nav>
-          </div>
-
-          {/* Tab Content */}
-          <div className="rounded-lg bg-white p-6 shadow">
-            {activeTab === 'overview' && (
-              <div className="space-y-6">
-                {/* Quick Stats */}
-                {result.goal_status && result.goal_status.length > 0 && (
-                  <div>
-                    <h3 className="mb-4 text-lg font-medium text-gray-900">Goal Summary</h3>
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div className="rounded-lg bg-gray-50 p-4">
-                        <p className="text-sm text-gray-500">Goals Achieved</p>
-                        <p className="text-2xl font-bold text-gray-900">
-                          {result.goal_status.filter(g => g.satisfied).length} / {result.goal_status.length}
-                        </p>
-                      </div>
-                      <div className="rounded-lg bg-gray-50 p-4">
-                        <p className="text-sm text-gray-500">Accounts Used</p>
-                        <p className="text-2xl font-bold text-gray-900">{accountNames.length}</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Allocation Chart Preview */}
-                {/* Wealth Trajectory Preview */}
-                {result.summary_stats?.total_wealth && (
-                  <div>
-                    <div className="mb-4 flex items-center justify-between">
-                      <h3 className="text-lg font-medium text-gray-900">Projected Wealth</h3>
-                      <button
-                        onClick={() => setActiveTab('wealth')}
-                        className="text-sm text-primary-600 hover:text-primary-500"
-                      >
-                        View Details →
-                      </button>
-                    </div>
-                    <WealthTrajectoryChart
-                      summaryStats={result.summary_stats}
-                      startDate={scenario?.start_date}
-                      goalStatus={result.goal_status}
-                      optimalHorizon={result.optimal_horizon}
-                      withdrawals={scenario?.withdrawals}
-                    />
-                  </div>
-                )}
-
-                {/* Allocation Preview */}
-                {result.allocation_policy && (
-                  <div>
-                    <div className="mb-4 flex items-center justify-between">
-                      <h3 className="text-lg font-medium text-gray-900">Allocation Over Time</h3>
-                      <button
-                        onClick={() => setActiveTab('allocation')}
-                        className="text-sm text-primary-600 hover:text-primary-500"
-                      >
-                        View Details →
-                      </button>
-                    </div>
-                    <AllocationChart
-                      allocation={result.allocation_policy}
-                      accountNames={accountNames}
-                      startDate={scenario?.start_date}
-                      cashFlow={result.summary_stats?.cash_flow}
-                    />
-                  </div>
-                )}
-
-                {/* Investment Plan Preview */}
-                {result.allocation_policy && result.summary_stats?.cash_flow && (
-                  <div>
-                    <div className="mb-4 flex items-center justify-between">
-                      <h3 className="text-lg font-medium text-gray-900">Investment Plan</h3>
-                      <button
-                        onClick={() => setActiveTab('allocation')}
-                        className="text-sm text-primary-600 hover:text-primary-500"
-                      >
-                        View Details →
-                      </button>
-                    </div>
-                    <MonthlyInvestmentPlan
-                      allocation={result.allocation_policy}
-                      accountNames={accountNames}
-                      cashFlow={result.summary_stats.cash_flow}
-                      startDate={scenario?.start_date}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-
-            {activeTab === 'wealth' && (
-              <div>
-                <h3 className="mb-2 text-lg font-medium text-gray-900">Projected Wealth</h3>
-                <p className="mb-4 text-sm text-gray-500">
-                  Monte Carlo fan chart showing wealth distribution over the {result.optimal_horizon}-month horizon.
-                  The shaded bands represent the P10-P90 and P25-P75 percentile ranges.
-                </p>
-                {result.summary_stats ? (
-                  <WealthTrajectoryChart
-                    summaryStats={result.summary_stats}
-                    startDate={scenario?.start_date}
-                    goalStatus={result.goal_status}
-                    optimalHorizon={result.optimal_horizon}
-                    withdrawals={scenario?.withdrawals}
-                  />
-                ) : (
-                  <p className="text-gray-500">
-                    No wealth trajectory data available. Re-run the optimization to generate trajectories.
-                  </p>
-                )}
-              </div>
-            )}
-
-            {activeTab === 'cashflow' && (
-              <div className="space-y-6">
-                <div>
-                  <h3 className="mb-2 text-lg font-medium text-gray-900">Cash Flow Analysis</h3>
-                  <p className="mb-4 text-sm text-gray-500">
-                    Monthly contributions and withdrawals over the investment horizon.
-                  </p>
-                </div>
-
-                {/* Net Cash Flow Chart */}
-                {result.summary_stats?.cash_flow ? (
-                  <CashFlowChart
-                    cashFlow={result.summary_stats.cash_flow}
-                    startDate={scenario?.start_date}
-                  />
-                ) : (
-                  <p className="text-sm text-gray-500">
-                    No cash flow data available. Re-run the optimization to generate cash flow statistics.
-                  </p>
-                )}
-
-                {/* Withdrawal Schedule */}
-                {scenario?.withdrawals && (
-                  <>
-                    <hr className="border-gray-200" />
-                    <div>
-                      <h3 className="mb-4 text-lg font-medium text-gray-900">Withdrawal Schedule</h3>
-                      <WithdrawalSummary
-                        withdrawals={scenario.withdrawals}
-                        startDate={scenario.start_date}
-                      />
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-
-            {activeTab === 'allocation' && result.allocation_policy && (
-              <div className="space-y-6">
-                <div>
-                  <h3 className="mb-2 text-lg font-medium text-gray-900">Allocation Timeline</h3>
-                  <p className="mb-4 text-sm text-gray-500">
-                    Stacked area chart showing how allocation changes over the {result.optimal_horizon}-month horizon.
-                    {result.summary_stats?.cash_flow && ' Toggle between percentage and dollar amount views.'}
-                  </p>
-                  <AllocationChart
-                    allocation={result.allocation_policy}
-                    accountNames={accountNames}
-                    startDate={scenario?.start_date}
-                    cashFlow={result.summary_stats?.cash_flow}
-                  />
-                </div>
-                <hr className="border-gray-200" />
-                <div>
-                  <h3 className="mb-2 text-lg font-medium text-gray-900">Allocation Heatmap</h3>
-                  <p className="mb-4 text-sm text-gray-500">
-                    Detailed view of monthly allocation percentages. Hover for exact values.
-                  </p>
-                  <AllocationHeatmap
-                    allocation={result.allocation_policy}
-                    accountNames={accountNames}
-                    startDate={scenario?.start_date}
-                    cashFlow={result.summary_stats?.cash_flow}
-                  />
-                </div>
-                {result.summary_stats?.cash_flow && (
-                  <>
-                    <hr className="border-gray-200" />
-                    <div>
-                      <h3 className="mb-2 text-lg font-medium text-gray-900">Investment Plan</h3>
-                      <MonthlyInvestmentPlan
-                        allocation={result.allocation_policy}
-                        accountNames={accountNames}
-                        cashFlow={result.summary_stats.cash_flow}
-                        startDate={scenario?.start_date}
-                      />
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-
-            {activeTab === 'goals' && (
-              <div>
-                <h3 className="mb-4 text-lg font-medium text-gray-900">Goal Achievement Status</h3>
-                {result.goal_status && result.goal_status.length > 0 ? (
-                  <GoalProgressCard goals={result.goal_status} />
-                ) : (
-                  <p className="text-gray-500">No goal information available</p>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Export Options */}
-          <div className="flex gap-4">
-            <button
-              onClick={() => {
-                const blob = new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' })
-                const url = URL.createObjectURL(blob)
-                const a = document.createElement('a')
-                a.href = url
-                a.download = `finopt-result-${jobId}.json`
-                a.click()
-                URL.revokeObjectURL(url)
-              }}
-              className="flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-            >
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-              Export JSON
-            </button>
-            {result.allocation_policy && (
-              <button
-                onClick={() => {
-                  const headers = ['Month', ...accountNames]
-                  const rows = result.allocation_policy!.map((row, t) => [
-                    t.toString(),
-                    ...row.map(v => (v * 100).toFixed(2))
-                  ])
-                  const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n')
-                  const blob = new Blob([csv], { type: 'text/csv' })
-                  const url = URL.createObjectURL(blob)
-                  const a = document.createElement('a')
-                  a.href = url
-                  a.download = `finopt-allocation-${jobId}.csv`
-                  a.click()
-                  URL.revokeObjectURL(url)
-                }}
-                className="flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-              >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                Export Allocation CSV
-              </button>
-            )}
-          </div>
+      {/* Results - redesigned "My plan" view (Phase B: wired to real data) */}
+      {job.status === 'completed' && result && scenario && (
+        <div style={{ fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif' }}>
+          <PlanResults
+            profile={scenario.profiles}
+            // database Scenario/Result widen some literal-union fields to
+            // `string` (objective, goal_status[].type); otherwise identical.
+            scenario={scenario as unknown as PlanScenario}
+            result={result as unknown as PlanResult}
+            jobStatus="completed"
+            onExportJSON={handleExportJSON}
+            onExportCSV={handleExportCSV}
+            onRecalculate={handleRecalculate}
+            onAdjustGoals={() => navigate('/scenarios')}
+          />
         </div>
       )}
     </div>

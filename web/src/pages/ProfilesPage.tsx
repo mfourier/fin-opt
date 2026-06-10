@@ -3,35 +3,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
 import { useToast } from '../components/Toast'
-import { validateProfile, type ValidationError } from '../lib/validation'
-import { ValidationSummary, CurrencyInput } from '../components/FormField'
-import type {
-  Profile,
-  ProfileInsert,
-  AccountConfig,
-  IncomeConfig,
-  FixedIncomeConfig,
-  VariableIncomeConfig,
-  SalaryRaise,
-} from '../types/database'
-
-// Default seasonality factors (12 months)
-const defaultSeasonality = [0, 0, 0, 0.6, 1.0, 1.16, 1.0, 1.1, 0.5, 0.9, 0.85, 1.0]
-const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-
-const defaultIncomeConfig: IncomeConfig = {
-  fixed: {
-    base: 1500000,
-    annual_growth: 0.03,
-  },
-  contribution_rate_fixed: 0.3,
-  contribution_rate_variable: 1.0,
-}
-
-const defaultAccounts: AccountConfig[] = [
-  { name: 'Conservative', display_name: 'Conservative Fund', annual_return: 0.08, annual_volatility: 0.09, initial_wealth: 0 },
-  { name: 'Aggressive', display_name: 'Aggressive Fund', annual_return: 0.14, annual_volatility: 0.15, initial_wealth: 0 },
-]
+import { SituationForm } from '@/components/finopt/SituationForm'
+import { Button } from '@/components/ui/button'
+import type { Profile, ProfileInsert } from '../types/database'
+import type { ProfileDraft } from '@/mocks/types'
 
 export default function ProfilesPage() {
   const queryClient = useQueryClient()
@@ -39,27 +14,6 @@ export default function ProfilesPage() {
   const toast = useToast()
   const [showForm, setShowForm] = useState(false)
   const [editingProfile, setEditingProfile] = useState<Profile | null>(null)
-
-  // Expandable sections
-  const [showVariableIncome, setShowVariableIncome] = useState(false)
-  const [showSeasonality, setShowSeasonality] = useState(false)
-  const [showAdvancedContributions, setShowAdvancedContributions] = useState(false)
-  const [showCorrelationMatrix, setShowCorrelationMatrix] = useState(false)
-
-  // Salary raises management
-  const [salaryRaises, setSalaryRaises] = useState<SalaryRaise[]>([])
-
-  // Correlation matrix (NxN where N = number of accounts)
-  const [correlationMatrix, setCorrelationMatrix] = useState<number[][] | null>(null)
-
-  const [validationErrors, setValidationErrors] = useState<ValidationError[]>([])
-
-  const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    income_config: defaultIncomeConfig,
-    accounts_config: defaultAccounts,
-  })
 
   const { data: profiles, isLoading } = useQuery({
     queryKey: ['profiles'],
@@ -76,21 +30,17 @@ export default function ProfilesPage() {
 
   const createMutation = useMutation({
     mutationFn: async (profile: ProfileInsert) => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .insert(profile)
-        .select()
-        .single()
+      const { data, error } = await supabase.from('profiles').insert(profile).select().single()
       if (error) throw error
       return data
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profiles'] })
       resetForm()
-      toast.success('Profile created', 'Your profile has been created successfully.')
+      toast.success('Situation saved', 'Your situation has been created.')
     },
     onError: (error: Error) => {
-      toast.error('Failed to create profile', error.message)
+      toast.error('Failed to save situation', error.message)
     },
   })
 
@@ -108,10 +58,10 @@ export default function ProfilesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profiles'] })
       resetForm()
-      toast.success('Profile updated', 'Your changes have been saved.')
+      toast.success('Situation updated', 'Your changes have been saved.')
     },
     onError: (error: Error) => {
-      toast.error('Failed to update profile', error.message)
+      toast.error('Failed to update situation', error.message)
     },
   })
 
@@ -122,32 +72,19 @@ export default function ProfilesPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profiles'] })
-      toast.success('Profile deleted', 'The profile has been removed.')
+      toast.success('Situation deleted', 'The situation has been removed.')
     },
     onError: (error: Error) => {
-      toast.error('Failed to delete profile', error.message)
+      toast.error('Failed to delete situation', error.message)
     },
   })
 
   const resetForm = () => {
     setShowForm(false)
     setEditingProfile(null)
-    setShowVariableIncome(false)
-    setShowSeasonality(false)
-    setShowAdvancedContributions(false)
-    setShowCorrelationMatrix(false)
-    setSalaryRaises([])
-    setCorrelationMatrix(null)
-    setValidationErrors([])
-    setFormData({
-      name: '',
-      description: '',
-      income_config: defaultIncomeConfig,
-      accounts_config: defaultAccounts,
-    })
   }
 
-  // Close the form modal with the Escape key.
+  // Close the form overlay with the Escape key.
   useEffect(() => {
     if (!showForm) return
     const onKey = (e: KeyboardEvent) => {
@@ -155,830 +92,84 @@ export default function ProfilesPage() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showForm])
 
   const handleEdit = (profile: Profile) => {
     setEditingProfile(profile)
-
-    // Extract salary raises from the profile
-    const raises: SalaryRaise[] = []
-    if (profile.income_config.fixed?.salary_raises) {
-      Object.entries(profile.income_config.fixed.salary_raises).forEach(([date, amount]) => {
-        raises.push({ date, amount })
-      })
-    }
-    setSalaryRaises(raises)
-
-    // Check if variable income exists
-    setShowVariableIncome(!!profile.income_config.variable)
-    setShowSeasonality(!!profile.income_config.variable?.seasonality)
-
-    // Check if advanced contributions
-    const hasArrayContributions =
-      Array.isArray(profile.income_config.contribution_rate_fixed) ||
-      Array.isArray(profile.income_config.contribution_rate_variable)
-    setShowAdvancedContributions(hasArrayContributions)
-
-    // Load correlation matrix
-    setCorrelationMatrix(profile.correlation_matrix)
-    setShowCorrelationMatrix(profile.correlation_matrix !== null)
-
-    setFormData({
-      name: profile.name,
-      description: profile.description,
-      income_config: profile.income_config,
-      accounts_config: profile.accounts_config,
-    })
     setShowForm(true)
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-
-    // Validate before submitting
-    const validation = validateProfile(formData)
-    if (!validation.valid) {
-      setValidationErrors(validation.errors)
-      return
-    }
-    setValidationErrors([])
-
-    // Build income_config with salary raises
-    const incomeConfig = { ...formData.income_config }
-
-    // Convert salary raises array to Record
-    if (salaryRaises.length > 0 && incomeConfig.fixed) {
-      incomeConfig.fixed = {
-        ...incomeConfig.fixed,
-        salary_raises: salaryRaises.reduce((acc, raise) => {
-          acc[raise.date] = raise.amount
-          return acc
-        }, {} as Record<string, number>)
-      }
-    }
-
-    // Remove variable if not enabled
-    if (!showVariableIncome) {
-      delete incomeConfig.variable
-    }
-
-    // Remove seasonality if not enabled
-    if (!showSeasonality && incomeConfig.variable) {
-      delete incomeConfig.variable.seasonality
-    }
-
-    const finalFormData = {
-      ...formData,
-      income_config: incomeConfig,
-    }
-
-    // Build correlation matrix if enabled
-    const finalCorrelationMatrix = showCorrelationMatrix ? correlationMatrix : null
-
-    if (editingProfile) {
-      updateMutation.mutate({ id: editingProfile.id, ...finalFormData, correlation_matrix: finalCorrelationMatrix })
-    } else {
-      createMutation.mutate({
-        user_id: user!.id,
-        ...finalFormData,
-        correlation_matrix: finalCorrelationMatrix,
-      })
-    }
-  }
-
-  // Fixed Income helpers
-  const updateFixedIncome = (field: keyof FixedIncomeConfig, value: number) => {
-    setFormData({
-      ...formData,
-      income_config: {
-        ...formData.income_config,
-        fixed: { ...formData.income_config.fixed!, [field]: value },
-      },
-    })
-  }
-
-  // Variable Income helpers
-  const updateVariableIncome = (field: keyof VariableIncomeConfig, value: number | number[] | undefined) => {
-    setFormData({
-      ...formData,
-      income_config: {
-        ...formData.income_config,
-        variable: {
-          ...formData.income_config.variable!,
-          [field]: value,
-        },
-      },
-    })
-  }
-
-  const initializeVariableIncome = () => {
-    setFormData({
-      ...formData,
-      income_config: {
-        ...formData.income_config,
-        variable: {
-          base: 500000,
-          sigma: 0.2,
-        },
-      },
-    })
-    setShowVariableIncome(true)
-  }
-
-  // Salary Raise helpers
-  const addSalaryRaise = () => {
-    const nextYear = new Date().getFullYear() + 1
-    setSalaryRaises([...salaryRaises, { date: `${nextYear}-03-01`, amount: 100000 }])
-  }
-
-  const updateSalaryRaise = (index: number, field: keyof SalaryRaise, value: string | number) => {
-    const newRaises = [...salaryRaises]
-    newRaises[index] = { ...newRaises[index], [field]: value }
-    setSalaryRaises(newRaises)
-  }
-
-  const removeSalaryRaise = (index: number) => {
-    setSalaryRaises(salaryRaises.filter((_, i) => i !== index))
-  }
-
-  // Seasonality helpers
-  const initializeSeasonality = () => {
-    setFormData({
-      ...formData,
-      income_config: {
-        ...formData.income_config,
-        variable: {
-          ...formData.income_config.variable!,
-          seasonality: [...defaultSeasonality],
-        },
-      },
-    })
-    setShowSeasonality(true)
-  }
-
-  const updateSeasonalityMonth = (monthIndex: number, value: number) => {
-    const currentSeasonality = formData.income_config.variable?.seasonality ?? [...defaultSeasonality]
-    const newSeasonality = [...currentSeasonality]
-    newSeasonality[monthIndex] = value
-    updateVariableIncome('seasonality', newSeasonality)
-  }
-
-  // Contribution rate helpers
-  const getContributionRateValue = (type: 'fixed' | 'variable'): number => {
-    const rate = type === 'fixed'
-      ? formData.income_config.contribution_rate_fixed
-      : formData.income_config.contribution_rate_variable
-    return Array.isArray(rate) ? rate[0] : rate
-  }
-
-  const getContributionRateArray = (type: 'fixed' | 'variable'): number[] => {
-    const rate = type === 'fixed'
-      ? formData.income_config.contribution_rate_fixed
-      : formData.income_config.contribution_rate_variable
-    return Array.isArray(rate) ? rate : Array(12).fill(rate)
-  }
-
-  const updateContributionRate = (type: 'fixed' | 'variable', value: number | number[]) => {
-    setFormData({
-      ...formData,
-      income_config: {
-        ...formData.income_config,
-        [type === 'fixed' ? 'contribution_rate_fixed' : 'contribution_rate_variable']: value,
-      },
-    })
-  }
-
-  const toggleAdvancedContributions = () => {
-    if (showAdvancedContributions) {
-      // Convert back to scalar (use first value)
-      const fixedScalar = getContributionRateValue('fixed')
-      const varScalar = getContributionRateValue('variable')
-      setFormData({
-        ...formData,
-        income_config: {
-          ...formData.income_config,
-          contribution_rate_fixed: fixedScalar,
-          contribution_rate_variable: varScalar,
-        },
-      })
-    } else {
-      // Convert to array
-      const fixedArray = getContributionRateArray('fixed')
-      const varArray = getContributionRateArray('variable')
-      setFormData({
-        ...formData,
-        income_config: {
-          ...formData.income_config,
-          contribution_rate_fixed: fixedArray,
-          contribution_rate_variable: varArray,
-        },
-      })
-    }
-    setShowAdvancedContributions(!showAdvancedContributions)
-  }
-
-  // Account helpers
-  const updateAccount = (index: number, field: keyof AccountConfig, value: string | number) => {
-    const newAccounts = [...formData.accounts_config]
-    newAccounts[index] = { ...newAccounts[index], [field]: value }
-    setFormData({ ...formData, accounts_config: newAccounts })
-  }
-
-  const addAccount = () => {
-    setFormData({
-      ...formData,
-      accounts_config: [
-        ...formData.accounts_config,
-        { name: 'NewAccount', display_name: 'New Account', annual_return: 0.10, annual_volatility: 0.12, initial_wealth: 0 },
-      ],
-    })
-  }
-
-  const removeAccount = (index: number) => {
-    setFormData({
-      ...formData,
-      accounts_config: formData.accounts_config.filter((_, i) => i !== index),
-    })
-  }
-
-  // Correlation matrix helpers
-  const initializeCorrelationMatrix = () => {
-    const n = formData.accounts_config.length
-    // Create identity matrix (all correlations = 0 except diagonal = 1)
-    const matrix: number[][] = []
-    for (let i = 0; i < n; i++) {
-      matrix[i] = []
-      for (let j = 0; j < n; j++) {
-        matrix[i][j] = i === j ? 1.0 : 0.0
-      }
-    }
-    setCorrelationMatrix(matrix)
-    setShowCorrelationMatrix(true)
-  }
-
-  const updateCorrelation = (i: number, j: number, value: number) => {
-    if (!correlationMatrix) return
-    // Clamp value to valid correlation range
-    const clampedValue = Math.max(-1, Math.min(1, value))
-    const newMatrix = correlationMatrix.map(row => [...row])
-    // Symmetric matrix: update both (i,j) and (j,i)
-    newMatrix[i][j] = clampedValue
-    newMatrix[j][i] = clampedValue
-    setCorrelationMatrix(newMatrix)
-  }
-
-  // Get correlation pairs for display (upper triangle only, excluding diagonal)
-  const getCorrelationPairs = () => {
-    const pairs: { i: number; j: number; name1: string; name2: string; value: number }[] = []
-    const accounts = formData.accounts_config
-    if (!correlationMatrix || correlationMatrix.length !== accounts.length) return pairs
-
-    for (let i = 0; i < accounts.length; i++) {
-      for (let j = i + 1; j < accounts.length; j++) {
-        pairs.push({
-          i,
-          j,
-          name1: accounts[i].display_name || accounts[i].name,
-          name2: accounts[j].display_name || accounts[j].name,
-          value: correlationMatrix[i][j],
+  const handleSave = async (draft: ProfileDraft) => {
+    try {
+      if (editingProfile) {
+        await updateMutation.mutateAsync({
+          id: editingProfile.id,
+          name: draft.name,
+          description: draft.description,
+          income_config: draft.income_config,
+          accounts_config: draft.accounts_config,
+          correlation_matrix: draft.correlation_matrix,
+        })
+      } else {
+        await createMutation.mutateAsync({
+          user_id: user!.id,
+          name: draft.name,
+          description: draft.description,
+          income_config: draft.income_config,
+          accounts_config: draft.accounts_config,
+          correlation_matrix: draft.correlation_matrix,
         })
       }
+    } catch {
+      // Mutations surface errors via toast.
     }
-    return pairs
   }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Profiles</h1>
+          <h1 className="text-2xl font-bold text-gray-900">My situation</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Manage your financial profiles (income sources and investment accounts).
+            Your income and investment accounts — the basis your plans are built on.
           </p>
         </div>
         <button
           onClick={() => setShowForm(true)}
           className="rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
         >
-          New Profile
+          New situation
         </button>
       </div>
 
-      {/* Form Modal */}
+      {/* Form overlay (redesigned) */}
       {showForm && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4"
-          onClick={resetForm}
+          className="fixed inset-0 z-50 overflow-y-auto bg-background"
+          style={{ fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif' }}
         >
-          <div
-            className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-lg bg-white p-6 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="mb-4 text-lg font-medium text-gray-900">
-              {editingProfile ? 'Edit Profile' : 'Create Profile'}
-            </h2>
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {validationErrors.length > 0 && (
-                <ValidationSummary errors={validationErrors} />
-              )}
-
-              {/* Basic Info */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Name</label>
-                  <input
-                    type="text"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    required
-                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Description</label>
-                  <input
-                    type="text"
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                  />
-                </div>
-              </div>
-
-              {/* Fixed Income Section */}
-              <div className="rounded-lg border border-gray-200 p-4">
-                <h3 className="mb-3 font-medium text-gray-900">Fixed Income (Salary)</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm text-gray-600">Base Monthly Income</label>
-                    <div className="mt-1">
-                      <CurrencyInput
-                        value={formData.income_config.fixed?.base ?? 0}
-                        onChange={(v) => updateFixedIncome('base', v ?? 0)}
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-600">Annual Growth Rate</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={formData.income_config.fixed?.annual_growth ?? 0}
-                      onChange={(e) => updateFixedIncome('annual_growth', Number(e.target.value))}
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                    />
-                    <p className="mt-1 text-xs text-gray-500">e.g., 0.03 = 3% per year</p>
-                  </div>
-                </div>
-
-                {/* Salary Raises */}
-                <div className="mt-4">
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium text-gray-700">Scheduled Salary Raises</label>
-                    <button
-                      type="button"
-                      onClick={addSalaryRaise}
-                      className="text-sm text-primary-600 hover:text-primary-500"
-                    >
-                      + Add Raise
-                    </button>
-                  </div>
-                  {salaryRaises.length > 0 && (
-                    <div className="mt-2 space-y-2">
-                      {salaryRaises.map((raise, index) => (
-                        <div key={index} className="flex items-center gap-2">
-                          <input
-                            type="date"
-                            value={raise.date}
-                            onChange={(e) => updateSalaryRaise(index, 'date', e.target.value)}
-                            className="rounded-md border border-gray-300 px-2 py-1 text-sm"
-                          />
-                          <div className="w-36">
-                            <CurrencyInput
-                              value={raise.amount}
-                              onChange={(v) => updateSalaryRaise(index, 'amount', v ?? 0)}
-                              placeholder="Amount"
-                              className="text-sm"
-                            />
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => removeSalaryRaise(index)}
-                            className="text-red-500 hover:text-red-600"
-                          >
-                            &times;
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Variable Income Section */}
-              <div className="rounded-lg border border-gray-200 p-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-medium text-gray-900">Variable Income (Bonuses/Commissions)</h3>
-                  {!showVariableIncome ? (
-                    <button
-                      type="button"
-                      onClick={initializeVariableIncome}
-                      className="text-sm text-primary-600 hover:text-primary-500"
-                    >
-                      + Enable
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setShowVariableIncome(false)}
-                      className="text-sm text-red-600 hover:text-red-500"
-                    >
-                      Disable
-                    </button>
-                  )}
-                </div>
-
-                {showVariableIncome && (
-                  <div className="mt-4 space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm text-gray-600">Base Amount (monthly)</label>
-                        <div className="mt-1">
-                          <CurrencyInput
-                            value={formData.income_config.variable?.base ?? 0}
-                            onChange={(v) => updateVariableIncome('base', v ?? 0)}
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-sm text-gray-600">Volatility (sigma)</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={formData.income_config.variable?.sigma ?? 0.2}
-                          onChange={(e) => updateVariableIncome('sigma', Number(e.target.value))}
-                          className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                        />
-                        <p className="mt-1 text-xs text-gray-500">e.g., 0.2 = 20% monthly variation</p>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-sm text-gray-600">Annual Growth (optional)</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={formData.income_config.variable?.annual_growth ?? ''}
-                          onChange={(e) => updateVariableIncome('annual_growth', e.target.value ? Number(e.target.value) : undefined)}
-                          placeholder="0.03"
-                          className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm text-gray-600">Floor (min)</label>
-                        <div className="mt-1">
-                          <CurrencyInput
-                            value={formData.income_config.variable?.floor ?? null}
-                            onChange={(v) => updateVariableIncome('floor', v ?? undefined)}
-                            placeholder="Optional"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-sm text-gray-600">Cap (max)</label>
-                        <div className="mt-1">
-                          <CurrencyInput
-                            value={formData.income_config.variable?.cap ?? null}
-                            onChange={(v) => updateVariableIncome('cap', v ?? undefined)}
-                            placeholder="Optional"
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Seasonality */}
-                    <div>
-                      <div className="flex items-center justify-between">
-                        <label className="text-sm font-medium text-gray-700">Seasonality (12-month factors)</label>
-                        {!showSeasonality ? (
-                          <button
-                            type="button"
-                            onClick={initializeSeasonality}
-                            className="text-sm text-primary-600 hover:text-primary-500"
-                          >
-                            + Enable
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => setShowSeasonality(false)}
-                            className="text-sm text-red-600 hover:text-red-500"
-                          >
-                            Disable
-                          </button>
-                        )}
-                      </div>
-                      {showSeasonality && (
-                        <div className="mt-2 grid grid-cols-6 gap-2">
-                          {monthNames.map((month, index) => (
-                            <div key={month}>
-                              <label className="block text-xs text-gray-500">{month}</label>
-                              <input
-                                type="number"
-                                step="0.1"
-                                value={formData.income_config.variable?.seasonality?.[index] ?? defaultSeasonality[index]}
-                                onChange={(e) => updateSeasonalityMonth(index, Number(e.target.value))}
-                                className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      <p className="mt-1 text-xs text-gray-500">Multiplier per month. e.g., 1.0 = normal, 0.5 = half, 2.0 = double</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Contribution Rates */}
-              <div className="rounded-lg border border-gray-200 p-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-medium text-gray-900">Contribution Rates</h3>
-                  <button
-                    type="button"
-                    onClick={toggleAdvancedContributions}
-                    className="text-sm text-primary-600 hover:text-primary-500"
-                  >
-                    {showAdvancedContributions ? 'Use Simple (single value)' : 'Use Monthly (12 values)'}
-                  </button>
-                </div>
-                <p className="mt-1 text-xs text-gray-500">Fraction of income contributed to investments each month</p>
-
-                {!showAdvancedContributions ? (
-                  <div className="mt-3 grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm text-gray-600">Fixed Income Rate</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        max="1"
-                        value={getContributionRateValue('fixed')}
-                        onChange={(e) => updateContributionRate('fixed', Number(e.target.value))}
-                        className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                      />
-                      <p className="mt-1 text-xs text-gray-500">e.g., 0.3 = save 30% of salary</p>
-                    </div>
-                    <div>
-                      <label className="block text-sm text-gray-600">Variable Income Rate</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        max="1"
-                        value={getContributionRateValue('variable')}
-                        onChange={(e) => updateContributionRate('variable', Number(e.target.value))}
-                        className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                      />
-                      <p className="mt-1 text-xs text-gray-500">e.g., 1.0 = save 100% of bonuses</p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="mt-3 space-y-4">
-                    <div>
-                      <label className="block text-sm text-gray-600">Fixed Income Rate (by month)</label>
-                      <div className="mt-2 grid grid-cols-6 gap-2">
-                        {monthNames.map((month, index) => (
-                          <div key={`fixed-${month}`}>
-                            <label className="block text-xs text-gray-500">{month}</label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              max="1"
-                              value={getContributionRateArray('fixed')[index]}
-                              onChange={(e) => {
-                                const arr = [...getContributionRateArray('fixed')]
-                                arr[index] = Number(e.target.value)
-                                updateContributionRate('fixed', arr)
-                              }}
-                              className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm text-gray-600">Variable Income Rate (by month)</label>
-                      <div className="mt-2 grid grid-cols-6 gap-2">
-                        {monthNames.map((month, index) => (
-                          <div key={`var-${month}`}>
-                            <label className="block text-xs text-gray-500">{month}</label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              max="1"
-                              value={getContributionRateArray('variable')[index]}
-                              onChange={(e) => {
-                                const arr = [...getContributionRateArray('variable')]
-                                arr[index] = Number(e.target.value)
-                                updateContributionRate('variable', arr)
-                              }}
-                              className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Investment Accounts */}
-              <div className="rounded-lg border border-gray-200 p-4">
-                <div className="mb-3 flex items-center justify-between">
-                  <h3 className="font-medium text-gray-900">Investment Accounts</h3>
-                  <button
-                    type="button"
-                    onClick={addAccount}
-                    className="text-sm text-primary-600 hover:text-primary-500"
-                  >
-                    + Add Account
-                  </button>
-                </div>
-                <div className="space-y-4">
-                  {formData.accounts_config.map((account, index) => (
-                    <div key={index} className="rounded-md border border-gray-200 p-4">
-                      <div className="mb-3 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            value={account.name}
-                            onChange={(e) => updateAccount(index, 'name', e.target.value)}
-                            placeholder="ID (no spaces)"
-                            className="w-32 rounded-md border-gray-300 text-sm font-medium focus:border-primary-500 focus:ring-primary-500"
-                          />
-                          <input
-                            type="text"
-                            value={account.display_name ?? ''}
-                            onChange={(e) => updateAccount(index, 'display_name', e.target.value)}
-                            placeholder="Display Name"
-                            className="w-48 rounded-md border-gray-300 text-sm focus:border-primary-500 focus:ring-primary-500"
-                          />
-                        </div>
-                        {formData.accounts_config.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => removeAccount(index)}
-                            className="text-sm text-red-600 hover:text-red-500"
-                          >
-                            Remove
-                          </button>
-                        )}
-                      </div>
-                      <div className="grid grid-cols-3 gap-4">
-                        <div>
-                          <label className="block text-xs text-gray-500">Annual Return</label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={account.annual_return}
-                            onChange={(e) => updateAccount(index, 'annual_return', Number(e.target.value))}
-                            className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                          />
-                          <p className="mt-1 text-xs text-gray-400">e.g., 0.08 = 8%</p>
-                        </div>
-                        <div>
-                          <label className="block text-xs text-gray-500">Annual Volatility</label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={account.annual_volatility}
-                            onChange={(e) => updateAccount(index, 'annual_volatility', Number(e.target.value))}
-                            className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                          />
-                          <p className="mt-1 text-xs text-gray-400">e.g., 0.12 = 12%</p>
-                        </div>
-                        <div>
-                          <label className="block text-xs text-gray-500">Initial Wealth</label>
-                          <div className="mt-1">
-                            <CurrencyInput
-                              value={account.initial_wealth}
-                              onChange={(v) => updateAccount(index, 'initial_wealth', v ?? 0)}
-                              className="text-sm"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Correlation Matrix */}
-              {formData.accounts_config.length >= 2 && (
-                <div className="rounded-lg border border-gray-200 p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-medium text-gray-900">Account Correlations</h3>
-                      <p className="text-xs text-gray-500">Define return correlations between accounts (optional)</p>
-                    </div>
-                    {!showCorrelationMatrix ? (
-                      <button
-                        type="button"
-                        onClick={initializeCorrelationMatrix}
-                        className="text-sm text-primary-600 hover:text-primary-500"
-                      >
-                        + Enable
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowCorrelationMatrix(false)
-                          setCorrelationMatrix(null)
-                        }}
-                        className="text-sm text-red-600 hover:text-red-500"
-                      >
-                        Disable
-                      </button>
-                    )}
-                  </div>
-
-                  {showCorrelationMatrix && correlationMatrix && (
-                    <div className="mt-4 space-y-3">
-                      {getCorrelationPairs().length === 0 ? (
-                        <p className="text-sm text-gray-500">Add at least 2 accounts to configure correlations.</p>
-                      ) : (
-                        getCorrelationPairs().map(({ i, j, name1, name2, value }) => (
-                          <div key={`${i}-${j}`} className="flex items-center gap-4">
-                            <span className="w-48 text-sm text-gray-700">
-                              {name1} ↔ {name2}
-                            </span>
-                            <input
-                              type="range"
-                              min="-1"
-                              max="1"
-                              step="0.05"
-                              value={value}
-                              onChange={(e) => updateCorrelation(i, j, Number(e.target.value))}
-                              className="h-2 w-32 cursor-pointer appearance-none rounded-lg bg-gray-200"
-                            />
-                            <input
-                              type="number"
-                              min="-1"
-                              max="1"
-                              step="0.05"
-                              value={value}
-                              onChange={(e) => updateCorrelation(i, j, Number(e.target.value))}
-                              className="w-20 rounded-md border border-gray-300 px-2 py-1 text-sm"
-                            />
-                            <span className="text-xs text-gray-400">
-                              {value > 0.5 ? '(high +)' : value < -0.5 ? '(high -)' : value === 0 ? '(independent)' : ''}
-                            </span>
-                          </div>
-                        ))
-                      )}
-                      <p className="text-xs text-gray-500">
-                        -1 = perfectly inverse, 0 = independent, +1 = perfectly correlated
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Form Actions */}
-              <div className="flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={resetForm}
-                  className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={createMutation.isPending || updateMutation.isPending}
-                  className="rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
-                >
-                  {editingProfile ? 'Update' : 'Create'}
-                </button>
-              </div>
-            </form>
+          <div className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-6">
+            <div className="mb-2 flex justify-end">
+              <Button variant="ghost" size="sm" onClick={resetForm}>
+                Close
+              </Button>
+            </div>
+            <SituationForm
+              initialProfile={editingProfile ?? undefined}
+              onSave={handleSave}
+              onCancel={resetForm}
+            />
           </div>
         </div>
       )}
 
-      {/* Profiles List */}
+      {/* Situations list */}
       <div className="rounded-lg bg-white shadow">
         {isLoading ? (
           <div className="p-6 text-center text-gray-500">Loading...</div>
         ) : profiles?.length === 0 ? (
           <div className="p-6 text-center text-gray-500">
-            No profiles yet. Create one to get started.
+            No situations yet. Create one to get started.
           </div>
         ) : (
           <div className="divide-y divide-gray-200">
@@ -990,7 +181,7 @@ export default function ProfilesPage() {
                   <div className="mt-1 flex flex-wrap gap-2 text-xs text-gray-400">
                     <span>{profile.accounts_config.length} accounts</span>
                     <span>|</span>
-                    <span>Fixed: ${profile.income_config.fixed?.base?.toLocaleString() ?? 0}/mo</span>
+                    <span>Salary: ${profile.income_config.fixed?.base?.toLocaleString() ?? 0}/mo</span>
                     {profile.income_config.variable && (
                       <>
                         <span>|</span>
@@ -1008,7 +199,7 @@ export default function ProfilesPage() {
                   </button>
                   <button
                     onClick={() => {
-                      if (confirm('Delete this profile?')) {
+                      if (confirm('Delete this situation?')) {
                         deleteMutation.mutate(profile.id)
                       }
                     }}
