@@ -1,8 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
 import { useToast } from '../components/Toast'
+import { validateProfile, type ValidationError } from '../lib/validation'
+import { ValidationSummary, CurrencyInput } from '../components/FormField'
 import type {
   Profile,
   ProfileInsert,
@@ -49,6 +51,8 @@ export default function ProfilesPage() {
 
   // Correlation matrix (NxN where N = number of accounts)
   const [correlationMatrix, setCorrelationMatrix] = useState<number[][] | null>(null)
+
+  const [validationErrors, setValidationErrors] = useState<ValidationError[]>([])
 
   const [formData, setFormData] = useState({
     name: '',
@@ -134,6 +138,7 @@ export default function ProfilesPage() {
     setShowCorrelationMatrix(false)
     setSalaryRaises([])
     setCorrelationMatrix(null)
+    setValidationErrors([])
     setFormData({
       name: '',
       description: '',
@@ -141,6 +146,17 @@ export default function ProfilesPage() {
       accounts_config: defaultAccounts,
     })
   }
+
+  // Close the form modal with the Escape key.
+  useEffect(() => {
+    if (!showForm) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') resetForm()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showForm])
 
   const handleEdit = (profile: Profile) => {
     setEditingProfile(profile)
@@ -179,6 +195,14 @@ export default function ProfilesPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+
+    // Validate before submitting
+    const validation = validateProfile(formData)
+    if (!validation.valid) {
+      setValidationErrors(validation.errors)
+      return
+    }
+    setValidationErrors([])
 
     // Build income_config with salary raises
     const incomeConfig = { ...formData.income_config }
@@ -443,12 +467,22 @@ export default function ProfilesPage() {
 
       {/* Form Modal */}
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
-          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-lg bg-white p-6 shadow-xl">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4"
+          onClick={resetForm}
+        >
+          <div
+            className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-lg bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h2 className="mb-4 text-lg font-medium text-gray-900">
               {editingProfile ? 'Edit Profile' : 'Create Profile'}
             </h2>
             <form onSubmit={handleSubmit} className="space-y-6">
+              {validationErrors.length > 0 && (
+                <ValidationSummary errors={validationErrors} />
+              )}
+
               {/* Basic Info */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -477,13 +511,13 @@ export default function ProfilesPage() {
                 <h3 className="mb-3 font-medium text-gray-900">Fixed Income (Salary)</h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm text-gray-600">Base Monthly Income</label>
-                    <input
-                      type="number"
-                      value={formData.income_config.fixed?.base ?? 0}
-                      onChange={(e) => updateFixedIncome('base', Number(e.target.value))}
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                    />
+                    <label className="block text-sm text-gray-600">Sueldo mensual base</label>
+                    <div className="mt-1">
+                      <CurrencyInput
+                        value={formData.income_config.fixed?.base ?? 0}
+                        onChange={(v) => updateFixedIncome('base', v ?? 0)}
+                      />
+                    </div>
                   </div>
                   <div>
                     <label className="block text-sm text-gray-600">Annual Growth Rate</label>
@@ -520,13 +554,14 @@ export default function ProfilesPage() {
                             onChange={(e) => updateSalaryRaise(index, 'date', e.target.value)}
                             className="rounded-md border border-gray-300 px-2 py-1 text-sm"
                           />
-                          <input
-                            type="number"
-                            value={raise.amount}
-                            onChange={(e) => updateSalaryRaise(index, 'amount', Number(e.target.value))}
-                            placeholder="Amount"
-                            className="w-32 rounded-md border border-gray-300 px-2 py-1 text-sm"
-                          />
+                          <div className="w-36">
+                            <CurrencyInput
+                              value={raise.amount}
+                              onChange={(v) => updateSalaryRaise(index, 'amount', v ?? 0)}
+                              placeholder="Monto"
+                              className="text-sm"
+                            />
+                          </div>
                           <button
                             type="button"
                             onClick={() => removeSalaryRaise(index)}
@@ -568,13 +603,13 @@ export default function ProfilesPage() {
                   <div className="mt-4 space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm text-gray-600">Base Amount (monthly)</label>
-                        <input
-                          type="number"
-                          value={formData.income_config.variable?.base ?? 0}
-                          onChange={(e) => updateVariableIncome('base', Number(e.target.value))}
-                          className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                        />
+                        <label className="block text-sm text-gray-600">Monto base (mensual)</label>
+                        <div className="mt-1">
+                          <CurrencyInput
+                            value={formData.income_config.variable?.base ?? 0}
+                            onChange={(v) => updateVariableIncome('base', v ?? 0)}
+                          />
+                        </div>
                       </div>
                       <div>
                         <label className="block text-sm text-gray-600">Volatility (sigma)</label>
@@ -602,24 +637,24 @@ export default function ProfilesPage() {
                         />
                       </div>
                       <div>
-                        <label className="block text-sm text-gray-600">Floor (min)</label>
-                        <input
-                          type="number"
-                          value={formData.income_config.variable?.floor ?? ''}
-                          onChange={(e) => updateVariableIncome('floor', e.target.value ? Number(e.target.value) : undefined)}
-                          placeholder="Optional"
-                          className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                        />
+                        <label className="block text-sm text-gray-600">Piso (mínimo)</label>
+                        <div className="mt-1">
+                          <CurrencyInput
+                            value={formData.income_config.variable?.floor ?? null}
+                            onChange={(v) => updateVariableIncome('floor', v ?? undefined)}
+                            placeholder="Opcional"
+                          />
+                        </div>
                       </div>
                       <div>
-                        <label className="block text-sm text-gray-600">Cap (max)</label>
-                        <input
-                          type="number"
-                          value={formData.income_config.variable?.cap ?? ''}
-                          onChange={(e) => updateVariableIncome('cap', e.target.value ? Number(e.target.value) : undefined)}
-                          placeholder="Optional"
-                          className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                        />
+                        <label className="block text-sm text-gray-600">Techo (máximo)</label>
+                        <div className="mt-1">
+                          <CurrencyInput
+                            value={formData.income_config.variable?.cap ?? null}
+                            onChange={(v) => updateVariableIncome('cap', v ?? undefined)}
+                            placeholder="Opcional"
+                          />
+                        </div>
                       </div>
                     </div>
 
@@ -828,13 +863,14 @@ export default function ProfilesPage() {
                           <p className="mt-1 text-xs text-gray-400">e.g., 0.12 = 12%</p>
                         </div>
                         <div>
-                          <label className="block text-xs text-gray-500">Initial Wealth</label>
-                          <input
-                            type="number"
-                            value={account.initial_wealth}
-                            onChange={(e) => updateAccount(index, 'initial_wealth', Number(e.target.value))}
-                            className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                          />
+                          <label className="block text-xs text-gray-500">Capital inicial</label>
+                          <div className="mt-1">
+                            <CurrencyInput
+                              value={account.initial_wealth}
+                              onChange={(v) => updateAccount(index, 'initial_wealth', v ?? 0)}
+                              className="text-sm"
+                            />
+                          </div>
                         </div>
                       </div>
                     </div>

@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
 import { queueOptimization } from '../lib/api'
 import { validateScenario, getFieldError, type ValidationError } from '../lib/validation'
-import { ValidationSummary } from '../components/FormField'
+import { ValidationSummary, CurrencyInput } from '../components/FormField'
 import { useToast } from '../components/Toast'
 import type {
   Profile,
@@ -39,6 +39,14 @@ const emptyWithdrawals: WithdrawalsConfig = {
   stochastic: [],
 }
 
+// Plain-language labels for the optimization objective (no solver jargon).
+const OBJECTIVE_LABELS: Record<string, string> = {
+  risky: 'Crecimiento máximo',
+  balanced: 'Equilibrado',
+  conservative: 'Conservador',
+  risky_turnover: 'Crecimiento (estable)',
+}
+
 const getDefaultFormData = (): FormData => ({
   profile_id: '',
   name: '',
@@ -46,7 +54,7 @@ const getDefaultFormData = (): FormData => ({
   start_date: new Date().toISOString().split('T')[0],
   n_sims: 500,
   seed: 42,
-  t_max: 120,
+  t_max: 360,
   solver: 'ECOS',
   objective: 'balanced',
   terminal_goals: [],
@@ -65,6 +73,7 @@ export default function ScenariosPage() {
   // Section toggles
   const [showWithdrawals, setShowWithdrawals] = useState(false)
   const [showIntermediateGoals, setShowIntermediateGoals] = useState(false)
+  const [showAdvanced, setShowAdvanced] = useState(false)
 
   const [formData, setFormData] = useState<FormData>(getDefaultFormData())
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([])
@@ -178,9 +187,21 @@ export default function ScenariosPage() {
     setEditingScenario(null)
     setShowWithdrawals(false)
     setShowIntermediateGoals(false)
+    setShowAdvanced(false)
     setFormData(getDefaultFormData())
     setValidationErrors([])
   }
+
+  // Close the form modal with the Escape key.
+  useEffect(() => {
+    if (!showForm) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') resetForm()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showForm])
 
   const handleEdit = (scenario: Scenario) => {
     setEditingScenario(scenario)
@@ -400,8 +421,14 @@ export default function ScenariosPage() {
 
       {/* Form Modal */}
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
-          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-lg bg-white p-6 shadow-xl">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4"
+          onClick={resetForm}
+        >
+          <div
+            className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-lg bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h2 className="mb-4 text-lg font-medium text-gray-900">
               {editingScenario ? 'Edit Scenario' : 'Create Scenario'}
             </h2>
@@ -468,12 +495,16 @@ export default function ScenariosPage() {
                 />
               </div>
 
-              {/* Simulation Parameters */}
+              {/* Strategy */}
               <div className="rounded-lg border border-gray-200 p-4">
-                <h3 className="mb-3 font-medium text-gray-900">Simulation Parameters</h3>
-                <div className="grid grid-cols-4 gap-4">
+                <h3 className="mb-1 font-medium text-gray-900">Estrategia</h3>
+                <p className="mb-3 text-xs text-gray-500">
+                  Definimos cuándo empiezas y tu estilo de inversión. El horizonte mínimo para
+                  cumplir tus metas se calcula automáticamente.
+                </p>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="block text-sm text-gray-600">Start Date</label>
+                    <label className="block text-sm text-gray-600">Fecha de inicio</label>
                     <input
                       type="date"
                       value={formData.start_date}
@@ -482,71 +513,92 @@ export default function ScenariosPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm text-gray-600">Simulations</label>
-                    <input
-                      type="number"
-                      value={formData.n_sims}
-                      onChange={(e) => setFormData({ ...formData, n_sims: Number(e.target.value) })}
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-600">Seed (optional)</label>
-                    <input
-                      type="number"
-                      value={formData.seed ?? ''}
-                      onChange={(e) => setFormData({ ...formData, seed: e.target.value ? Number(e.target.value) : null })}
-                      placeholder="Random"
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-600">T Max (months)</label>
-                    <input
-                      type="number"
-                      value={formData.t_max}
-                      onChange={(e) => setFormData({ ...formData, t_max: Number(e.target.value) })}
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                    />
-                  </div>
-                </div>
-                <div className="mt-4 grid grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm text-gray-600">T Min (optional)</label>
-                    <input
-                      type="number"
-                      value={formData.t_min ?? ''}
-                      onChange={(e) => setFormData({ ...formData, t_min: e.target.value ? Number(e.target.value) : undefined })}
-                      placeholder="Auto"
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                    />
-                    <p className="mt-1 text-xs text-gray-500">Minimum horizon to search</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-600">Solver</label>
-                    <select
-                      value={formData.solver}
-                      onChange={(e) => setFormData({ ...formData, solver: e.target.value })}
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                    >
-                      <option value="ECOS">ECOS</option>
-                      <option value="SCS">SCS</option>
-                      <option value="CLARABEL">CLARABEL</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-600">Objective</label>
+                    <label className="block text-sm text-gray-600">Estilo de inversión</label>
                     <select
                       value={formData.objective}
                       onChange={(e) => setFormData({ ...formData, objective: e.target.value })}
                       className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                     >
-                      <option value="balanced">Balanced (min turnover)</option>
-                      <option value="risky">Risky (max wealth)</option>
-                      <option value="conservative">Conservative (mean-variance)</option>
-                      <option value="risky_turnover">Risky + Turnover penalty</option>
+                      <option value="risky">Crecimiento máximo</option>
+                      <option value="balanced">Equilibrado (recomendado)</option>
+                      <option value="conservative">Conservador</option>
                     </select>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Cómo equilibramos rentabilidad y estabilidad de tu plan.
+                    </p>
                   </div>
+                </div>
+
+                {/* Advanced settings (optional) — hidden by default */}
+                <div className="mt-4 border-t border-gray-100 pt-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowAdvanced(!showAdvanced)}
+                    className="text-sm text-gray-500 hover:text-gray-700"
+                  >
+                    {showAdvanced ? '▾ Ocultar ajustes avanzados' : '▸ Ajustes avanzados (opcional)'}
+                  </button>
+                  {showAdvanced && (
+                    <div className="mt-3 space-y-4">
+                      <p className="text-xs text-gray-400">
+                        Estos valores se ajustan solos. Cámbialos solo si sabes lo que haces.
+                      </p>
+                      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                        <div>
+                          <label className="block text-sm text-gray-600">Simulaciones</label>
+                          <input
+                            type="number"
+                            value={formData.n_sims}
+                            onChange={(e) => setFormData({ ...formData, n_sims: Number(e.target.value) })}
+                            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm text-gray-600">Semilla (opcional)</label>
+                          <input
+                            type="number"
+                            value={formData.seed ?? ''}
+                            onChange={(e) => setFormData({ ...formData, seed: e.target.value ? Number(e.target.value) : null })}
+                            placeholder="Aleatoria"
+                            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm text-gray-600">Solver</label>
+                          <select
+                            value={formData.solver}
+                            onChange={(e) => setFormData({ ...formData, solver: e.target.value })}
+                            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                          >
+                            <option value="ECOS">ECOS</option>
+                            <option value="SCS">SCS</option>
+                            <option value="CLARABEL">CLARABEL</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm text-gray-600">Horizonte máx (meses)</label>
+                          <input
+                            type="number"
+                            value={formData.t_max}
+                            onChange={(e) => setFormData({ ...formData, t_max: Number(e.target.value) })}
+                            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                          />
+                          <p className="mt-1 text-xs text-gray-500">Tope de la búsqueda.</p>
+                        </div>
+                        <div>
+                          <label className="block text-sm text-gray-600">Horizonte mín (meses)</label>
+                          <input
+                            type="number"
+                            value={formData.t_min ?? ''}
+                            onChange={(e) => setFormData({ ...formData, t_min: e.target.value ? Number(e.target.value) : undefined })}
+                            placeholder="Auto"
+                            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                          />
+                          <p className="mt-1 text-xs text-gray-500">Lo calcula la heurística.</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -584,13 +636,14 @@ export default function ScenariosPage() {
                           </select>
                         </div>
                         <div className="flex-1">
-                          <label className="block text-xs text-gray-500">Target Amount</label>
-                          <input
-                            type="number"
-                            value={goal.threshold}
-                            onChange={(e) => updateTerminalGoal(index, 'threshold', Number(e.target.value))}
-                            className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                          />
+                          <label className="block text-xs text-gray-500">Monto objetivo</label>
+                          <div className="mt-1">
+                            <CurrencyInput
+                              value={goal.threshold}
+                              onChange={(v) => updateTerminalGoal(index, 'threshold', v ?? 0)}
+                              className="text-sm"
+                            />
+                          </div>
                         </div>
                         <div className="w-24">
                           <label className="block text-xs text-gray-500">Confidence</label>
@@ -685,13 +738,14 @@ export default function ScenariosPage() {
                               />
                             </div>
                             <div className="flex-1">
-                              <label className="block text-xs text-gray-500">Target Amount</label>
-                              <input
-                                type="number"
-                                value={goal.threshold}
-                                onChange={(e) => updateIntermediateGoal(index, 'threshold', Number(e.target.value))}
-                                className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                              />
+                              <label className="block text-xs text-gray-500">Monto objetivo</label>
+                              <div className="mt-1">
+                                <CurrencyInput
+                                  value={goal.threshold}
+                                  onChange={(v) => updateIntermediateGoal(index, 'threshold', v ?? 0)}
+                                  className="text-sm"
+                                />
+                              </div>
                             </div>
                             <div className="w-24">
                               <label className="block text-xs text-gray-500">Confidence</label>
@@ -791,13 +845,14 @@ export default function ScenariosPage() {
                                 />
                               </div>
                               <div className="flex-1">
-                                <label className="block text-xs text-gray-500">Amount</label>
-                                <input
-                                  type="number"
-                                  value={w.amount}
-                                  onChange={(e) => updateScheduledWithdrawal(index, 'amount', Number(e.target.value))}
-                                  className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-xs focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                                />
+                                <label className="block text-xs text-gray-500">Monto</label>
+                                <div className="mt-1">
+                                  <CurrencyInput
+                                    value={w.amount}
+                                    onChange={(v) => updateScheduledWithdrawal(index, 'amount', v ?? 0)}
+                                    className="text-xs"
+                                  />
+                                </div>
                               </div>
                               <div className="flex-1">
                                 <label className="block text-xs text-gray-500">Description</label>
@@ -865,14 +920,15 @@ export default function ScenariosPage() {
                                   className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-xs focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                                 />
                               </div>
-                              <div className="w-24">
-                                <label className="block text-xs text-gray-500">Base Amount</label>
-                                <input
-                                  type="number"
-                                  value={w.base_amount}
-                                  onChange={(e) => updateStochasticWithdrawal(index, 'base_amount', Number(e.target.value))}
-                                  className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-xs focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                                />
+                              <div className="w-28">
+                                <label className="block text-xs text-gray-500">Monto base</label>
+                                <div className="mt-1">
+                                  <CurrencyInput
+                                    value={w.base_amount}
+                                    onChange={(v) => updateStochasticWithdrawal(index, 'base_amount', v ?? 0)}
+                                    className="text-xs"
+                                  />
+                                </div>
                               </div>
                               <div className="w-16">
                                 <label className="block text-xs text-gray-500">Sigma</label>
@@ -884,25 +940,27 @@ export default function ScenariosPage() {
                                   className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-xs focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                                 />
                               </div>
-                              <div className="w-20">
-                                <label className="block text-xs text-gray-500">Floor</label>
-                                <input
-                                  type="number"
-                                  value={w.floor ?? ''}
-                                  onChange={(e) => updateStochasticWithdrawal(index, 'floor', e.target.value ? Number(e.target.value) : undefined)}
-                                  placeholder="None"
-                                  className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-xs focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                                />
+                              <div className="w-24">
+                                <label className="block text-xs text-gray-500">Mínimo</label>
+                                <div className="mt-1">
+                                  <CurrencyInput
+                                    value={w.floor ?? null}
+                                    onChange={(v) => updateStochasticWithdrawal(index, 'floor', v ?? undefined)}
+                                    placeholder="—"
+                                    className="text-xs"
+                                  />
+                                </div>
                               </div>
-                              <div className="w-20">
-                                <label className="block text-xs text-gray-500">Cap</label>
-                                <input
-                                  type="number"
-                                  value={w.cap ?? ''}
-                                  onChange={(e) => updateStochasticWithdrawal(index, 'cap', e.target.value ? Number(e.target.value) : undefined)}
-                                  placeholder="None"
-                                  className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-xs focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                                />
+                              <div className="w-24">
+                                <label className="block text-xs text-gray-500">Máximo</label>
+                                <div className="mt-1">
+                                  <CurrencyInput
+                                    value={w.cap ?? null}
+                                    onChange={(v) => updateStochasticWithdrawal(index, 'cap', v ?? undefined)}
+                                    placeholder="—"
+                                    className="text-xs"
+                                  />
+                                </div>
                               </div>
                               <div className="flex-1">
                                 <label className="block text-xs text-gray-500">Description</label>
@@ -979,9 +1037,7 @@ export default function ScenariosPage() {
                         | {(scenario.withdrawals.scheduled?.length ?? 0) + (scenario.withdrawals.stochastic?.length ?? 0)} withdrawals
                       </span>
                     )}
-                    <span>| {scenario.n_sims} sims</span>
-                    <span>| T_max={scenario.t_max}</span>
-                    <span>| {scenario.objective}</span>
+                    <span>| {OBJECTIVE_LABELS[scenario.objective] ?? scenario.objective}</span>
                   </div>
                 </div>
                 <div className="flex gap-2">
