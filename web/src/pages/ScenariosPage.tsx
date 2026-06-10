@@ -41,10 +41,10 @@ const emptyWithdrawals: WithdrawalsConfig = {
 
 // Plain-language labels for the optimization objective (no solver jargon).
 const OBJECTIVE_LABELS: Record<string, string> = {
-  risky: 'Crecimiento máximo',
-  balanced: 'Equilibrado',
-  conservative: 'Conservador',
-  risky_turnover: 'Crecimiento (estable)',
+  risky: 'Maximum growth',
+  balanced: 'Balanced',
+  conservative: 'Conservative',
+  risky_turnover: 'Growth (stable)',
 }
 
 const getDefaultFormData = (): FormData => ({
@@ -497,14 +497,14 @@ export default function ScenariosPage() {
 
               {/* Strategy */}
               <div className="rounded-lg border border-gray-200 p-4">
-                <h3 className="mb-1 font-medium text-gray-900">Estrategia</h3>
+                <h3 className="mb-1 font-medium text-gray-900">Strategy</h3>
                 <p className="mb-3 text-xs text-gray-500">
-                  Definimos cuándo empiezas y tu estilo de inversión. El horizonte mínimo para
-                  cumplir tus metas se calcula automáticamente.
+                  Set when you start and your investment style. The minimum horizon to reach
+                  your goals is computed automatically.
                 </p>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="block text-sm text-gray-600">Fecha de inicio</label>
+                    <label className="block text-sm text-gray-600">Start Date</label>
                     <input
                       type="date"
                       value={formData.start_date}
@@ -513,18 +513,18 @@ export default function ScenariosPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm text-gray-600">Estilo de inversión</label>
+                    <label className="block text-sm text-gray-600">Investment style</label>
                     <select
                       value={formData.objective}
                       onChange={(e) => setFormData({ ...formData, objective: e.target.value })}
                       className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                     >
-                      <option value="risky">Crecimiento máximo</option>
-                      <option value="balanced">Equilibrado (recomendado)</option>
-                      <option value="conservative">Conservador</option>
+                      <option value="risky">Maximum growth</option>
+                      <option value="balanced">Balanced (recommended)</option>
+                      <option value="conservative">Conservative</option>
                     </select>
                     <p className="mt-1 text-xs text-gray-500">
-                      Cómo equilibramos rentabilidad y estabilidad de tu plan.
+                      How we balance return and stability in your plan.
                     </p>
                   </div>
                 </div>
@@ -536,16 +536,16 @@ export default function ScenariosPage() {
                     onClick={() => setShowAdvanced(!showAdvanced)}
                     className="text-sm text-gray-500 hover:text-gray-700"
                   >
-                    {showAdvanced ? '▾ Ocultar ajustes avanzados' : '▸ Ajustes avanzados (opcional)'}
+                    {showAdvanced ? '▾ Hide advanced settings' : '▸ Advanced settings (optional)'}
                   </button>
                   {showAdvanced && (
                     <div className="mt-3 space-y-4">
                       <p className="text-xs text-gray-400">
-                        Estos valores se ajustan solos. Cámbialos solo si sabes lo que haces.
+                        These values are auto-tuned. Only change them if you know what you're doing.
                       </p>
                       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
                         <div>
-                          <label className="block text-sm text-gray-600">Simulaciones</label>
+                          <label className="block text-sm text-gray-600">Simulations</label>
                           <input
                             type="number"
                             value={formData.n_sims}
@@ -554,12 +554,12 @@ export default function ScenariosPage() {
                           />
                         </div>
                         <div>
-                          <label className="block text-sm text-gray-600">Semilla (opcional)</label>
+                          <label className="block text-sm text-gray-600">Seed (optional)</label>
                           <input
                             type="number"
                             value={formData.seed ?? ''}
                             onChange={(e) => setFormData({ ...formData, seed: e.target.value ? Number(e.target.value) : null })}
-                            placeholder="Aleatoria"
+                            placeholder="Random"
                             className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                           />
                         </div>
@@ -576,17 +576,17 @@ export default function ScenariosPage() {
                           </select>
                         </div>
                         <div>
-                          <label className="block text-sm text-gray-600">Horizonte máx (meses)</label>
+                          <label className="block text-sm text-gray-600">Max horizon (months)</label>
                           <input
                             type="number"
                             value={formData.t_max}
                             onChange={(e) => setFormData({ ...formData, t_max: Number(e.target.value) })}
                             className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                           />
-                          <p className="mt-1 text-xs text-gray-500">Tope de la búsqueda.</p>
+                          <p className="mt-1 text-xs text-gray-500">Search upper bound.</p>
                         </div>
                         <div>
-                          <label className="block text-sm text-gray-600">Horizonte mín (meses)</label>
+                          <label className="block text-sm text-gray-600">Min horizon (months)</label>
                           <input
                             type="number"
                             value={formData.t_min ?? ''}
@@ -594,7 +594,7 @@ export default function ScenariosPage() {
                             placeholder="Auto"
                             className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                           />
-                          <p className="mt-1 text-xs text-gray-500">Lo calcula la heurística.</p>
+                          <p className="mt-1 text-xs text-gray-500">Computed by the heuristic.</p>
                         </div>
                       </div>
                     </div>
@@ -636,7 +636,7 @@ export default function ScenariosPage() {
                           </select>
                         </div>
                         <div className="flex-1">
-                          <label className="block text-xs text-gray-500">Monto objetivo</label>
+                          <label className="block text-xs text-gray-500">Target Amount</label>
                           <div className="mt-1">
                             <CurrencyInput
                               value={goal.threshold}
@@ -738,7 +738,7 @@ export default function ScenariosPage() {
                               />
                             </div>
                             <div className="flex-1">
-                              <label className="block text-xs text-gray-500">Monto objetivo</label>
+                              <label className="block text-xs text-gray-500">Target Amount</label>
                               <div className="mt-1">
                                 <CurrencyInput
                                   value={goal.threshold}
@@ -845,7 +845,7 @@ export default function ScenariosPage() {
                                 />
                               </div>
                               <div className="flex-1">
-                                <label className="block text-xs text-gray-500">Monto</label>
+                                <label className="block text-xs text-gray-500">Amount</label>
                                 <div className="mt-1">
                                   <CurrencyInput
                                     value={w.amount}
@@ -921,7 +921,7 @@ export default function ScenariosPage() {
                                 />
                               </div>
                               <div className="w-28">
-                                <label className="block text-xs text-gray-500">Monto base</label>
+                                <label className="block text-xs text-gray-500">Base Amount</label>
                                 <div className="mt-1">
                                   <CurrencyInput
                                     value={w.base_amount}
@@ -941,7 +941,7 @@ export default function ScenariosPage() {
                                 />
                               </div>
                               <div className="w-24">
-                                <label className="block text-xs text-gray-500">Mínimo</label>
+                                <label className="block text-xs text-gray-500">Floor</label>
                                 <div className="mt-1">
                                   <CurrencyInput
                                     value={w.floor ?? null}
@@ -952,7 +952,7 @@ export default function ScenariosPage() {
                                 </div>
                               </div>
                               <div className="w-24">
-                                <label className="block text-xs text-gray-500">Máximo</label>
+                                <label className="block text-xs text-gray-500">Cap</label>
                                 <div className="mt-1">
                                   <CurrencyInput
                                     value={w.cap ?? null}

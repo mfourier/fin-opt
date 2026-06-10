@@ -69,7 +69,7 @@ export function Select({ error, className = '', children, ...props }: SelectProp
 // Emits `null` when the field is cleared so optional amounts can be unset.
 // -----------------------------------------------------------------------------
 
-const currencyFormatter = new Intl.NumberFormat('es-CL')
+const currencyFormatter = new Intl.NumberFormat('en-US')
 
 function formatCurrency(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(value)) return ''

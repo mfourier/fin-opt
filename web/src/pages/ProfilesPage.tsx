@@ -511,7 +511,7 @@ export default function ProfilesPage() {
                 <h3 className="mb-3 font-medium text-gray-900">Fixed Income (Salary)</h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm text-gray-600">Sueldo mensual base</label>
+                    <label className="block text-sm text-gray-600">Base Monthly Income</label>
                     <div className="mt-1">
                       <CurrencyInput
                         value={formData.income_config.fixed?.base ?? 0}
@@ -558,7 +558,7 @@ export default function ProfilesPage() {
                             <CurrencyInput
                               value={raise.amount}
                               onChange={(v) => updateSalaryRaise(index, 'amount', v ?? 0)}
-                              placeholder="Monto"
+                              placeholder="Amount"
                               className="text-sm"
                             />
                           </div>
@@ -603,7 +603,7 @@ export default function ProfilesPage() {
                   <div className="mt-4 space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm text-gray-600">Monto base (mensual)</label>
+                        <label className="block text-sm text-gray-600">Base Amount (monthly)</label>
                         <div className="mt-1">
                           <CurrencyInput
                             value={formData.income_config.variable?.base ?? 0}
@@ -637,22 +637,22 @@ export default function ProfilesPage() {
                         />
                       </div>
                       <div>
-                        <label className="block text-sm text-gray-600">Piso (mínimo)</label>
+                        <label className="block text-sm text-gray-600">Floor (min)</label>
                         <div className="mt-1">
                           <CurrencyInput
                             value={formData.income_config.variable?.floor ?? null}
                             onChange={(v) => updateVariableIncome('floor', v ?? undefined)}
-                            placeholder="Opcional"
+                            placeholder="Optional"
                           />
                         </div>
                       </div>
                       <div>
-                        <label className="block text-sm text-gray-600">Techo (máximo)</label>
+                        <label className="block text-sm text-gray-600">Cap (max)</label>
                         <div className="mt-1">
                           <CurrencyInput
                             value={formData.income_config.variable?.cap ?? null}
                             onChange={(v) => updateVariableIncome('cap', v ?? undefined)}
-                            placeholder="Opcional"
+                            placeholder="Optional"
                           />
                         </div>
                       </div>
@@ -863,7 +863,7 @@ export default function ProfilesPage() {
                           <p className="mt-1 text-xs text-gray-400">e.g., 0.12 = 12%</p>
                         </div>
                         <div>
-                          <label className="block text-xs text-gray-500">Capital inicial</label>
+                          <label className="block text-xs text-gray-500">Initial Wealth</label>
                           <div className="mt-1">
                             <CurrencyInput
                               value={account.initial_wealth}
