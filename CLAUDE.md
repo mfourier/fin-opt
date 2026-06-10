@@ -533,7 +533,48 @@ These fields are mirrored in the TypeScript interface `GoalStatus` in `web/src/t
 
 ### Supabase persistence
 
-Results are stored as JSONB in the `results` table — no schema migration is needed when adding new optional fields to `goal_status` entries. The `web/` frontend reads `result.goal_status` and renders it via `GoalProgressCard`.
+Results are stored as JSONB in the `results` table — no schema migration is needed when adding new optional fields to `goal_status` entries. The `web/` frontend reads `result.goal_status` and renders it via `GoalStatusList` (inside `PlanResults`).
+
+## Web Frontend (`web/`)
+
+React single-page app that lets users define their finances and goals, runs optimization through the API, and visualizes the resulting plan. Redesigned (2026-06) around a **non-technical end user**: plain English, CLP currency, and **no exposed solver/horizon parameters**.
+
+### Stack
+
+- React 18 + Vite 5 + TypeScript, React Router v6, TanStack Query (server state), Zustand (auth), Recharts (charts).
+- Tailwind CSS v3 + **shadcn/ui** (Radix primitives) for the design system; `lucide-react` icons.
+- Supabase for auth + data (`profiles`, `scenarios`, `jobs`, `results` stored as JSONB).
+
+### Data flow
+
+- `profiles` (a user's income + accounts) ──one-to-many──▶ `scenarios` (a plan: goals + style). A scenario references `profile_id`, so **one situation backs many plans**.
+- Running a plan inserts a `jobs` row (`pending → running → completed/failed`) and POSTs to the API (`/optimize`). `useJobProgress` polls the job; the result lands in the `results` table.
+- TypeScript types mirror the JSON schema in `web/src/types/database.ts` (**canonical**). `web/src/mocks/types.ts` restates the user-facing subset for the redesigned components (plus `ScenarioDraft`, `ProfileDraft`).
+
+### Screens (user-facing IA)
+
+| Nav label | Page component | Redesigned component | Domain object |
+|-----------|----------------|----------------------|---------------|
+| My situation | `pages/ProfilesPage.tsx` | `SituationForm` | Profile |
+| Plans | `pages/ScenariosPage.tsx` | `GoalsWizard` | Scenario |
+| (results) | `pages/ResultsPage.tsx` | `PlanResults` | Result |
+
+- Redesigned UI lives as **presentational components** under `web/src/components/finopt/*` (props in, no routing/fetching); the page components wire them to Supabase + react-query. Standalone mock previews: `/plan-preview`, `/goals-preview`, `/situation-preview`.
+- `GoalsWizard` is a 3-step stepper; its "Calculate my plan" emits a `ScenarioDraft`, which the page turns into a Scenario by filling **hidden optimization defaults** (`n_sims=500, seed=42, t_max=360, solver=ECOS`) and immediately queuing optimization. The API hardcodes `search_method="bracketed"`, so `T_min`/`T_max` are never user-set.
+
+### Design system
+
+- shadcn/ui components in `web/src/components/ui/*`; `cn()` in `web/src/lib/utils.ts`; CLP/month/confidence formatting in `web/src/lib/format.ts`.
+- Design tokens are oklch CSS variables in `web/src/index.css` (`:root` + `.dark`), mapped to Tailwind color names in `tailwind.config.js` (`darkMode: 'class'`). The legacy `primary` sky scale is kept alongside the token-based `primary`.
+
+### Lovable workflow
+
+The redesigned UI is generated in **Lovable** (source repo `mfourier/lovable-finopt` — a Tailwind v4 + React 19 + TanStack Start scaffold) and harvested into this repo. When integrating new Lovable output:
+
+- Copy the `finopt/*` + required `ui/*` components; re-wire navigation with react-router (drop the TanStack route files).
+- Strip unused imports (this repo's `tsconfig` sets `noUnusedLocals`; Lovable's does not).
+- Cast values whose `database.ts` type widens a literal union to `string` (e.g. `objective`, `goal_status.type`) with `as unknown as` at the call site.
+- Generate one screen at a time as presentational components. Spec + prompts live in `web/DESIGN_BRIEF.md` and `web/LOVABLE_PROMPT*.md` (gitignored, kept locally).
 
 ## References
 
