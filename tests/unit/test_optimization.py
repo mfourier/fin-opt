@@ -726,7 +726,10 @@ class TestCVaROptimizerSolve:
         Xp = CVaROptimizer(n_accounts=M, objective="proportional").solve(**kw).X
 
         w = np.full(M, 1.0 / M)
-        anchor = lambda X: ((X - w) ** 2).sum()
+
+        def anchor(X):
+            return ((X - w) ** 2).sum()
+
         assert anchor(Xp) <= anchor(Xb) + 1e-4
 
     def test_proportional_default_is_parameter_free(self, three_accounts, start_date):
