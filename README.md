@@ -59,6 +59,9 @@ where $F_{s,t}^m = \prod_{\tau=s+1}^{t}(1 + R_\tau^m)$ are stochastic accumulati
 ![Wealth Dynamics](docs/images/wealth_dynamics.png)
 *Monte Carlo wealth trajectories under the optimal allocation policy $X^\*$*
 
+![Wealth Dynamics](docs/images/allocation_analysis.png)
+*Optimal allocation policy $X^\*$*
+
 ---
 
 ## Quick Start
