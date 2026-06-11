@@ -53,6 +53,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info(f"Starting FinOpt API v{__version__} in {settings.environment} mode")
     logger.info(f"CORS origins: {settings.cors_origins}")
 
+    # Reap jobs orphaned by a prior restart: background tasks die with the
+    # process, so any 'running'/'pending' job at startup is dead and would
+    # otherwise show a frozen progress bar forever. Never block startup on this.
+    try:
+        from api.supabase_client import reap_orphaned_jobs
+
+        reaped = reap_orphaned_jobs()
+        if reaped:
+            logger.warning(f"Reaped {reaped} orphaned job(s) left by a prior restart")
+    except Exception as exc:
+        logger.error(f"Job reaper failed on startup: {exc}")
+
     yield
 
     # Shutdown

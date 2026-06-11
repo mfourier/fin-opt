@@ -103,6 +103,52 @@ def update_job(
         client.table("jobs").update(update_data).eq("id", job_id).execute()
 
 
+def reap_orphaned_jobs(older_than_seconds: int = 0) -> int:
+    """
+    Mark stuck jobs as failed.
+
+    Background tasks run in-process, so a job in 'pending'/'running' cannot
+    survive a process restart. On startup, any such job is orphaned (e.g. the
+    instance was restarted by the platform mid-job) and would otherwise stay
+    'running' forever, leaving the UI with a frozen progress bar. This marks
+    them 'failed'.
+
+    Parameters
+    ----------
+    older_than_seconds : int, default 0
+        Only reap jobs created more than this many seconds ago. 0 reaps every
+        pending/running job — correct on startup, where a fresh process means
+        nothing is genuinely running (single-instance deployment).
+
+    Returns
+    -------
+    int
+        Number of jobs reaped.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    client = get_supabase_client()
+    now = datetime.now(timezone.utc)
+
+    query = (
+        client.table("jobs")
+        .update(
+            {
+                "status": "failed",
+                "error_message": "Orphaned: the server restarted while this job was running.",
+                "completed_at": now.isoformat(),
+            }
+        )
+        .in_("status", ["pending", "running"])
+    )
+    if older_than_seconds > 0:
+        cutoff = (now - timedelta(seconds=older_than_seconds)).isoformat()
+        query = query.lt("created_at", cutoff)
+
+    response = query.execute()
+    return len(response.data or [])
+
+
 def save_optimization_result(
     job_id: str,
     allocation_policy: list[list[float]],

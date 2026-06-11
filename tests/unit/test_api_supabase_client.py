@@ -246,3 +246,51 @@ def test_fetch_scenario_with_profile_not_found_raises(mocker, mock_env_vars):
 
     assert "not found" in str(exc_info.value).lower()
     assert "nonexistent-id" in str(exc_info.value)
+
+
+def test_reap_orphaned_jobs_marks_running_and_pending_failed(mocker, mock_env_vars):
+    """reap_orphaned_jobs marks pending/running jobs failed and returns the count."""
+    mock_client = MagicMock()
+    mocker.patch('api.supabase_client.get_supabase_client', return_value=mock_client)
+
+    resp = MagicMock()
+    resp.data = [{"id": "j1"}, {"id": "j2"}]
+    table = mock_client.table.return_value
+    table.update.return_value.in_.return_value.execute.return_value = resp
+
+    from api.supabase_client import reap_orphaned_jobs
+
+    n = reap_orphaned_jobs()
+
+    assert n == 2
+    mock_client.table.assert_called_with("jobs")
+
+    update_data = table.update.call_args[0][0]
+    assert update_data["status"] == "failed"
+    assert "error_message" in update_data
+
+    in_args = table.update.return_value.in_.call_args[0]
+    assert in_args[0] == "status"
+    assert set(in_args[1]) == {"pending", "running"}
+
+    # default older_than_seconds=0 -> no created_at age filter
+    table.update.return_value.in_.return_value.lt.assert_not_called()
+
+
+def test_reap_orphaned_jobs_age_filter(mocker, mock_env_vars):
+    """older_than_seconds adds a created_at cutoff to the query."""
+    mock_client = MagicMock()
+    mocker.patch('api.supabase_client.get_supabase_client', return_value=mock_client)
+
+    resp = MagicMock()
+    resp.data = []
+    table = mock_client.table.return_value
+    table.update.return_value.in_.return_value.lt.return_value.execute.return_value = resp
+
+    from api.supabase_client import reap_orphaned_jobs
+
+    n = reap_orphaned_jobs(older_than_seconds=600)
+
+    assert n == 0
+    lt_args = table.update.return_value.in_.return_value.lt.call_args[0]
+    assert lt_args[0] == "created_at"

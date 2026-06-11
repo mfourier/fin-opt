@@ -21,10 +21,14 @@ const OBJECTIVE_LABELS: Record<string, string> = {
 
 // Hidden optimization defaults — the user never sets these. The bracketed
 // horizon search infers the horizon, so T_min/T_max are just a safe cap.
+// t_max is capped at 180 (15y): the optimizer's accumulation-factor tensor is
+// O(n_sims * T^2 * M), so a larger ceiling risks OOM on small instances if a
+// plan ever needs a long horizon (e.g. ~1.5GB at T=360, n_sims=500). Plans
+// needing >15y fail gracefully (infeasible) instead of crashing the worker.
 const HIDDEN_DEFAULTS = {
   n_sims: 500,
   seed: 42,
-  t_max: 360,
+  t_max: 180,
   solver: 'ECOS',
 } as const
 
