@@ -12,9 +12,12 @@ services:
     region: oregon
 
     # Build configuration
+    # --timeout/--retries: pip's defaults (15s read timeout, 5 retries) are
+    # too tight for flaky Render->PyPI CDN paths (2026-06-11: build died on
+    # ReadTimeout fetching /simple/httpcore/ while PyPI was fully up).
     buildCommand: |
       pip install --upgrade pip
-      pip install -e ".[web]"
+      pip install --timeout 60 --retries 10 -e ".[web]"
 
     # Start command
     startCommand: uvicorn api.main:app --host 0.0.0.0 --port $PORT
