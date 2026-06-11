@@ -30,14 +30,14 @@ export function formatCLP(value: number | null | undefined): string {
   return `${sign}$${clpFormatter.format(Math.abs(Math.round(value)))}`;
 }
 
-/** Compact CLP for chart axes: $1.5M, $850K. */
+/** Compact CLP for chart axes: $1.5M, $850K, -$1.5M. */
 export function formatCLPCompact(value: number): string {
   const abs = Math.abs(value);
   const sign = value < 0 ? "-" : "";
-  if (abs >= 1_000_000_000) return `${sign}$${(value / 1_000_000_000).toFixed(1)}B`;
-  if (abs >= 1_000_000) return `${sign}$${(value / 1_000_000).toFixed(1)}M`;
-  if (abs >= 1_000) return `${sign}$${(value / 1_000).toFixed(0)}K`;
-  return `${sign}$${Math.round(value)}`;
+  if (abs >= 1_000_000_000) return `${sign}$${(abs / 1_000_000_000).toFixed(1)}B`;
+  if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(1)}M`;
+  if (abs >= 1_000) return `${sign}$${(abs / 1_000).toFixed(0)}K`;
+  return `${sign}$${Math.round(abs)}`;
 }
 
 /** months → "4y 2m" / "10m" / "3y". */

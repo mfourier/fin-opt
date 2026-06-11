@@ -116,7 +116,9 @@ export function GoalsWizard({ profiles, initialDraft, onCalculate, onCancel }: P
         g.date > draft.start_date,
     ) &&
     (draft.withdrawals?.scheduled ?? []).every((w) => w.amount > 0 && !!w.account && !!w.date) &&
-    (draft.withdrawals?.stochastic ?? []).every((w) => w.base_amount > 0 && !!w.account);
+    // The backend requires either `date` or `month` on stochastic withdrawals;
+    // the wizard always works with `date`.
+    (draft.withdrawals?.stochastic ?? []).every((w) => w.base_amount > 0 && !!w.account && !!w.date);
 
   const canNext = step === 0 ? step1Valid : step === 1 ? step2Valid : true;
 
@@ -632,7 +634,7 @@ function WithdrawalsEditor({
     onChange({
       stochastic: [
         ...value.stochastic,
-        { account: firstAccount, base_amount: 0, sigma: 0.2, description: "" },
+        { account: firstAccount, base_amount: 0, sigma: 0.2, date: startDate, description: "" },
       ],
     });
   const updateStochastic = (i: number, patch: Partial<StochasticWithdrawal>) =>
@@ -737,6 +739,15 @@ function WithdrawalsEditor({
                       ))}
                     </SelectContent>
                   </Select>
+                </Field>
+                <Field label="Date">
+                  <Input
+                    type="date"
+                    value={s.date ?? ""}
+                    min={startDate}
+                    onChange={(e) => updateStochastic(i, { date: e.target.value })}
+                    className="h-10"
+                  />
                 </Field>
                 <Field label="Variability (sigma)">
                   <Input

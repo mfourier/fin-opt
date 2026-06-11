@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { User } from '@supabase/supabase-js'
 import { supabase } from './supabase'
+import { queryClient } from './queryClient'
 
 interface AuthState {
   user: User | null
@@ -21,8 +22,14 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({ user: session?.user ?? null, loading: false })
 
       // Listen for auth changes
-      supabase.auth.onAuthStateChange((_event, session) => {
+      supabase.auth.onAuthStateChange((event, session) => {
         set({ user: session?.user ?? null })
+        // Drop all cached data on sign-out so the next account never sees the
+        // previous account's profiles/scenarios/jobs while they are still
+        // "fresh" within staleTime. Covers explicit sign-out and expiry.
+        if (event === 'SIGNED_OUT') {
+          queryClient.clear()
+        }
       })
     } catch (error) {
       console.error('Error initializing auth:', error)

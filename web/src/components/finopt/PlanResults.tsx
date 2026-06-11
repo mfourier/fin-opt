@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Download, RotateCw, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Profile, Scenario, Result, JobStatus } from "@/mocks/types";
+import { formatCLPCompact } from "@/lib/format";
 import { PlanHero, type FeasibilityStatus } from "./PlanHero";
 import { PlanExplainers } from "./PlanExplainers";
 import { WealthFanChart, type WithdrawalMarker } from "./WealthFanChart";
@@ -215,17 +216,23 @@ function buildWithdrawalMarkers(scenario: Scenario): WithdrawalMarker[] {
     if (month === null || month < 0) continue;
     markers.push({
       month,
-      label: `${displayWithdrawalLabel(withdrawal.description, withdrawal.account)} ${formatCompactMoney(withdrawal.amount)}`,
+      label: `${displayWithdrawalLabel(withdrawal.description, withdrawal.account)} ${formatCLPCompact(withdrawal.amount)}`,
     });
   }
 
   for (const withdrawal of scenario.withdrawals.stochastic) {
-    if (!withdrawal.date) continue;
-    const month = monthDiff(start, parseIsoMonthStart(withdrawal.date));
+    // Stochastic withdrawals carry either a calendar `date` or a 1-indexed
+    // `month` offset from start_date (the core's convention); the chart's
+    // x-axis is 0-indexed months from start.
+    const month = withdrawal.date
+      ? monthDiff(start, parseIsoMonthStart(withdrawal.date))
+      : typeof withdrawal.month === "number"
+        ? withdrawal.month - 1
+        : null;
     if (month === null || month < 0) continue;
     markers.push({
       month,
-      label: `${displayWithdrawalLabel(withdrawal.description, withdrawal.account)} ${formatCompactMoney(withdrawal.base_amount)}`,
+      label: `${displayWithdrawalLabel(withdrawal.description, withdrawal.account)} ${formatCLPCompact(withdrawal.base_amount)}`,
     });
   }
 
@@ -246,11 +253,4 @@ function monthDiff(start: Date, target: Date | null): number | null {
 
 function displayWithdrawalLabel(description: string | undefined, account: string): string {
   return description?.trim() || `Withdrawal from ${account}`;
-}
-
-function formatCompactMoney(value: number): string {
-  const abs = Math.abs(value);
-  if (abs >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
-  if (abs >= 1_000) return `$${Math.round(value / 1_000)}K`;
-  return `$${Math.round(value)}`;
 }

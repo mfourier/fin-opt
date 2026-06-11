@@ -41,7 +41,7 @@ export default function ScenariosPage() {
   const [editingScenario, setEditingScenario] = useState<Scenario | null>(null)
 
   const { data: profiles } = useQuery({
-    queryKey: ['profiles'],
+    queryKey: ['profiles', user?.id],
     queryFn: async () => {
       const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false })
       if (error) throw error
@@ -51,7 +51,7 @@ export default function ScenariosPage() {
   })
 
   const { data: scenarios, isLoading } = useQuery({
-    queryKey: ['scenarios'],
+    queryKey: ['scenarios', user?.id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('scenarios')

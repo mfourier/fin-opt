@@ -16,7 +16,8 @@ export default function ProfilesPage() {
   const [editingProfile, setEditingProfile] = useState<Profile | null>(null)
 
   const { data: profiles, isLoading } = useQuery({
-    queryKey: ['profiles'],
+    // Scoped by user so a cached list can never leak across accounts.
+    queryKey: ['profiles', user?.id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('profiles')

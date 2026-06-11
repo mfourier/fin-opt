@@ -59,7 +59,7 @@ export interface StochasticWithdrawal {
   base_amount: number             // Expected withdrawal amount
   sigma: number                   // Volatility
   date?: string                   // Specific date (ISO string)
-  month?: number                  // Or recurring month (0-11)
+  month?: number                  // Or 1-indexed month offset from start_date (one-off, mutually exclusive with date)
   floor?: number                  // Minimum withdrawal
   cap?: number                    // Maximum withdrawal
   seed?: number                   // Random seed

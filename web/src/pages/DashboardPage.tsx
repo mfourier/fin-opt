@@ -8,7 +8,9 @@ export default function DashboardPage() {
   const user = useAuthStore((state) => state.user)
 
   const { data: profiles, isLoading: profilesLoading } = useQuery({
-    queryKey: ['profiles'],
+    // 'dashboard' segment: this query only fetches the 5 most recent profiles,
+    // so it must not share a cache entry with the full list in ProfilesPage.
+    queryKey: ['profiles', 'dashboard', user?.id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('profiles')
@@ -22,7 +24,7 @@ export default function DashboardPage() {
   })
 
   const { data: recentJobs, isLoading: jobsLoading } = useQuery({
-    queryKey: ['recent-jobs'],
+    queryKey: ['recent-jobs', user?.id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('jobs')

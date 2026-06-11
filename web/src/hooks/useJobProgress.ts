@@ -8,10 +8,18 @@ export function useJobProgress(jobId: string | null) {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    // Reset state so a jobId change never exposes the previous job's data
+    // (e.g. navigating between results or after "Recalculate").
+    setJob(null)
+    setError(null)
+
     if (!jobId) {
       setLoading(false)
       return
     }
+
+    setLoading(true)
+    let cancelled = false
 
     // Initial fetch
     const fetchJob = async () => {
@@ -21,6 +29,7 @@ export function useJobProgress(jobId: string | null) {
         .eq('id', jobId)
         .single()
 
+      if (cancelled) return
       if (error) {
         setError(error.message)
       } else {
@@ -43,12 +52,15 @@ export function useJobProgress(jobId: string | null) {
           filter: `id=eq.${jobId}`,
         },
         (payload) => {
-          setJob(payload.new as Job)
+          if (!cancelled) {
+            setJob(payload.new as Job)
+          }
         }
       )
       .subscribe()
 
     return () => {
+      cancelled = true
       channel.unsubscribe()
     }
   }, [jobId])
