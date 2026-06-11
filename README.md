@@ -28,7 +28,7 @@ where $\Delta^T = \lbrace X \in \mathbb{R}_{\geq 0}^{T \times M} : \mathbf{x}_t^
 
 $$\min_{T \in \mathbb{N}, X \in \Delta^T} \quad T \qquad \text{s.t.} \quad \mathbb{P}\left(W_t^m(X) \geq b_t^m\right) \geq 1 - \varepsilon_t^m \quad \forall \text{ goals}$$
 
-Here $T^\star$ is fixed by feasibility alone, and the secondary objective $f(X)$ — turnover, expected wealth, or mean–variance (see the [objective table](#quick-start) below) — only selects *which* optimal-horizon policy to deploy.
+Here $T^\star$ is fixed by feasibility alone, and the secondary objective $f(X)$ — an even-split diversification anchor (default), turnover, expected wealth, or mean–variance (see the [objective table](#quick-start) below) — only selects *which* optimal-horizon policy to deploy.
 
 `GoalSeeker` runs the outer search over $T$ — `linear` (sequential, safest), `binary` (≈50% fewer iterations, assumes monotonicity), or `bracketed` (two-sided galloping from a computed bracket) — using the inner convex program's solver status (`OPTIMAL` vs `INFEASIBLE`) as the feasibility oracle for $\mathcal{F}(T)$. The inner program, $\min_X f(X)$ subject to the CVaR constraints below, is solved by CVXPY.
 
@@ -46,7 +46,11 @@ The full problem becomes a linear (or quadratic) program in $(\gamma, z_1, \ldot
 
 ### Affine Wealth Representation
 
-Wealth is affine in $X$, which is what makes the CVaR constraint a tractable convex constraint:
+Wealth follows a recursive law: each period the start-of-period wealth, plus the contribution allocated to account $m$, minus any withdrawal, compounds at the realized return.
+
+$$W_{t+1}^m = \left(W_t^m + A_t\, x_t^m - D_t^m\right)\left(1 + R_t^m\right)$$
+
+Unrolling this recursion from $W_0^m$ yields a closed form that is **affine in the allocation policy** $X$ — which is what makes the CVaR constraint a tractable convex constraint:
 
 $$W_t^m(X) = W_0^m \cdot F_{0,t}^m + \sum_{s=0}^{t-1} \left(A_s x_s^m - D_s^m\right) \cdot F_{s,t}^m$$
 
@@ -77,7 +81,7 @@ accounts = [
 model = FinancialModel(income, accounts)
 goals = [TerminalGoal(account="Aggressive", threshold=5_000_000, confidence=0.80)]
 
-optimizer = CVaROptimizer(n_accounts=2, objective="balanced")
+optimizer = CVaROptimizer(n_accounts=2, objective="proportional")
 result = model.optimize(goals=goals, optimizer=optimizer, T_max=120, n_sims=500, seed=42)
 
 print(f"Minimum horizon: T* = {result.T} months")
@@ -88,10 +92,13 @@ The `objective` parameter controls the inner optimization program:
 
 | Value | Formulation | Use case |
 |-------|-------------|----------|
-| `"balanced"` | $-\sum_{t,m}(\Delta x_{t,m})^2$ | Stable allocations (default) |
+| `"proportional"` | $-\sum_{t,m}(x_{t,m} - w_m)^2$ | Even, stable monthly split — keeps every account funded (default) |
+| `"balanced"` | $-\sum_{t,m}(\Delta x_{t,m})^2$ | Stable allocations (turnover penalty only) |
 | `"risky"` | $\mathbb{E}[\sum_m W_T^m]$ | Maximum wealth accumulation |
 | `"conservative"` | $\mathbb{E}[W_T] - \lambda \mathrm{Std}(W_T)$ | Risk-averse mean-variance |
 | `"risky_turnover"` | $\mathbb{E}[W_T] - \lambda\sum(\Delta x)^2$ | Wealth + stability tradeoff |
+
+`"proportional"` anchors each month's split toward target weights $w$ (default uniform $1/M$). It is a single strictly-convex quadratic — hence parameter-free and with a unique minimizer — so it acts as a tie-breaker among optimal-horizon policies without changing $T^\star$.
 
 ### Command-line interface
 
