@@ -41,9 +41,15 @@ All objectives exploit the affine structure: W[:,t,m] = b + Φ @ X[:t,m]
 
 Available objectives:
     - "risky": E[Σ_m W_T^m]
-    - "balanced": E[W_T] - λ·Σ_{t,m}|x_{t+1,m} - x_t^m| (default)
+    - "balanced": E[W_T] - λ·Σ_{t,m}|x_{t+1,m} - x_t^m|
     - "conservative": E[W_T] - λ·Std(W_T)
     - "risky_turnover": E[W_T] - λ·Σ_{t,m}|x_{t+1,m} - x_t^m|
+    - "proportional": -Σ_{t,m}(x_{t,m} - w_m)²   [- λ_turn·Σ_{t,m}(Δx_{t,m})²]  (default)
+        Diversification anchor toward target weights w (default uniform 1/M).
+        Parameter-free by default (single strictly-convex quadratic) ⇒ unique
+        tie-breaker that keeps every account funded each month at the minimum
+        horizon T*. Optional turnover term (lambda_turnover, default 0) adds
+        temporal smoothing.
     - Custom callable: f(W, X, T, M) → float
 
 All objectives maintain convexity via:
@@ -132,7 +138,7 @@ class SearchProgressInfo:
 
 # Type alias for objective specifications
 ObjectiveType = Union[
-    Literal["risky", "risky_turnover", "balanced", "conservative"],
+    Literal["risky", "risky_turnover", "balanced", "conservative", "proportional"],
     Callable[[np.ndarray, np.ndarray, int, int], float]
 ]
 
@@ -327,9 +333,10 @@ class AllocationOptimizer(ABC):
 
     Supports parametrizable objectives f(X):
     - "risky": E[Σ_m W_T^m]
-    - "balanced": E[W_T] - λ·Σ_{t,m}|x_{t+1,m} - x_t^m| (default)
+    - "balanced": E[W_T] - λ·Σ_{t,m}|x_{t+1,m} - x_t^m|
     - "conservative": E[W_T] - λ·Std(W_T)
     - "risky_turnover": E[W_T] - λ·Σ_{t,m}|x_{t+1,m} - x_t^m|
+    - "proportional": diversification anchor (tie-breaker, see module docstring) (default)
     - Custom callable: f(W, X, T, M) → float
 
     Parameters
@@ -357,7 +364,7 @@ class AllocationOptimizer(ABC):
     def __init__(
         self,
         n_accounts: int,
-        objective: ObjectiveType = "balanced",
+        objective: ObjectiveType = "proportional",
         objective_params: Optional[Dict[str, Any]] = None,
         account_names: Optional[List[str]] = None
     ):
@@ -561,6 +568,8 @@ class AllocationOptimizer(ABC):
             return self._objective_risky_turnover(W, X, T, M)
         elif self.objective == "conservative":
             return self._objective_conservative(W, X, T, M)
+        elif self.objective == "proportional":
+            return self._objective_proportional(W, X, T, M)
         else:
             raise ValueError(f"Unknown objective: {self.objective}")
 
@@ -636,6 +645,58 @@ class AllocationOptimizer(ABC):
 
         return mean_wealth - lambda_ * std_wealth
 
+    def _resolve_target_weights(self, M: int) -> np.ndarray:
+        """Resolve and validate the ``proportional`` anchor weights ``w``.
+
+        Defaults to uniform ``1/M``. A user-supplied ``target_weights`` must be a
+        length-``M`` point on the simplex (non-negative, summing to 1), since the
+        anchor pulls each month's allocation toward ``w`` and an off-simplex target
+        would silently distort the "even split" interpretation.
+        """
+        w = self.objective_params.get("target_weights", None)
+        if w is None:
+            return np.ones(M) / M
+        w = np.asarray(w, dtype=float)
+        if w.shape != (M,):
+            raise ValueError(f"target_weights must have shape ({M},), got {w.shape}")
+        if np.any(w < 0):
+            raise ValueError(f"target_weights must be non-negative, got {w}")
+        if not np.isclose(w.sum(), 1.0, atol=1e-6):
+            raise ValueError(f"target_weights must sum to 1, got sum={w.sum():.6f}")
+        return w
+
+    def _objective_proportional(
+        self,
+        W: np.ndarray,
+        X: np.ndarray,
+        T: int,
+        M: int
+    ) -> float:
+        """
+        Diversification anchor (tie-breaker objective).
+
+        Pulls each month's split toward a target weight vector w (default
+        uniform 1/M):
+
+        f(X) = -Σ_{t,m} (x_{t,m} - w_m)^2   [ - λ_turn · Σ_{t,m} (Δx_{t,m})^2 ]
+
+        With w = 1/M the anchor equals the Herfindahl concentration index (up to
+        a constant), so this rewards spreading contributions across accounts each
+        month — a more "human" plan. Parameter-free by default (a single strictly
+        convex quadratic, so its scale is immaterial). `lambda_turnover` (default
+        0) optionally adds the same turnover penalty as "balanced" for extra
+        temporal smoothing.
+        """
+        w = self._resolve_target_weights(M)
+
+        penalty = ((X - w[np.newaxis, :]) ** 2).sum()
+
+        lambda_turn = self.objective_params.get("lambda_turnover", 0.0)
+        if lambda_turn and T > 1:
+            penalty += lambda_turn * ((X[1:, :] - X[:-1, :]) ** 2).sum()
+
+        return -penalty
+
 
 # ---------------------------------------------------------------------------
 # CVaR Optimizer (Convex Programming)
@@ -691,13 +752,25 @@ class CVaROptimizer(AllocationOptimizer):
        - λ controls risk aversion (typical: 0.1-1.0)
        - Use case: Markowitz-style optimization
 
+    4. proportional: min ||X - w||_2²  [+ λ_turn·||ΔX||_2²]
+       - Diversification anchor toward target weights w (default uniform 1/M).
+         Single strictly-convex quadratic ⇒ unique solution and PARAMETER-FREE
+         by default (its scale is immaterial).
+       - Pure tie-breaker: adds no constraints, so the minimum horizon T* is
+         unchanged. Keeps every account funded each month (no $0 stretches),
+         as evenly as the binding goal/withdrawal constraints allow.
+       - objective_params: {'target_weights': array shape (M,) summing to 1,
+         default 1/M; 'lambda_turnover': optional temporal-smoothing weight,
+         default 0 (off)}
+       - Use case: human-readable plans (even monthly split per account)
+
     Parameters
     ----------
     n_accounts : int
         Number of investment accounts in the portfolio
-    objective : str, default='balanced'
+    objective : str, default='proportional'
         Optimization objective. Options:
-        'risky', 'balanced', 'conservative'.
+        'risky', 'balanced', 'conservative', 'risky_turnover', 'proportional'.
     objective_params : dict, optional
         Objective-specific parameters:
         - risky:
@@ -731,7 +804,7 @@ class CVaROptimizer(AllocationOptimizer):
     def __init__(
         self,
         n_accounts: int,
-        objective: str = 'balanced',
+        objective: str = 'proportional',
         objective_params: Optional[Dict[str, Any]] = None,
         account_names: Optional[List[str]] = None
     ):
@@ -739,7 +812,7 @@ class CVaROptimizer(AllocationOptimizer):
 
         # Validate objective
         valid_objectives = [
-            'risky', 'balanced', 'risky_turnover', 'conservative'
+            'risky', 'balanced', 'risky_turnover', 'conservative', 'proportional'
         ]
         if objective not in valid_objectives:
             raise ValueError(
@@ -1149,6 +1222,27 @@ class CVaROptimizer(AllocationOptimizer):
             turnover = cp.sum_squares(X[1:, :] - X[:-1, :]) if T > 1 else 0.0
 
             objective = cp.Maximize(-turnover)
+
+        elif self.objective == "proportional":
+            # Pure diversification anchor toward target weights w (default uniform
+            # 1/M):  min Σ_{t,m}(x_{t,m} - w_m)².  This is a single strictly-convex
+            # quadratic, so its scale is immaterial ⇒ PARAMETER-FREE, and the
+            # minimizer is unique (a genuine tie-breaker — unlike "balanced", whose
+            # pure-turnover objective is degenerate). Adds no constraints ⇒ T*
+            # (fixed by feasibility) is unchanged. With w = 1/M the anchor equals
+            # the Herfindahl concentration index. `lambda_turnover` (default 0)
+            # optionally adds the same turnover penalty as "balanced" for extra
+            # temporal smoothing on top of proportionality.
+            w = self._resolve_target_weights(M)
+
+            target = np.tile(w, (T, 1))  # (T, M) — broadcast-safe for CVXPY
+            penalty = cp.sum_squares(X - target)
+
+            lambda_turn = self.objective_params.get("lambda_turnover", 0.0)
+            if lambda_turn and T > 1:
+                penalty = penalty + lambda_turn * cp.sum_squares(X[1:, :] - X[:-1, :])
+
+            objective = cp.Maximize(-penalty)
 
         else:
             raise ValueError(

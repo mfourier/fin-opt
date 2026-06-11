@@ -455,10 +455,10 @@ class TestAllocationOptimizerInit:
         assert optimizer.account_names == ["Savings", "Investment"]
 
     def test_default_objective(self):
-        """Test default objective is balanced."""
+        """Test default objective is proportional."""
         optimizer = CVaROptimizer(n_accounts=2)
 
-        assert optimizer.objective == "balanced"
+        assert optimizer.objective == "proportional"
 
     def test_objective_params_default(self):
         """Test objective_params defaults to empty dict."""
@@ -614,7 +614,7 @@ class TestCVaROptimizerInstantiation:
 
     def test_all_valid_objectives(self):
         """Test all valid objective types."""
-        for objective in ["risky", "balanced", "conservative", "risky_turnover"]:
+        for objective in ["risky", "balanced", "conservative", "risky_turnover", "proportional"]:
             optimizer = CVaROptimizer(n_accounts=2, objective=objective)
             assert optimizer.objective == objective
 
@@ -690,6 +690,80 @@ class TestCVaROptimizerSolve:
         )
 
         assert isinstance(result, OptimizationResult)
+
+    def _three_account_problem(self, three_accounts, start_date):
+        """Build a small 3-account terminal-goal problem for proportional tests."""
+        M, T, n_sims = 3, 12, 100
+        np.random.seed(0)
+        A = np.full((n_sims, T), 400_000.0)
+        R = np.random.randn(n_sims, T, M) * 0.02 + 0.005
+        iw = np.zeros(M)
+        goals = [TerminalGoal(account="Aggressive", threshold=5_000_000, confidence=0.70)]
+        gs = GoalSet(goals, three_accounts, start_date)
+        return dict(T=T, A=A, R=R, initial_wealth=iw, goal_set=gs, M=M)
+
+    def test_solve_proportional_objective(self, three_accounts, start_date):
+        """proportional solves and returns a valid (simplex) allocation."""
+        p = self._three_account_problem(three_accounts, start_date)
+        res = CVaROptimizer(n_accounts=p["M"], objective="proportional").solve(
+            T=p["T"], A=p["A"], R=p["R"],
+            initial_wealth=p["initial_wealth"], goal_set=p["goal_set"],
+        )
+        assert isinstance(res, OptimizationResult)
+        assert res.X.shape == (p["T"], p["M"])
+        assert np.all(res.X >= -1e-6)
+        assert np.allclose(res.X.sum(axis=1), 1.0, atol=1e-5)
+
+    def test_proportional_more_even_than_balanced(self, three_accounts, start_date):
+        """At the same horizon, proportional achieves a lower diversification
+        penalty Σ(x-1/M)² than balanced (it minimizes exactly that; balanced does
+        not). Guaranteed since balanced's X is feasible for the same program."""
+        p = self._three_account_problem(three_accounts, start_date)
+        M = p["M"]
+        kw = dict(T=p["T"], A=p["A"], R=p["R"],
+                  initial_wealth=p["initial_wealth"], goal_set=p["goal_set"])
+        Xb = CVaROptimizer(n_accounts=M, objective="balanced").solve(**kw).X
+        Xp = CVaROptimizer(n_accounts=M, objective="proportional").solve(**kw).X
+
+        w = np.full(M, 1.0 / M)
+        anchor = lambda X: ((X - w) ** 2).sum()
+        assert anchor(Xp) <= anchor(Xb) + 1e-4
+
+    def test_proportional_default_is_parameter_free(self, three_accounts, start_date):
+        """Scaling the (single-quadratic) objective must not move the optimum:
+        an explicit lambda_div has no effect, confirming parameter-freeness."""
+        p = self._three_account_problem(three_accounts, start_date)
+        M = p["M"]
+        kw = dict(T=p["T"], A=p["A"], R=p["R"],
+                  initial_wealth=p["initial_wealth"], goal_set=p["goal_set"])
+        X1 = CVaROptimizer(n_accounts=M, objective="proportional").solve(**kw).X
+        X2 = CVaROptimizer(n_accounts=M, objective="proportional",
+                           objective_params={"lambda_div": 1000.0}).solve(**kw).X
+        assert np.allclose(X1, X2, atol=1e-4)
+
+    @pytest.mark.parametrize("bad_weights", [
+        [0.5, 0.5],            # wrong shape (M=3, len 2)
+        [0.2, 0.2, 0.2],       # does not sum to 1
+        [-0.5, 0.75, 0.75],    # negative entry (still sums to 1)
+    ])
+    def test_proportional_target_weights_validation(self, three_accounts, start_date, bad_weights):
+        """Invalid target_weights (wrong shape / not on the simplex) raise clearly."""
+        p = self._three_account_problem(three_accounts, start_date)
+        opt = CVaROptimizer(n_accounts=p["M"], objective="proportional",
+                            objective_params={"target_weights": bad_weights})
+        with pytest.raises(ValueError, match="target_weights"):
+            opt.solve(T=p["T"], A=p["A"], R=p["R"],
+                      initial_wealth=p["initial_wealth"], goal_set=p["goal_set"])
+
+    def test_proportional_custom_target_weights_solves(self, three_accounts, start_date):
+        """A valid non-uniform simplex target is accepted and solves."""
+        p = self._three_account_problem(three_accounts, start_date)
+        opt = CVaROptimizer(n_accounts=p["M"], objective="proportional",
+                            objective_params={"target_weights": [0.2, 0.3, 0.5]})
+        res = opt.solve(T=p["T"], A=p["A"], R=p["R"],
+                        initial_wealth=p["initial_wealth"], goal_set=p["goal_set"])
+        assert res.X.shape == (p["T"], p["M"])
+        assert np.allclose(res.X.sum(axis=1), 1.0, atol=1e-5)
 
     def test_solve_with_warm_start(self, optimizer, simulation_data, terminal_goals, accounts, start_date):
         """Test solve with warm start allocation."""

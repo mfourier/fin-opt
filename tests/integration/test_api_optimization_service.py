@@ -425,7 +425,7 @@ def test_parse_opt_params_defaults():
     assert t_max == 240
     assert t_min == 12
     assert solver == "ECOS"
-    assert objective == "balanced"
+    assert objective == "proportional"
     assert seed is None
     assert start_date is None
 

@@ -16,6 +16,7 @@ const OBJECTIVE_LABELS: Record<string, string> = {
   balanced: 'Balanced',
   conservative: 'Conservative',
   risky_turnover: 'Growth (stable)',
+  proportional: 'Steady & even',
 }
 
 // Hidden optimization defaults — the user never sets these. The bracketed

@@ -291,9 +291,9 @@ def simulate(
 )
 @click.option(
     "--objective",
-    type=click.Choice(["balanced", "risky", "conservative"]),
-    default="balanced",
-    help="Optimization objective (default: balanced)"
+    type=click.Choice(["proportional", "balanced", "risky", "conservative", "risky_turnover"]),
+    default="proportional",
+    help="Optimization objective (default: proportional)"
 )
 @click.pass_context
 def optimize(

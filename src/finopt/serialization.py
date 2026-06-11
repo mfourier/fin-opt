@@ -637,7 +637,7 @@ def save_scenario(
     seed: Optional[int] = None,
     T_max: int = 240,
     solver: str = "ECOS",
-    objective: str = "balanced",
+    objective: str = "proportional",
 ) -> None:
     """
     Save a complete optimization scenario to JSON file.
@@ -868,7 +868,7 @@ def load_scenario(
     result["optimization"] = OptimizationConfig(
         T_max=opt_config.get("T_max", 240),
         solver=opt_config.get("solver", "ECOS"),
-        objective=opt_config.get("objective", "balanced"),
+        objective=opt_config.get("objective", "proportional"),
     )
 
     return result

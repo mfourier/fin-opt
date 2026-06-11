@@ -268,7 +268,7 @@ def compute_wealth_percentiles(
 
 
 _VALID_SOLVERS = {"ECOS", "SCS", "CLARABEL", "MOSEK"}
-_VALID_OBJECTIVES = {"risky", "balanced", "risky_turnover", "conservative"}
+_VALID_OBJECTIVES = {"risky", "balanced", "risky_turnover", "conservative", "proportional"}
 
 
 def _parse_opt_params(scenario_data: dict) -> tuple:
@@ -277,7 +277,7 @@ def _parse_opt_params(scenario_data: dict) -> tuple:
     raw_t_max = scenario_data.get("t_max", 240)
     raw_t_min = scenario_data.get("t_min", 12)
     solver = scenario_data.get("solver", "ECOS")
-    objective = scenario_data.get("objective", "balanced")
+    objective = scenario_data.get("objective", "proportional")
     seed = scenario_data.get("seed")
     start_date_str = scenario_data.get("start_date")
 

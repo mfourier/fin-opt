@@ -104,7 +104,7 @@ Implements bilevel optimization: outer problem (minimize horizon T) + inner prob
 
 - **`CVaROptimizer`**: Convex reformulation via CVaR epigraphic form (uses CVXPY)
   - Transforms non-convex chance constraints into tractable LP/QP
-  - Objectives: "risky", "balanced" (default), "conservative", "risky_turnover", or custom callable
+  - Objectives: "proportional" (default), "risky", "balanced", "conservative", "risky_turnover", or custom callable
   - Solver selection via `solver` kwarg: "ECOS" (default), "SCS", "CLARABEL", "MOSEK"
 - **`GoalSeeker`**: Binary/linear search over horizon T with warm-start
 - **`OptimizationResult`**: Container for X*, T*, objective value, goal_set, and diagnostics
@@ -134,7 +134,10 @@ This provides global optimality guarantees (vs local minima from gradient-based 
 | `"balanced"` | `-Σ_{t,m}(Δx_{t,m})²` | QP | Stable allocations (turnover penalty only) |
 | `"conservative"` | `E[W_T] - λ·Std(W_T)` | QP | Risk-averse mean-variance |
 | `"risky_turnover"` | `E[W_T] - λ·Σ(Δx)²` | QP | Wealth + stability tradeoff |
+| `"proportional"` | `-Σ(x_{t,m}-w_m)²` (`+` optional `λ_turn·Σ(Δx)²`) | QP | Human-readable plans: even monthly split per account |
 | Custom callable | `f(W, X, T, M) → float` | - | User-defined (must be convex) |
+
+**`"proportional"` (tie-breaker)**: Pulls each month's split toward target weights `w` (default uniform `1/M`). A single strictly-convex quadratic ⇒ **unique** solution (unlike `"balanced"`, whose pure-turnover objective is degenerate — its Hessian is singular for time-constant shifts — leaving the cross-account split undetermined) and **parameter-free by default** (scaling the objective doesn't move its argmin, so there is no weight to tune). Adds no constraints ⇒ the minimum horizon **T\* is unchanged**; it only re-selects X at T\*, keeping every account funded each month (no `$0` stretches) as evenly as the binding goal/withdrawal constraints allow. Temporal smoothness is emergent (anchoring every row to a constant `w` + quadratic spreading of forced deviations). `objective_params`: `{"target_weights": <(M,) array summing to 1>, "lambda_turnover": <float, default 0 — optional turnover term, the same one `"balanced"` uses, for extra temporal smoothing>}`. Note: the policy is over *fractions* of the (stochastic) contribution `A_t`, so a fixed even fraction ≈ a fixed monthly amount per account only insofar as `A_t` is stable.
 
 ### 6. `model.py` - Orchestration Facade
 
@@ -162,7 +165,7 @@ Pydantic-based type-safe configuration for all model parameters.
 from finopt.config import SimulationConfig, OptimizationConfig
 
 sim_config = SimulationConfig(n_sims=1000, seed=42, cache_enabled=True)
-opt_config = OptimizationConfig(T_max=120, solver="ECOS", objective="balanced")
+opt_config = OptimizationConfig(T_max=120, solver="ECOS", objective="proportional")
 
 # Serialize to JSON
 config_dict = sim_config.model_dump()
@@ -314,7 +317,7 @@ model = FinancialModel(income, accounts)
 goals = [TerminalGoal(account="Aggressive", threshold=5_000_000, confidence=0.80)]
 
 # 5. Optimize (finds minimum T* and optimal allocation policy X*)
-optimizer = CVaROptimizer(n_accounts=2, objective="balanced")
+optimizer = CVaROptimizer(n_accounts=2, objective="proportional")
 result = model.optimize(goals=goals, optimizer=optimizer, T_max=120, n_sims=500, seed=42)
 
 # 6. Visualize
@@ -560,7 +563,7 @@ React single-page app that lets users define their finances and goals, runs opti
 | (results) | `pages/ResultsPage.tsx` | `PlanResults` | Result |
 
 - Redesigned UI lives as **presentational components** under `web/src/components/finopt/*` (props in, no routing/fetching); the page components wire them to Supabase + react-query. Standalone mock previews: `/plan-preview`, `/goals-preview`, `/situation-preview`.
-- `GoalsWizard` is a 3-step stepper; its "Calculate my plan" emits a `ScenarioDraft`, which the page turns into a Scenario by filling **hidden optimization defaults** (`n_sims=500, seed=42, t_max=360, solver=ECOS`) and immediately queuing optimization. The API hardcodes `search_method="bracketed"`, so `T_min`/`T_max` are never user-set.
+- `GoalsWizard` is a 3-step stepper; its "Calculate my plan" emits a `ScenarioDraft`, which the page turns into a Scenario by filling **hidden optimization defaults** (`n_sims=500, seed=42, t_max=360, solver=ECOS`) and immediately queuing optimization. The API hardcodes `search_method="bracketed"`, so `T_min`/`T_max` are never user-set. The investment-style selector offers three options — "Maximum growth" (`risky`), **"Steady & even" (`proportional`, default + recommended)**, and "Conservative" (`conservative`); the `balanced` objective is backend-only (still accepted by the API and shown for legacy scenarios, but never offered in the wizard).
 
 ### Design system
 

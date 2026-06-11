@@ -79,7 +79,7 @@ export type Scenario = {
   terminal_goals: TerminalGoal[];
   intermediate_goals: IntermediateGoal[];
   withdrawals: WithdrawalsConfig | null;
-  objective: "risky" | "balanced" | "conservative";
+  objective: "risky" | "balanced" | "conservative" | "proportional";
 };
 
 export type WealthPercentiles = {
@@ -132,7 +132,7 @@ export type ScenarioDraft = {
   name: string;
   description: string;
   start_date: string;
-  objective: "risky" | "balanced" | "conservative";
+  objective: "risky" | "balanced" | "conservative" | "proportional";
   terminal_goals: TerminalGoal[];
   intermediate_goals: IntermediateGoal[];
   withdrawals: WithdrawalsConfig | null;

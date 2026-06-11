@@ -90,10 +90,10 @@ DEFAULT_SOLVER: str = "ECOS"
 Alternatives: "SCS", "CLARABEL", "MOSEK" (commercial, requires license).
 """
 
-DEFAULT_OBJECTIVE: str = "balanced"
+DEFAULT_OBJECTIVE: str = "proportional"
 """Default optimization objective.
 
-Options: "risky", "balanced", "conservative", "risky_turnover".
+Options: "proportional", "risky", "balanced", "conservative", "risky_turnover".
 """
 
 DEFAULT_TOLERANCE: float = 1e-4

@@ -119,7 +119,8 @@ class OptimizationConfig(BaseModel):
     solver : str
         CVXPY solver backend: "ECOS", "SCS", "CLARABEL", "MOSEK".
     objective : str
-        Optimization objective: "risky", "balanced", "conservative", "risky_turnover".
+        Optimization objective: "risky", "balanced", "conservative",
+        "risky_turnover", "proportional".
     search_strategy : str
         Horizon search method: "bracketed" (default), "binary", or "linear".
     tolerance : float
@@ -133,7 +134,7 @@ class OptimizationConfig(BaseModel):
 
     Examples
     --------
-    >>> config = OptimizationConfig(T_max=120, solver="ECOS", objective="balanced")
+    >>> config = OptimizationConfig(T_max=120, solver="ECOS", objective="proportional")
     >>> config.T_max
     120
     """
@@ -155,8 +156,8 @@ class OptimizationConfig(BaseModel):
         default="ECOS",
         description="CVXPY solver backend"
     )
-    objective: Literal["risky", "balanced", "conservative", "risky_turnover"] = Field(
-        default="balanced",
+    objective: Literal["risky", "balanced", "conservative", "risky_turnover", "proportional"] = Field(
+        default="proportional",
         description="Optimization objective function"
     )
     search_strategy: Literal["bracketed", "binary", "linear"] = Field(

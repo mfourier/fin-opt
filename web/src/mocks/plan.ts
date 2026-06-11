@@ -78,7 +78,7 @@ export const mockScenario: Scenario = {
     },
   ],
   withdrawals: null,
-  objective: "balanced",
+  objective: "proportional",
 };
 
 // --- Build a coherent mock Result with monotone fan + smooth allocation drift.

@@ -42,9 +42,9 @@ type Objective = ScenarioDraft["objective"];
 const OBJECTIVES: { id: Objective; title: string; subtitle: string; tag?: string }[] = [
   { id: "risky", title: "Maximum growth", subtitle: "Higher swings, higher long-term return." },
   {
-    id: "balanced",
-    title: "Balanced",
-    subtitle: "A steady mix of growth and stability.",
+    id: "proportional",
+    title: "Steady & even",
+    subtitle: "A stable, even monthly split across your accounts.",
     tag: "Recommended",
   },
   {
@@ -78,7 +78,7 @@ export function GoalsWizard({ profiles, initialDraft, onCalculate, onCancel }: P
     name: initialDraft?.name ?? "",
     description: initialDraft?.description ?? "",
     start_date: initialDraft?.start_date ?? todayISO(),
-    objective: initialDraft?.objective ?? "balanced",
+    objective: initialDraft?.objective ?? "proportional",
     terminal_goals: initialDraft?.terminal_goals ?? [],
     intermediate_goals: initialDraft?.intermediate_goals ?? [],
     withdrawals: initialDraft?.withdrawals ?? null,
@@ -290,7 +290,7 @@ function StepBasics({
       <div>
         <p className="text-sm font-medium text-foreground">Investment style</p>
         <p className="mt-1 text-sm text-muted-foreground">
-          Pick how aggressively you want your money to grow.
+          Pick how we balance growth and diversification across your accounts.
         </p>
         <div
           role="radiogroup"
@@ -320,7 +320,7 @@ function StepBasics({
                     <span
                       className={cn(
                         "rounded-full px-2 py-0.5 text-[10px] font-medium ring-1",
-                        o.id === "balanced"
+                        o.id === "proportional"
                           ? "bg-success-soft text-success-foreground ring-success/30"
                           : "bg-secondary text-muted-foreground ring-border",
                       )}
