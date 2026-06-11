@@ -232,12 +232,17 @@ def _parse_sim_params(scenario_data: dict) -> tuple:
     return n_sims, t_max, seed, start_date
 
 
-async def run_simulation(scenario_id: str, job_id: str) -> None:
+def run_simulation(scenario_id: str, job_id: str) -> None:
     """
     Run a Monte Carlo simulation for a scenario.
 
     This is the main entry point called from FastAPI background tasks.
     It fetches the scenario, runs simulation, computes stats, and saves results.
+
+    NOTE: intentionally a SYNC ``def`` (CPU-bound body, no ``await``). Starlette
+    threadpools sync background tasks, keeping the event loop free for ``/health``.
+    Declaring it ``async`` blocks the loop and gets the instance health-checked to
+    death mid-job. Do not make it async. See run_optimization for details.
 
     Parameters
     ----------

@@ -268,7 +268,7 @@ async def test_run_optimization_updates_job_status(mocker, sample_scenario_data,
 
     from api.services.optimization import run_optimization
 
-    await run_optimization(scenario_id="test-scenario", job_id="test-job")
+    run_optimization(scenario_id="test-scenario", job_id="test-job")
 
     # Check that update_job was called multiple times
     assert mock_update_job.call_count >= 3
@@ -291,7 +291,7 @@ async def test_run_optimization_handles_error(mocker, sample_scenario_data, mock
     from api.services.optimization import run_optimization
 
     with pytest.raises(ValueError):
-        await run_optimization(scenario_id="test-scenario", job_id="test-job")
+        run_optimization(scenario_id="test-scenario", job_id="test-job")
 
     # Should have updated job with failed status
     calls = [call for call in mock_update_job.call_args_list if 'status' in call[1]]
@@ -337,7 +337,7 @@ async def test_run_optimization_saves_allocation_policy(mocker, sample_scenario_
 
     from api.services.optimization import run_optimization
 
-    await run_optimization(scenario_id="test-scenario", job_id="test-job")
+    run_optimization(scenario_id="test-scenario", job_id="test-job")
 
     # Check save was called with allocation_policy as list
     assert mock_save.called
@@ -442,7 +442,7 @@ async def test_run_optimization_error_message_includes_step(mocker, mock_env_var
     from api.services.optimization import run_optimization
 
     with pytest.raises(ConnectionError):
-        await run_optimization(scenario_id="s1", job_id="j1")
+        run_optimization(scenario_id="s1", job_id="j1")
 
     failed_call = next(
         c for c in mock_update_job.call_args_list if c[1].get("status") == "failed"

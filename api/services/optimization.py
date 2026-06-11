@@ -316,7 +316,7 @@ def _parse_opt_params(scenario_data: dict) -> tuple:
     return n_sims, t_max, t_min, solver, objective, seed, start_date
 
 
-async def run_optimization(scenario_id: str, job_id: str) -> None:
+def run_optimization(scenario_id: str, job_id: str) -> None:
     """
     Run CVaR optimization with goal-seeking for a scenario.
 
@@ -324,6 +324,12 @@ async def run_optimization(scenario_id: str, job_id: str) -> None:
     It fetches the scenario, runs bilevel optimization (outer: horizon search,
     inner: convex allocation), re-simulates with optimal policy to get
     wealth trajectories, and saves results.
+
+    NOTE: intentionally a SYNC ``def`` (the body is entirely CPU-bound, no
+    ``await``). Starlette runs sync background tasks in a threadpool, which keeps
+    the event loop free to answer the ``/health`` check while the solve runs.
+    Declaring this ``async`` blocks the loop and gets the instance killed by the
+    platform health check mid-job (job left stuck at "running"). Do not make it async.
 
     Parameters
     ----------

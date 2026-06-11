@@ -264,7 +264,7 @@ async def test_run_simulation_updates_job_status(mocker, sample_scenario_data, m
 
     from api.services.simulation import run_simulation
 
-    await run_simulation(scenario_id="test-scenario", job_id="test-job")
+    run_simulation(scenario_id="test-scenario", job_id="test-job")
 
     # Check that update_job was called multiple times with progress updates
     assert mock_update_job.call_count >= 3
@@ -284,7 +284,7 @@ async def test_run_simulation_handles_error(mocker, sample_scenario_data, mock_e
     from api.services.simulation import run_simulation
 
     with pytest.raises(ValueError):
-        await run_simulation(scenario_id="test-scenario", job_id="test-job")
+        run_simulation(scenario_id="test-scenario", job_id="test-job")
 
     # Should have updated job with failed status
     calls = [call for call in mock_update_job.call_args_list if 'status' in call[1]]
@@ -365,7 +365,7 @@ async def test_run_simulation_error_message_includes_step(mocker, mock_env_vars)
     from api.services.simulation import run_simulation
 
     with pytest.raises(ConnectionError):
-        await run_simulation(scenario_id="s1", job_id="j1")
+        run_simulation(scenario_id="s1", job_id="j1")
 
     failed_call = next(
         c for c in mock_update_job.call_args_list if c[1].get("status") == "failed"
