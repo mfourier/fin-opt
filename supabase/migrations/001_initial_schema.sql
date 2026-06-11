@@ -82,7 +82,7 @@ CREATE TABLE IF NOT EXISTS scenarios (
     t_max INTEGER DEFAULT 240 NOT NULL CHECK (t_max >= 12 AND t_max <= 600),
     t_min INTEGER DEFAULT 12 NOT NULL CHECK (t_min >= 1),
     solver VARCHAR(20) DEFAULT 'ECOS' NOT NULL CHECK (solver IN ('ECOS', 'SCS', 'CLARABEL', 'MOSEK')),
-    objective VARCHAR(30) DEFAULT 'balanced' NOT NULL CHECK (objective IN ('risky', 'balanced', 'conservative', 'risky_turnover')),
+    objective VARCHAR(30) DEFAULT 'proportional' NOT NULL CHECK (objective IN ('risky', 'balanced', 'conservative', 'risky_turnover', 'proportional')),
 
     created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
