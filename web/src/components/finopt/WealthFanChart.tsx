@@ -95,13 +95,21 @@ export function WealthFanChart({
     }));
   }, [fanSource, startDate]);
 
-  // "All accounts" view: one median series per account.
+  // "All accounts" view: median series per account plus its P25–P75 band
+  // (same stacked-area trick as the fan views, one stack per account).
   const accountsData = useMemo(() => {
     if (!hasAccounts) return [];
     const n = Math.max(...accounts.map((a) => a.p50.length));
     return Array.from({ length: n }, (_, i) => {
       const row: Record<string, number | string> = { month: i, label: monthLabel(i, startDate) };
-      for (const a of accounts) row[a.account] = a.p50[i] ?? 0;
+      for (const a of accounts) {
+        const p50 = a.p50[i] ?? 0;
+        const p25 = a.p25?.[i] ?? p50;
+        const p75 = a.p75?.[i] ?? p50;
+        row[a.account] = p50;
+        row[`${a.account}__bandLower`] = p25;
+        row[`${a.account}__bandWidth`] = Math.max(0, p75 - p25);
+      }
       return row;
     });
   }, [accounts, hasAccounts, startDate]);
@@ -117,7 +125,7 @@ export function WealthFanChart({
     view === "total"
       ? "Likely range of your total savings over time. Darker band = more likely."
       : view === "accounts"
-        ? "Median projected wealth for each account over time. Filled areas mark each account and dashed lines show your goals."
+        ? "Median line for each account with its likely range (P25–P75) shaded. Dashed lines show your goals."
         : `Likely range for ${selected?.display_name ?? view}. Darker band = more likely.`;
 
   const tooltipStyle = {
@@ -194,14 +202,6 @@ export function WealthFanChart({
         <ResponsiveContainer width="100%" height="100%">
           {view === "accounts" ? (
             <ComposedChart data={accountsData} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
-              <defs>
-                {accounts.map((a) => (
-                  <linearGradient key={a.account} id={`wealth-grad-${a.account}`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={colorOf(a.account)} stopOpacity={0.34} />
-                    <stop offset="100%" stopColor={colorOf(a.account)} stopOpacity={0.08} />
-                  </linearGradient>
-                ))}
-              </defs>
               <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" vertical={false} />
               <XAxis
                 dataKey="month"
@@ -220,18 +220,51 @@ export function WealthFanChart({
                   return [formatCLP(Number(value)), acc?.display_name ?? name];
                 }}
               />
+              {/* P25–P75 band per account (stacked-area trick: invisible
+                  baseline at P25 + filled width up to P75). */}
               {accounts.map((a) => (
                 <Area
+                  key={`${a.account}-band-lower`}
+                  type="monotone"
+                  dataKey={`${a.account}__bandLower`}
+                  stackId={`band-${a.account}`}
+                  stroke="transparent"
+                  fill="transparent"
+                  isAnimationActive={false}
+                  activeDot={false}
+                  legendType="none"
+                  tooltipType="none"
+                />
+              ))}
+              {accounts.map((a) => (
+                <Area
+                  key={`${a.account}-band-width`}
+                  type="monotone"
+                  dataKey={`${a.account}__bandWidth`}
+                  stackId={`band-${a.account}`}
+                  stroke="transparent"
+                  fill={colorOf(a.account)}
+                  fillOpacity={highlightLikelyBand ? 0.32 : dimForFocus ? 0.08 : 0.16}
+                  isAnimationActive={false}
+                  activeDot={false}
+                  legendType="none"
+                  tooltipType="none"
+                  onClick={() => togglePin("likely-band")}
+                  onMouseEnter={() => setHoverFocus("likely-band")}
+                  onMouseLeave={() => setHoverFocus(null)}
+                />
+              ))}
+              {/* Median line per account, drawn above the bands. */}
+              {accounts.map((a) => (
+                <Line
                   key={a.account}
                   type="monotone"
                   dataKey={a.account}
                   stroke={colorOf(a.account)}
                   strokeWidth={highlightWealth ? 2.8 : 2}
-                  fill={`url(#wealth-grad-${a.account})`}
-                  fillOpacity={highlightWealth ? 1 : dimForFocus ? 0.38 : 1}
-                  opacity={highlightWithdrawals || highlightGoals ? 0.45 : 1}
-                  isAnimationActive={false}
+                  opacity={highlightWithdrawals || highlightGoals ? 0.45 : dimForFocus && !highlightWealth ? 0.55 : 1}
                   dot={false}
+                  isAnimationActive={false}
                   onClick={() => togglePin("wealth")}
                   onMouseEnter={() => setHoverFocus("wealth")}
                   onMouseLeave={() => setHoverFocus(null)}
@@ -499,6 +532,7 @@ function AccountsLegend({
       {accounts.map((a) => (
         <LegendItem key={a.account} color={colorOf(a.account)} label={a.display_name} focus="wealth" activeFocus={activeFocus} pinnedFocus={pinnedFocus} onFocusChange={onFocusChange} onTogglePin={onTogglePin} />
       ))}
+      <LegendItem color="var(--color-muted-foreground)" opacity={0.35} label="Likely range (P25–P75)" focus="likely-band" activeFocus={activeFocus} pinnedFocus={pinnedFocus} onFocusChange={onFocusChange} onTogglePin={onTogglePin} />
       {showGoal && <LegendItem color="var(--color-muted-foreground)" label="Goal" dashed focus="goal-target" activeFocus={activeFocus} pinnedFocus={pinnedFocus} onFocusChange={onFocusChange} onTogglePin={onTogglePin} />}
       {showWithdrawal && <LegendItem color="var(--color-danger)" label="Withdrawal" dashed focus="withdrawal" activeFocus={activeFocus} pinnedFocus={pinnedFocus} onFocusChange={onFocusChange} onTogglePin={onTogglePin} />}
     </div>

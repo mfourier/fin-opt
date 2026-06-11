@@ -20,7 +20,7 @@ export default function Layout() {
           <div className="flex h-16 justify-between">
             <div className="flex">
               <div className="flex flex-shrink-0 items-center">
-                <span className="text-xl font-bold text-primary-600">FinOpt</span>
+                <img src="/icon.png" alt="FinOpt" className="h-8 w-8" />
               </div>
               <div className="ml-10 flex items-center space-x-4">
                 {navigation.map((item) => {
