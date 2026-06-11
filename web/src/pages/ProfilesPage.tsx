@@ -39,8 +39,8 @@ export default function ProfilesPage() {
       resetForm()
       toast.success('Situation saved', 'Your situation has been created.')
     },
-    onError: (error: Error) => {
-      toast.error('Failed to save situation', error.message)
+    onError: (error: unknown) => {
+      toast.error('Failed to save situation', getProfileSaveErrorMessage(error))
     },
   })
 
@@ -60,8 +60,8 @@ export default function ProfilesPage() {
       resetForm()
       toast.success('Situation updated', 'Your changes have been saved.')
     },
-    onError: (error: Error) => {
-      toast.error('Failed to update situation', error.message)
+    onError: (error: unknown) => {
+      toast.error('Failed to update situation', getProfileSaveErrorMessage(error))
     },
   })
 
@@ -100,11 +100,24 @@ export default function ProfilesPage() {
   }
 
   const handleSave = async (draft: ProfileDraft) => {
+    const nextName = draft.name.trim()
+    const duplicate = profiles?.find((profile) =>
+      profile.name.trim() === nextName && profile.id !== editingProfile?.id,
+    )
+
+    if (duplicate) {
+      toast.error(
+        editingProfile ? 'Name already in use' : 'Situation already exists',
+        'Choose a different situation name or edit the existing one.',
+      )
+      return
+    }
+
     try {
       if (editingProfile) {
         await updateMutation.mutateAsync({
           id: editingProfile.id,
-          name: draft.name,
+          name: nextName,
           description: draft.description,
           income_config: draft.income_config,
           accounts_config: draft.accounts_config,
@@ -113,7 +126,7 @@ export default function ProfilesPage() {
       } else {
         await createMutation.mutateAsync({
           user_id: user!.id,
-          name: draft.name,
+          name: nextName,
           description: draft.description,
           income_config: draft.income_config,
           accounts_config: draft.accounts_config,
@@ -135,7 +148,10 @@ export default function ProfilesPage() {
           </p>
         </div>
         <button
-          onClick={() => setShowForm(true)}
+          onClick={() => {
+            setEditingProfile(null)
+            setShowForm(true)
+          }}
           className="rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
         >
           New situation
@@ -215,4 +231,23 @@ export default function ProfilesPage() {
       </div>
     </div>
   )
+}
+
+function getProfileSaveErrorMessage(error: unknown): string {
+  if (isUniqueConstraintError(error)) {
+    return 'A situation with that name already exists in your account. Use a different name or edit the existing one.'
+  }
+
+  if (error instanceof Error) {
+    return error.message
+  }
+
+  return 'An unexpected error occurred while saving your situation.'
+}
+
+function isUniqueConstraintError(error: unknown): error is { code?: string; message?: string } {
+  if (!error || typeof error !== 'object') return false
+  const maybeError = error as { code?: string; message?: string }
+  return maybeError.code === '23505'
+    || maybeError.message?.includes('profiles_name_user_unique') === true
 }
