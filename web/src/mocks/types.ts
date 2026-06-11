@@ -91,6 +91,12 @@ export type WealthPercentiles = {
   p90: number[];
 };
 
+/** Per-account wealth percentiles (summary_stats.per_account entries). */
+export type AccountWealthSeries = WealthPercentiles & {
+  account: string;
+  display_name: string;
+};
+
 export type GoalStatus = {
   goal: string;
   type: "terminal" | "intermediate";
@@ -112,6 +118,7 @@ export type Result = {
   solve_time: number | null;
   summary_stats: {
     total_wealth?: WealthPercentiles;
+    per_account?: AccountWealthSeries[];
     cash_flow?: {
       contributions_mean: number[];
       contributions_by_account: {

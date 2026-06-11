@@ -33,9 +33,11 @@ export function GoalStatusList({ goals, accountDisplayNames = {} }: Props) {
             >
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="font-medium text-foreground">{g.goal}</h3>
+                  {/* Title from structured fields — g.goal is a backend string and
+                      may contain account slugs ("cuenta_vivienda at horizon T=27"). */}
+                  <h3 className="font-medium text-foreground">{accName}</h3>
                   <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                    {g.type === "terminal" ? "By the end of the plan" : "By a specific date"}
+                    {g.type === "terminal" ? "By the end of the plan" : intermediateChip(g.goal)}
                   </span>
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">
@@ -76,6 +78,15 @@ export function GoalStatusList({ goals, accountDisplayNames = {} }: Props) {
       </ul>
     </div>
   );
+}
+
+/** Chip text for dated goals: pull the ISO date out of the backend description
+ *  ("... by 2026-07-01") and show it as "By Jul 2026"; fall back to generic copy. */
+function intermediateChip(goalDesc: string): string {
+  const m = goalDesc.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return "By a specific date";
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return `By ${d.toLocaleDateString("en-US", { month: "short", year: "numeric" })}`;
 }
 
 function ProbabilityBar({

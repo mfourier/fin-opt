@@ -56,11 +56,12 @@ export function PlanResults({
     profile.accounts_config.map((a) => [a.name, a.display_name ?? a.name]),
   );
 
-  // Pick the largest terminal goal threshold to show as the chart goal line.
-  const heroGoal = scenario.terminal_goals[0];
-  const heroGoalLabel = heroGoal
-    ? `Goal: ${accountDisplay[heroGoal.account] ?? heroGoal.account}`
-    : undefined;
+  // One dashed goal line per goal (terminal + dated), colored per account.
+  const goalLines = [...scenario.terminal_goals, ...scenario.intermediate_goals].map((g) => ({
+    account: g.account,
+    threshold: g.threshold,
+    label: accountDisplay[g.account] ?? g.account,
+  }));
 
   return (
     <div className="space-y-6">
@@ -106,8 +107,8 @@ export function PlanResults({
       {result.summary_stats?.total_wealth && (
         <WealthFanChart
           percentiles={result.summary_stats.total_wealth}
-          goalThreshold={heroGoal?.threshold}
-          goalLabel={heroGoal ? `Goal · ${heroGoalLabel}` : undefined}
+          accounts={result.summary_stats.per_account}
+          goals={goalLines}
         />
       )}
 

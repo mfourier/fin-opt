@@ -68,13 +68,21 @@ def compute_goal_status_from_result(
         if isinstance(goal.account, str):
             account_name = goal.account
             account_idx = account_name_to_idx.get(goal.account, 0)
+            # Human-readable label for descriptions (account names are often
+            # slugs like "cuenta_vivienda"; label falls back to name).
+            account_label = (
+                model.accounts[account_idx].label
+                if goal.account in account_name_to_idx
+                else goal.account
+            )
         else:
             account_name = model.accounts[goal.account].name
             account_idx = goal.account
+            account_label = model.accounts[goal.account].label
 
         if isinstance(goal, IntermediateGoal):
             goal_type = "intermediate"
-            goal_desc = f"{account_name} by {goal.date.isoformat()}"
+            goal_desc = f"{account_label} by {goal.date.isoformat()}"
             resolved_month = goal.resolve_month(start_date)
             if resolved_month < sim_result.wealth.shape[1]:
                 actual_prob, dual = compute_goal_probability(
@@ -87,7 +95,7 @@ def compute_goal_status_from_result(
                 dual = {"empirical_probability": None, "confidence_gap": None, "note": None}
         else:
             goal_type = "terminal"
-            goal_desc = f"{account_name} at horizon T={opt_result.T}"
+            goal_desc = f"{account_label} at horizon T={opt_result.T}"
             actual_prob, dual = compute_goal_probability(
                 sim_result.wealth[:, -1, account_idx], goal.threshold, goal.confidence
             )

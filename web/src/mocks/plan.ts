@@ -148,6 +148,25 @@ const wealth = buildPercentiles();
 const allocation = buildAllocation();
 const { consMean, aggMean, totalMean } = buildContributions();
 
+// Per-account percentiles for the chart's account views — a simple split of the
+// total (conservative grows toward ~55% of the pot as allocation drifts).
+function splitPercentiles(fraction: (t: number) => number) {
+  const scale = (xs: number[]) => xs.map((v, t) => Math.round(v * fraction(t)));
+  return {
+    mean: scale(wealth.mean),
+    p10: scale(wealth.p10),
+    p25: scale(wealth.p25),
+    p50: scale(wealth.p50),
+    p75: scale(wealth.p75),
+    p90: scale(wealth.p90),
+  };
+}
+const consFraction = (t: number) => 0.3 + 0.25 * (t / H);
+const perAccountWealth = [
+  { account: "conservative", display_name: "Safe savings", ...splitPercentiles(consFraction) },
+  { account: "aggressive", display_name: "Growth ETF", ...splitPercentiles((t) => 1 - consFraction(t)) },
+];
+
 export const mockResult: Result = {
   allocation_policy: allocation,
   optimal_horizon: H,
