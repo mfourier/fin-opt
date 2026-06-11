@@ -1,14 +1,23 @@
 import { CheckCircle2, AlertTriangle } from "lucide-react";
 import type { GoalStatus } from "@/mocks/types";
-import { formatCLP, describeConfidence, formatPercent } from "@/lib/format";
+import { formatCLP, describeConfidence, formatMonthYear, formatPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
+
+export type GoalDetail = {
+  type: GoalStatus["type"];
+  account: string;
+  threshold: number;
+  requiredConfidence: number;
+  targetDate?: string;
+};
 
 type Props = {
   goals: GoalStatus[];
   accountDisplayNames?: Record<string, string>;
+  goalDetails?: GoalDetail[];
 };
 
-export function GoalStatusList({ goals, accountDisplayNames = {} }: Props) {
+export function GoalStatusList({ goals, accountDisplayNames = {}, goalDetails = [] }: Props) {
   return (
     <div className="rounded-2xl border bg-card p-5 sm:p-6">
       <div className="flex items-end justify-between gap-3">
@@ -26,6 +35,7 @@ export function GoalStatusList({ goals, accountDisplayNames = {} }: Props) {
           const required = g.required_confidence;
           const tone = g.satisfied ? "success" : "warning";
           const accName = accountDisplayNames[g.account] ?? g.account;
+          const detail = goalDetails.find((candidate) => matchesGoal(candidate, g));
           return (
             <li
               key={g.goal}
@@ -37,7 +47,7 @@ export function GoalStatusList({ goals, accountDisplayNames = {} }: Props) {
                       may contain account slugs ("cuenta_vivienda at horizon T=27"). */}
                   <h3 className="font-medium text-foreground">{accName}</h3>
                   <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                    {g.type === "terminal" ? "By the end of the plan" : intermediateChip(g.goal)}
+                    {g.type === "terminal" ? "By the end of the plan" : intermediateChip(detail?.targetDate)}
                   </span>
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">
@@ -80,13 +90,15 @@ export function GoalStatusList({ goals, accountDisplayNames = {} }: Props) {
   );
 }
 
-/** Chip text for dated goals: pull the ISO date out of the backend description
- *  ("... by 2026-07-01") and show it as "By Jul 2026"; fall back to generic copy. */
-function intermediateChip(goalDesc: string): string {
-  const m = goalDesc.match(/(\d{4})-(\d{2})-(\d{2})/);
-  if (!m) return "By a specific date";
-  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-  return `By ${d.toLocaleDateString("en-US", { month: "short", year: "numeric" })}`;
+function matchesGoal(detail: GoalDetail, goal: GoalStatus): boolean {
+  return detail.type === goal.type
+    && detail.account === goal.account
+    && detail.threshold === goal.threshold
+    && detail.requiredConfidence === goal.required_confidence;
+}
+
+function intermediateChip(targetDate?: string): string {
+  return targetDate ? `By ${formatMonthYear(targetDate)}` : "By a specific date";
 }
 
 function ProbabilityBar({

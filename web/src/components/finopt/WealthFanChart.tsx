@@ -1,18 +1,20 @@
 import { useMemo, useState } from "react";
 import {
   Area,
-  AreaChart,
   CartesianGrid,
+  ComposedChart,
+  Line,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
-  Line,
 } from "recharts";
 import type { AccountWealthSeries, WealthPercentiles } from "@/mocks/types";
 import { formatCLP, formatCLPCompact, monthLabel } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import type { ExplainerFocus } from "./plan-explainer-focus";
+import { isFocusActive } from "./plan-explainer-focus";
 
 // Same palette as ContributionPlan so each account keeps its color across cards.
 const SERIES_COLORS = ["var(--color-chart-1)", "var(--color-chart-2)", "var(--color-chart-4)", "var(--color-chart-5)"];
@@ -23,6 +25,11 @@ export type GoalLine = {
   label: string;
 };
 
+export type WithdrawalMarker = {
+  month: number;
+  label: string;
+};
+
 type Props = {
   /** Total (sum of accounts) percentiles. */
   percentiles: WealthPercentiles;
@@ -30,12 +37,30 @@ type Props = {
   accounts?: AccountWealthSeries[];
   /** Goal thresholds to draw as dashed lines, colored per account. */
   goals?: GoalLine[];
+  /** Plan anchor date for x-axis month labels. */
+  startDate?: string;
+  /** Dated withdrawals shown as vertical markers. */
+  withdrawals?: WithdrawalMarker[];
+  activeFocus?: ExplainerFocus | null;
+  pinnedFocus?: ExplainerFocus | null;
+  onFocusChange?: (focus: ExplainerFocus | null) => void;
+  onTogglePin?: (focus: ExplainerFocus) => void;
 };
 
 /** "accounts" = all account medians; "total" = fan of the sum; otherwise an account slug. */
 type View = string;
 
-export function WealthFanChart({ percentiles, accounts = [], goals = [] }: Props) {
+export function WealthFanChart({
+  percentiles,
+  accounts = [],
+  goals = [],
+  startDate,
+  withdrawals = [],
+  activeFocus = null,
+  pinnedFocus = null,
+  onFocusChange,
+  onTogglePin,
+}: Props) {
   const hasAccounts = accounts.length > 0;
   const [view, setView] = useState<View>(hasAccounts ? "accounts" : "total");
 
@@ -56,7 +81,7 @@ export function WealthFanChart({ percentiles, accounts = [], goals = [] }: Props
     if (!fanSource) return [];
     return fanSource.p50.map((_, i) => ({
       month: i,
-      label: monthLabel(i),
+      label: monthLabel(i, startDate),
       p10: fanSource.p10[i],
       p25: fanSource.p25[i],
       p50: fanSource.p50[i],
@@ -68,18 +93,18 @@ export function WealthFanChart({ percentiles, accounts = [], goals = [] }: Props
       band2575Lower: fanSource.p25[i],
       band2575Width: fanSource.p75[i] - fanSource.p25[i],
     }));
-  }, [fanSource]);
+  }, [fanSource, startDate]);
 
   // "All accounts" view: one median series per account.
   const accountsData = useMemo(() => {
     if (!hasAccounts) return [];
-    const n = accounts[0].p50.length;
+    const n = Math.max(...accounts.map((a) => a.p50.length));
     return Array.from({ length: n }, (_, i) => {
-      const row: Record<string, number | string> = { month: i, label: monthLabel(i) };
-      for (const a of accounts) row[a.account] = a.p50[i];
+      const row: Record<string, number | string> = { month: i, label: monthLabel(i, startDate) };
+      for (const a of accounts) row[a.account] = a.p50[i] ?? 0;
       return row;
     });
-  }, [accounts, hasAccounts]);
+  }, [accounts, hasAccounts, startDate]);
 
   // Goal lines visible in the current view. The total view sums accounts, so
   // per-account thresholds would be misleading there — goals show in account views.
@@ -92,7 +117,7 @@ export function WealthFanChart({ percentiles, accounts = [], goals = [] }: Props
     view === "total"
       ? "Likely range of your total savings over time. Darker band = more likely."
       : view === "accounts"
-        ? "Median projected wealth for each account. Dashed lines mark your goals."
+        ? "Median projected wealth for each account over time. Filled areas mark each account and dashed lines show your goals."
         : `Likely range for ${selected?.display_name ?? view}. Darker band = more likely.`;
 
   const tooltipStyle = {
@@ -110,6 +135,15 @@ export function WealthFanChart({ percentiles, accounts = [], goals = [] }: Props
     tickLine: false,
     axisLine: false,
   } as const;
+
+  const highlightWealth = isFocusActive(activeFocus, ["wealth", "contribution", "allocation", "return", "median"]);
+  const highlightGoals = isFocusActive(activeFocus, ["goal-target", "goal-probability"]);
+  const highlightWithdrawals = isFocusActive(activeFocus, ["withdrawal"]);
+  const highlightLikelyBand = isFocusActive(activeFocus, ["likely-band"]);
+  const highlightPossibleBand = isFocusActive(activeFocus, ["possible-band"]);
+  const dimForFocus = activeFocus !== null;
+  const setHoverFocus = (focus: ExplainerFocus | null) => onFocusChange?.(focus);
+  const togglePin = (focus: ExplainerFocus) => onTogglePin?.(focus);
 
   return (
     <div className="rounded-2xl border bg-card p-5 sm:p-6">
@@ -133,20 +167,45 @@ export function WealthFanChart({ percentiles, accounts = [], goals = [] }: Props
 
       <div className="mt-2">
         {view === "accounts" ? (
-          <AccountsLegend accounts={accounts} colorOf={colorOf} showGoal={visibleGoals.length > 0} />
+          <AccountsLegend
+            accounts={accounts}
+            colorOf={colorOf}
+            showGoal={visibleGoals.length > 0}
+            showWithdrawal={withdrawals.length > 0}
+            activeFocus={activeFocus}
+            pinnedFocus={pinnedFocus}
+            onFocusChange={setHoverFocus}
+            onTogglePin={togglePin}
+          />
         ) : (
-          <FanLegend color={fanColor} showGoal={visibleGoals.length > 0} />
+          <FanLegend
+            color={fanColor}
+            showGoal={visibleGoals.length > 0}
+            showWithdrawal={withdrawals.length > 0}
+            activeFocus={activeFocus}
+            pinnedFocus={pinnedFocus}
+            onFocusChange={setHoverFocus}
+            onTogglePin={togglePin}
+          />
         )}
       </div>
 
       <div className="mt-4 h-[320px] w-full sm:h-[380px]">
         <ResponsiveContainer width="100%" height="100%">
           {view === "accounts" ? (
-            <AreaChart data={accountsData} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
+            <ComposedChart data={accountsData} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
+              <defs>
+                {accounts.map((a) => (
+                  <linearGradient key={a.account} id={`wealth-grad-${a.account}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={colorOf(a.account)} stopOpacity={0.34} />
+                    <stop offset="100%" stopColor={colorOf(a.account)} stopOpacity={0.08} />
+                  </linearGradient>
+                ))}
+              </defs>
               <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" vertical={false} />
               <XAxis
                 dataKey="month"
-                tickFormatter={(m) => monthLabel(Number(m))}
+                tickFormatter={(m) => monthLabel(Number(m), startDate)}
                 interval="preserveStartEnd"
                 minTickGap={48}
                 {...axisProps}
@@ -155,21 +214,27 @@ export function WealthFanChart({ percentiles, accounts = [], goals = [] }: Props
               <Tooltip
                 cursor={{ stroke: "var(--color-muted-foreground)", strokeDasharray: "3 3" }}
                 contentStyle={tooltipStyle}
-                labelFormatter={(m) => monthLabel(Number(m))}
+                labelFormatter={(m) => monthLabel(Number(m), startDate)}
                 formatter={(value: number, name: string) => {
                   const acc = accounts.find((a) => a.account === name);
                   return [formatCLP(Number(value)), acc?.display_name ?? name];
                 }}
               />
               {accounts.map((a) => (
-                <Line
+                <Area
                   key={a.account}
                   type="monotone"
                   dataKey={a.account}
                   stroke={colorOf(a.account)}
-                  strokeWidth={2.5}
-                  dot={false}
+                  strokeWidth={highlightWealth ? 2.8 : 2}
+                  fill={`url(#wealth-grad-${a.account})`}
+                  fillOpacity={highlightWealth ? 1 : dimForFocus ? 0.38 : 1}
+                  opacity={highlightWithdrawals || highlightGoals ? 0.45 : 1}
                   isAnimationActive={false}
+                  dot={false}
+                  onClick={() => togglePin("wealth")}
+                  onMouseEnter={() => setHoverFocus("wealth")}
+                  onMouseLeave={() => setHoverFocus(null)}
                   activeDot={{ r: 4, stroke: colorOf(a.account), fill: "var(--color-background)", strokeWidth: 2 }}
                 />
               ))}
@@ -179,7 +244,8 @@ export function WealthFanChart({ percentiles, accounts = [], goals = [] }: Props
                   y={g.threshold}
                   stroke={colorOf(g.account)}
                   strokeDasharray="6 4"
-                  strokeWidth={1.5}
+                  strokeWidth={highlightGoals ? 2.5 : 1.5}
+                  strokeOpacity={highlightWithdrawals ? 0.35 : dimForFocus && !highlightGoals ? 0.45 : 1}
                   ifOverflow="extendDomain"
                   label={{
                     value: `${g.label}: ${formatCLPCompact(g.threshold)}`,
@@ -188,11 +254,35 @@ export function WealthFanChart({ percentiles, accounts = [], goals = [] }: Props
                     fontSize: 11,
                     fontWeight: 600,
                   }}
+                  onClick={() => togglePin("goal-target")}
+                  onMouseEnter={() => setHoverFocus("goal-target")}
+                  onMouseLeave={() => setHoverFocus(null)}
                 />
               ))}
-            </AreaChart>
+              {withdrawals.map((w, idx) => (
+                <ReferenceLine
+                  key={`withdrawal-accounts-${idx}-${w.month}`}
+                  x={w.month}
+                  stroke="var(--color-danger)"
+                  strokeDasharray="4 4"
+                  strokeWidth={highlightWithdrawals ? 2 : 1}
+                  strokeOpacity={dimForFocus && !highlightWithdrawals ? 0.35 : 1}
+                  ifOverflow="extendDomain"
+                  label={{
+                    value: w.label,
+                    position: "insideTopLeft",
+                    fill: "var(--color-danger)",
+                    fontSize: 10,
+                    fontWeight: 600,
+                  }}
+                  onClick={() => togglePin("withdrawal")}
+                  onMouseEnter={() => setHoverFocus("withdrawal")}
+                  onMouseLeave={() => setHoverFocus(null)}
+                />
+              ))}
+            </ComposedChart>
           ) : (
-            <AreaChart data={fanData} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
+            <ComposedChart data={fanData} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
               <defs>
                 <linearGradient id="band-outer" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={fanColor} stopOpacity={0.18} />
@@ -207,7 +297,7 @@ export function WealthFanChart({ percentiles, accounts = [], goals = [] }: Props
               <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" vertical={false} />
               <XAxis
                 dataKey="month"
-                tickFormatter={(m) => monthLabel(Number(m))}
+                tickFormatter={(m) => monthLabel(Number(m), startDate)}
                 interval="preserveStartEnd"
                 minTickGap={48}
                 {...axisProps}
@@ -217,7 +307,7 @@ export function WealthFanChart({ percentiles, accounts = [], goals = [] }: Props
               <Tooltip
                 cursor={{ stroke: "var(--color-muted-foreground)", strokeDasharray: "3 3" }}
                 contentStyle={tooltipStyle}
-                labelFormatter={(m) => monthLabel(Number(m))}
+                labelFormatter={(m) => monthLabel(Number(m), startDate)}
                 formatter={(value: number, name: string) => {
                   const labels: Record<string, string> = {
                     p50: "Median (P50)",
@@ -251,9 +341,13 @@ export function WealthFanChart({ percentiles, accounts = [], goals = [] }: Props
                 stackId="outer"
                 stroke="transparent"
                 fill="url(#band-outer)"
+                fillOpacity={highlightPossibleBand ? 1 : dimForFocus && !highlightLikelyBand ? 0.45 : 1}
                 isAnimationActive={false}
                 activeDot={false}
                 legendType="none"
+                onClick={() => togglePin("possible-band")}
+                onMouseEnter={() => setHoverFocus("possible-band")}
+                onMouseLeave={() => setHoverFocus(null)}
               />
 
               {/* P25–P75 inner band */}
@@ -273,25 +367,33 @@ export function WealthFanChart({ percentiles, accounts = [], goals = [] }: Props
                 stackId="inner"
                 stroke="transparent"
                 fill="url(#band-inner)"
+                fillOpacity={highlightLikelyBand ? 1 : dimForFocus && !highlightPossibleBand ? 0.45 : 1}
                 isAnimationActive={false}
                 activeDot={false}
                 legendType="none"
+                onClick={() => togglePin("likely-band")}
+                onMouseEnter={() => setHoverFocus("likely-band")}
+                onMouseLeave={() => setHoverFocus(null)}
               />
 
               {/* Hidden series for tooltip readouts */}
-              <Line type="monotone" dataKey="p10" stroke="transparent" dot={false} isAnimationActive={false} activeDot={false} />
-              <Line type="monotone" dataKey="p25" stroke="transparent" dot={false} isAnimationActive={false} activeDot={false} />
-              <Line type="monotone" dataKey="p75" stroke="transparent" dot={false} isAnimationActive={false} activeDot={false} />
-              <Line type="monotone" dataKey="p90" stroke="transparent" dot={false} isAnimationActive={false} activeDot={false} />
+              <Area type="monotone" dataKey="p10" stroke="transparent" fill="transparent" isAnimationActive={false} activeDot={false} legendType="none" />
+              <Area type="monotone" dataKey="p25" stroke="transparent" fill="transparent" isAnimationActive={false} activeDot={false} legendType="none" />
+              <Area type="monotone" dataKey="p75" stroke="transparent" fill="transparent" isAnimationActive={false} activeDot={false} legendType="none" />
+              <Area type="monotone" dataKey="p90" stroke="transparent" fill="transparent" isAnimationActive={false} activeDot={false} legendType="none" />
 
               {/* Median */}
               <Line
                 type="monotone"
                 dataKey="p50"
                 stroke={fanColor}
-                strokeWidth={2.5}
+                strokeWidth={highlightWealth ? 3.5 : 2.5}
+                opacity={highlightGoals || highlightWithdrawals ? 0.45 : 1}
                 dot={false}
                 isAnimationActive={false}
+                onClick={() => togglePin("median")}
+                onMouseEnter={() => setHoverFocus("median")}
+                onMouseLeave={() => setHoverFocus(null)}
                 activeDot={{ r: 4, stroke: fanColor, fill: "var(--color-background)", strokeWidth: 2 }}
               />
 
@@ -301,7 +403,8 @@ export function WealthFanChart({ percentiles, accounts = [], goals = [] }: Props
                   y={g.threshold}
                   stroke="var(--color-success)"
                   strokeDasharray="6 4"
-                  strokeWidth={1.5}
+                  strokeWidth={highlightGoals ? 2.5 : 1.5}
+                  strokeOpacity={highlightWithdrawals ? 0.35 : dimForFocus && !highlightGoals ? 0.45 : 1}
                   ifOverflow="extendDomain"
                   label={{
                     value: `Goal: ${formatCLPCompact(g.threshold)}`,
@@ -310,9 +413,33 @@ export function WealthFanChart({ percentiles, accounts = [], goals = [] }: Props
                     fontSize: 11,
                     fontWeight: 600,
                   }}
+                  onClick={() => togglePin("goal-target")}
+                  onMouseEnter={() => setHoverFocus("goal-target")}
+                  onMouseLeave={() => setHoverFocus(null)}
                 />
               ))}
-            </AreaChart>
+              {withdrawals.map((w, idx) => (
+                <ReferenceLine
+                  key={`withdrawal-fan-${idx}-${w.month}`}
+                  x={w.month}
+                  stroke="var(--color-danger)"
+                  strokeDasharray="4 4"
+                  strokeWidth={highlightWithdrawals ? 2 : 1}
+                  strokeOpacity={dimForFocus && !highlightWithdrawals ? 0.35 : 1}
+                  ifOverflow="extendDomain"
+                  label={{
+                    value: w.label,
+                    position: "insideTopLeft",
+                    fill: "var(--color-danger)",
+                    fontSize: 10,
+                    fontWeight: 600,
+                  }}
+                  onClick={() => togglePin("withdrawal")}
+                  onMouseEnter={() => setHoverFocus("withdrawal")}
+                  onMouseLeave={() => setHoverFocus(null)}
+                />
+              ))}
+            </ComposedChart>
           )}
         </ResponsiveContainer>
       </div>
@@ -320,13 +447,30 @@ export function WealthFanChart({ percentiles, accounts = [], goals = [] }: Props
   );
 }
 
-function FanLegend({ color, showGoal }: { color: string; showGoal: boolean }) {
+function FanLegend({
+  color,
+  showGoal,
+  showWithdrawal,
+  activeFocus,
+  pinnedFocus,
+  onFocusChange,
+  onTogglePin,
+}: {
+  color: string;
+  showGoal: boolean;
+  showWithdrawal: boolean;
+  activeFocus: ExplainerFocus | null;
+  pinnedFocus: ExplainerFocus | null;
+  onFocusChange: (focus: ExplainerFocus | null) => void;
+  onTogglePin: (focus: ExplainerFocus) => void;
+}) {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
-      <LegendItem color={color} label="Median" />
-      <LegendItem color={color} opacity={0.3} label="Likely range (P25–P75)" />
-      <LegendItem color={color} opacity={0.15} label="Possible range (P10–P90)" />
-      {showGoal && <LegendItem color="var(--color-success)" label="Goal" dashed />}
+      <LegendItem color={color} label="Median" focus="median" activeFocus={activeFocus} pinnedFocus={pinnedFocus} onFocusChange={onFocusChange} onTogglePin={onTogglePin} />
+      <LegendItem color={color} opacity={0.3} label="Likely range (P25–P75)" focus="likely-band" activeFocus={activeFocus} pinnedFocus={pinnedFocus} onFocusChange={onFocusChange} onTogglePin={onTogglePin} />
+      <LegendItem color={color} opacity={0.15} label="Possible range (P10–P90)" focus="possible-band" activeFocus={activeFocus} pinnedFocus={pinnedFocus} onFocusChange={onFocusChange} onTogglePin={onTogglePin} />
+      {showGoal && <LegendItem color="var(--color-success)" label="Goal" dashed focus="goal-target" activeFocus={activeFocus} pinnedFocus={pinnedFocus} onFocusChange={onFocusChange} onTogglePin={onTogglePin} />}
+      {showWithdrawal && <LegendItem color="var(--color-danger)" label="Withdrawal" dashed focus="withdrawal" activeFocus={activeFocus} pinnedFocus={pinnedFocus} onFocusChange={onFocusChange} onTogglePin={onTogglePin} />}
     </div>
   );
 }
@@ -335,17 +479,28 @@ function AccountsLegend({
   accounts,
   colorOf,
   showGoal,
+  showWithdrawal,
+  activeFocus,
+  pinnedFocus,
+  onFocusChange,
+  onTogglePin,
 }: {
   accounts: AccountWealthSeries[];
   colorOf: (slug: string) => string;
   showGoal: boolean;
+  showWithdrawal: boolean;
+  activeFocus: ExplainerFocus | null;
+  pinnedFocus: ExplainerFocus | null;
+  onFocusChange: (focus: ExplainerFocus | null) => void;
+  onTogglePin: (focus: ExplainerFocus) => void;
 }) {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
       {accounts.map((a) => (
-        <LegendItem key={a.account} color={colorOf(a.account)} label={a.display_name} />
+        <LegendItem key={a.account} color={colorOf(a.account)} label={a.display_name} focus="wealth" activeFocus={activeFocus} pinnedFocus={pinnedFocus} onFocusChange={onFocusChange} onTogglePin={onTogglePin} />
       ))}
-      {showGoal && <LegendItem color="var(--color-muted-foreground)" label="Goal" dashed />}
+      {showGoal && <LegendItem color="var(--color-muted-foreground)" label="Goal" dashed focus="goal-target" activeFocus={activeFocus} pinnedFocus={pinnedFocus} onFocusChange={onFocusChange} onTogglePin={onTogglePin} />}
+      {showWithdrawal && <LegendItem color="var(--color-danger)" label="Withdrawal" dashed focus="withdrawal" activeFocus={activeFocus} pinnedFocus={pinnedFocus} onFocusChange={onFocusChange} onTogglePin={onTogglePin} />}
     </div>
   );
 }
@@ -355,14 +510,38 @@ function LegendItem({
   label,
   dashed,
   opacity = 1,
+  focus,
+  activeFocus,
+  pinnedFocus,
+  onFocusChange,
+  onTogglePin,
 }: {
   color: string;
   label: string;
   dashed?: boolean;
   opacity?: number;
+  focus: ExplainerFocus;
+  activeFocus: ExplainerFocus | null;
+  pinnedFocus: ExplainerFocus | null;
+  onFocusChange: (focus: ExplainerFocus | null) => void;
+  onTogglePin: (focus: ExplainerFocus) => void;
 }) {
+  const pinned = pinnedFocus === focus;
+
   return (
-    <span className="inline-flex items-center gap-1.5">
+    <button
+      type="button"
+      aria-pressed={pinned}
+      onClick={() => onTogglePin(focus)}
+      onMouseEnter={() => onFocusChange(focus)}
+      onMouseLeave={() => onFocusChange(null)}
+      onFocus={() => onFocusChange(focus)}
+      onBlur={() => onFocusChange(null)}
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded px-1 py-0.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+        pinned ? "bg-primary/14 text-foreground ring-1 ring-primary/30" : activeFocus === focus ? "bg-primary/10 text-foreground" : "hover:bg-muted/60",
+      )}
+    >
       <span
         className={cn(
           "inline-block h-2 w-4 rounded-sm",
@@ -372,7 +551,7 @@ function LegendItem({
         aria-hidden
       />
       {label}
-    </span>
+    </button>
   );
 }
 

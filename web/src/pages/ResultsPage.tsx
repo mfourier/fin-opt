@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useJobProgress } from '../hooks/useJobProgress'
@@ -6,13 +7,20 @@ import { queueOptimization } from '../lib/api'
 import type { Result, Scenario, Profile } from '../types/database'
 import type { Scenario as PlanScenario, Result as PlanResult } from '@/mocks/types'
 import { PlanResults } from '@/components/finopt/PlanResults'
+import { Button } from '@/components/ui/button'
 
 export default function ResultsPage() {
   const { jobId } = useParams<{ jobId: string }>()
   const navigate = useNavigate()
-  const { job, loading: jobLoading } = useJobProgress(jobId ?? null)
+  const { job, loading: jobLoading, error: jobError } = useJobProgress(jobId ?? null)
+  const [recalculating, setRecalculating] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
 
-  const { data: result } = useQuery({
+  const {
+    data: result,
+    isLoading: resultLoading,
+    error: resultError,
+  } = useQuery({
     queryKey: ['result', jobId] as const,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -26,7 +34,11 @@ export default function ResultsPage() {
     enabled: !!jobId && job?.status === 'completed',
   })
 
-  const { data: scenario } = useQuery({
+  const {
+    data: scenario,
+    isLoading: scenarioLoading,
+    error: scenarioError,
+  } = useQuery({
     queryKey: ['scenario', job?.scenario_id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -53,15 +65,10 @@ export default function ResultsPage() {
 
   if (!job) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center">
-        <svg className="h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        <p className="mt-4 text-gray-500">Job not found</p>
-        <Link to="/scenarios" className="mt-4 text-primary-600 hover:text-primary-500">
-          Back to Scenarios
-        </Link>
-      </div>
+      <EmptyState
+        title="Job not found"
+        message={jobError ?? 'We could not find this result. It may have been removed or the link may be incomplete.'}
+      />
     )
   }
 
@@ -105,6 +112,8 @@ export default function ResultsPage() {
   }
 
   const handleRecalculate = async () => {
+    setRecalculating(true)
+    setActionError(null)
     try {
       const { data: newJob, error } = await supabase
         .from('jobs')
@@ -115,8 +124,34 @@ export default function ResultsPage() {
       await queueOptimization({ scenario_id: job.scenario_id, job_id: newJob.id })
       navigate(`/results/${newJob.id}`)
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Failed to recalculate')
+      setActionError(e instanceof Error ? e.message : 'Failed to recalculate')
+    } finally {
+      setRecalculating(false)
     }
+  }
+
+  if (job.status === 'completed' && (resultLoading || scenarioLoading)) {
+    return (
+      <LoadingState message="Loading your completed plan and charts..." />
+    )
+  }
+
+  if (job.status === 'completed' && (resultError || scenarioError)) {
+    return (
+      <EmptyState
+        title="We couldn't load this plan"
+        message={(resultError ?? scenarioError)?.message ?? 'Something went wrong while loading the result.'}
+      />
+    )
+  }
+
+  if (job.status === 'completed' && (!result || !scenario)) {
+    return (
+      <EmptyState
+        title="Plan data unavailable"
+        message="The job finished, but the scenario or result payload is missing."
+      />
+    )
   }
 
   return (
@@ -200,9 +235,40 @@ export default function ResultsPage() {
             onExportCSV={handleExportCSV}
             onRecalculate={handleRecalculate}
             onAdjustGoals={() => navigate('/scenarios')}
+            updatedAt={job.completed_at ?? result.created_at}
+            isRecalculating={recalculating}
+            actionError={actionError}
           />
         </div>
       )}
+    </div>
+  )
+}
+
+function LoadingState({ message }: { message: string }) {
+  return (
+    <div className="flex h-64 items-center justify-center">
+      <div className="text-center">
+        <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-primary-500 border-t-transparent" />
+        <p className="mt-4 text-sm text-gray-500">{message}</p>
+      </div>
+    </div>
+  )
+}
+
+function EmptyState({ title, message }: { title: string; message: string }) {
+  return (
+    <div className="rounded-xl border bg-white p-8 text-center shadow-sm">
+      <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+      <h2 className="mt-4 text-lg font-semibold text-gray-900">{title}</h2>
+      <p className="mt-2 text-sm text-gray-500">{message}</p>
+      <div className="mt-5">
+        <Button asChild variant="outline">
+          <Link to="/scenarios">Back to Scenarios</Link>
+        </Button>
+      </div>
     </div>
   )
 }

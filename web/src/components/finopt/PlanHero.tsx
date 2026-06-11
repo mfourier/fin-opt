@@ -1,6 +1,6 @@
 import { CheckCircle2, AlertTriangle, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatMonthsLong } from "@/lib/format";
+import { formatDateShort, formatMonthsLong } from "@/lib/format";
 
 export type FeasibilityStatus = "feasible" | "tight" | "infeasible";
 
@@ -12,6 +12,7 @@ type Props = {
   solveTimeSeconds?: number | null;
   goalsAchieved: number;
   goalsTotal: number;
+  updatedAt?: string | null;
 };
 
 const STATUS = {
@@ -43,6 +44,7 @@ export function PlanHero({
   solveTimeSeconds,
   goalsAchieved,
   goalsTotal,
+  updatedAt,
 }: Props) {
   const s = STATUS[feasibility];
   const Icon = s.icon;
@@ -93,7 +95,7 @@ export function PlanHero({
         <Stat label="Goals achieved" value={`${goalsAchieved} / ${goalsTotal}`} />
         <Stat label="Plan status" value={s.label} />
         <Stat label="Time to compute" value={solveTimeSeconds ? `${solveTimeSeconds.toFixed(2)}s` : "—"} />
-        <Stat label="Updated" value="just now" />
+        <Stat label="Updated" value={formatDateShort(updatedAt)} />
       </dl>
     </section>
   );

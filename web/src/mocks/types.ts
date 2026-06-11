@@ -60,6 +60,7 @@ export type StochasticWithdrawal = {
   base_amount: number;
   sigma: number;
   date?: string;
+  month?: number;
   floor?: number;
   cap?: number;
   description?: string;
@@ -127,6 +128,11 @@ export type Result = {
         mean: number[];
       }[];
       withdrawals_mean?: number[];
+      withdrawals_by_account?: {
+        account: string;
+        display_name: string;
+        mean: number[];
+      }[];
     };
   } | null;
   goal_status: GoalStatus[] | null;

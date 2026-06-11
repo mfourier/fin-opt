@@ -4,6 +4,26 @@ const clpFormatter = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 0,
 });
 
+function coerceDate(value: string | Date | null | undefined): Date | null {
+  if (value instanceof Date) {
+    return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+  }
+
+  if (typeof value === "string") {
+    const isoMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (isoMatch) {
+      return new Date(Number(isoMatch[1]), Number(isoMatch[2]) - 1, Number(isoMatch[3]));
+    }
+
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed;
+    }
+  }
+
+  return null;
+}
+
 export function formatCLP(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(value)) return "$0";
   const sign = value < 0 ? "-" : "";
@@ -55,7 +75,26 @@ export function describeConfidence(confidence: number): string {
 }
 
 /** Add `monthsFromNow` months to today, return short label like "Aug 2028". */
-export function monthLabel(monthsFromNow: number, start: Date = new Date()): string {
-  const d = new Date(start.getFullYear(), start.getMonth() + monthsFromNow, 1);
+export function monthLabel(monthsFromNow: number, start?: string | Date | null): string {
+  const base = coerceDate(start) ?? new Date();
+  const d = new Date(base.getFullYear(), base.getMonth() + monthsFromNow, 1);
   return d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+}
+
+export function formatMonthYear(value: string | Date | null | undefined): string {
+  if (!value) return "—";
+  const parsed = coerceDate(value);
+  if (!parsed) return "—";
+  return parsed.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+}
+
+export function formatDateShort(value: string | Date | null | undefined): string {
+  if (!value) return "—";
+  const parsed = coerceDate(value);
+  if (!parsed) return "—";
+  return parsed.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }

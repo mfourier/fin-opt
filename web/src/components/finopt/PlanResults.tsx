@@ -1,11 +1,14 @@
+import { useState } from "react";
 import { Download, RotateCw, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Profile, Scenario, Result, JobStatus } from "@/mocks/types";
 import { PlanHero, type FeasibilityStatus } from "./PlanHero";
-import { WealthFanChart } from "./WealthFanChart";
+import { PlanExplainers } from "./PlanExplainers";
+import { WealthFanChart, type WithdrawalMarker } from "./WealthFanChart";
 import { ContributionPlan } from "./ContributionPlan";
-import { GoalStatusList } from "./GoalStatusList";
+import { GoalStatusList, type GoalDetail } from "./GoalStatusList";
 import { JobStatusView } from "./JobStatusView";
+import type { ExplainerFocus } from "./plan-explainer-focus";
 
 type Props = {
   profile: Profile;
@@ -17,6 +20,9 @@ type Props = {
   onExportCSV?: () => void;
   onRecalculate?: () => void;
   onAdjustGoals?: () => void;
+  updatedAt?: string | null;
+  isRecalculating?: boolean;
+  actionError?: string | null;
 };
 
 export function PlanResults({
@@ -29,7 +35,27 @@ export function PlanResults({
   onExportCSV,
   onRecalculate,
   onAdjustGoals,
+  updatedAt,
+  isRecalculating,
+  actionError,
 }: Props) {
+  const [hoverFocus, setHoverFocus] = useState<ExplainerFocus | null>(null);
+  const [pinnedFocus, setPinnedFocus] = useState<ExplainerFocus | null>(null);
+  const activeFocus = pinnedFocus ?? hoverFocus;
+
+  const handleHoverFocusChange = (focus: ExplainerFocus | null) => {
+    setHoverFocus(focus);
+  };
+
+  const handleTogglePin = (focus: ExplainerFocus) => {
+    setPinnedFocus((current) => (current === focus ? null : focus));
+    setHoverFocus(null);
+  };
+
+  const handleClearPin = () => {
+    setPinnedFocus(null);
+  };
+
   if (jobStatus !== "completed") {
     return (
       <div className="mx-auto w-full max-w-3xl">
@@ -63,6 +89,24 @@ export function PlanResults({
     label: accountDisplay[g.account] ?? g.account,
   }));
 
+  const goalDetails: GoalDetail[] = [
+    ...scenario.terminal_goals.map((g) => ({
+      type: "terminal" as const,
+      account: g.account,
+      threshold: g.threshold,
+      requiredConfidence: g.confidence,
+    })),
+    ...scenario.intermediate_goals.map((g) => ({
+      type: "intermediate" as const,
+      account: g.account,
+      threshold: g.threshold,
+      requiredConfidence: g.confidence,
+      targetDate: g.date,
+    })),
+  ];
+
+  const withdrawalMarkers: WithdrawalMarker[] = buildWithdrawalMarkers(scenario);
+
   return (
     <div className="space-y-6">
       <PlanHero
@@ -73,35 +117,55 @@ export function PlanResults({
         solveTimeSeconds={result.solve_time}
         goalsAchieved={achieved}
         goalsTotal={goals.length}
+        updatedAt={updatedAt}
+      />
+
+      <PlanExplainers
+        profile={profile}
+        scenario={scenario}
+        result={result}
+        activeFocus={activeFocus}
+        pinnedFocus={pinnedFocus}
+        onFocusChange={handleHoverFocusChange}
+        onTogglePin={handleTogglePin}
+        onClearPin={handleClearPin}
       />
 
       {/* Action bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card px-4 py-3">
-        <p className="text-sm text-muted-foreground">
-          Update your situation or goals and recalculate to see a new plan.
-        </p>
-        <div className="flex flex-wrap items-center gap-2">
-          {onAdjustGoals && (
-            <Button variant="ghost" size="sm" onClick={onAdjustGoals}>
-              <Settings2 className="size-4" aria-hidden /> Adjust
-            </Button>
-          )}
-          {onExportCSV && (
-            <Button variant="outline" size="sm" onClick={onExportCSV}>
-              <Download className="size-4" aria-hidden /> CSV
-            </Button>
-          )}
-          {onExportJSON && (
-            <Button variant="outline" size="sm" onClick={onExportJSON}>
-              <Download className="size-4" aria-hidden /> JSON
-            </Button>
-          )}
-          {onRecalculate && (
-            <Button size="sm" onClick={onRecalculate}>
-              <RotateCw className="size-4" aria-hidden /> Recalculate
-            </Button>
-          )}
+      <div className="rounded-xl border bg-card px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">
+            Update your situation or goals and recalculate to see a new plan.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            {onAdjustGoals && (
+              <Button variant="ghost" size="sm" onClick={onAdjustGoals} disabled={isRecalculating}>
+                <Settings2 className="size-4" aria-hidden /> Adjust
+              </Button>
+            )}
+            {onExportCSV && (
+              <Button variant="outline" size="sm" onClick={onExportCSV} disabled={isRecalculating}>
+                <Download className="size-4" aria-hidden /> CSV
+              </Button>
+            )}
+            {onExportJSON && (
+              <Button variant="outline" size="sm" onClick={onExportJSON} disabled={isRecalculating}>
+                <Download className="size-4" aria-hidden /> JSON
+              </Button>
+            )}
+            {onRecalculate && (
+              <Button size="sm" onClick={onRecalculate} disabled={isRecalculating}>
+                <RotateCw className="size-4" aria-hidden />
+                {isRecalculating ? "Recalculating…" : "Recalculate"}
+              </Button>
+            )}
+          </div>
         </div>
+        {actionError && (
+          <p className="mt-3 rounded-lg border border-danger/30 bg-danger-soft px-3 py-2 text-sm text-danger-foreground">
+            {actionError}
+          </p>
+        )}
       </div>
 
       {result.summary_stats?.total_wealth && (
@@ -109,14 +173,84 @@ export function PlanResults({
           percentiles={result.summary_stats.total_wealth}
           accounts={result.summary_stats.per_account}
           goals={goalLines}
+          startDate={scenario.start_date}
+          withdrawals={withdrawalMarkers}
+          activeFocus={activeFocus}
+          pinnedFocus={pinnedFocus}
+          onFocusChange={handleHoverFocusChange}
+          onTogglePin={handleTogglePin}
         />
       )}
 
-      {goals.length > 0 && <GoalStatusList goals={goals} accountDisplayNames={accountDisplay} />}
+      {goals.length > 0 && (
+        <GoalStatusList
+          goals={goals}
+          accountDisplayNames={accountDisplay}
+          goalDetails={goalDetails}
+        />
+      )}
 
       {result.summary_stats?.cash_flow && (
-        <ContributionPlan cashFlow={result.summary_stats.cash_flow} />
+        <ContributionPlan
+          cashFlow={result.summary_stats.cash_flow}
+          startDate={scenario.start_date}
+          withdrawals={withdrawalMarkers}
+          activeFocus={activeFocus}
+          pinnedFocus={pinnedFocus}
+          onFocusChange={handleHoverFocusChange}
+          onTogglePin={handleTogglePin}
+        />
       )}
     </div>
   );
+}
+
+function buildWithdrawalMarkers(scenario: Scenario): WithdrawalMarker[] {
+  const start = parseIsoMonthStart(scenario.start_date);
+  if (!start || !scenario.withdrawals) return [];
+
+  const markers: WithdrawalMarker[] = [];
+  for (const withdrawal of scenario.withdrawals.scheduled) {
+    const month = monthDiff(start, parseIsoMonthStart(withdrawal.date));
+    if (month === null || month < 0) continue;
+    markers.push({
+      month,
+      label: `${displayWithdrawalLabel(withdrawal.description, withdrawal.account)} ${formatCompactMoney(withdrawal.amount)}`,
+    });
+  }
+
+  for (const withdrawal of scenario.withdrawals.stochastic) {
+    if (!withdrawal.date) continue;
+    const month = monthDiff(start, parseIsoMonthStart(withdrawal.date));
+    if (month === null || month < 0) continue;
+    markers.push({
+      month,
+      label: `${displayWithdrawalLabel(withdrawal.description, withdrawal.account)} ${formatCompactMoney(withdrawal.base_amount)}`,
+    });
+  }
+
+  return markers.sort((a, b) => a.month - b.month);
+}
+
+function parseIsoMonthStart(value?: string | null): Date | null {
+  if (!value) return null;
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  return new Date(Number(match[1]), Number(match[2]) - 1, 1);
+}
+
+function monthDiff(start: Date, target: Date | null): number | null {
+  if (!target) return null;
+  return (target.getFullYear() - start.getFullYear()) * 12 + (target.getMonth() - start.getMonth());
+}
+
+function displayWithdrawalLabel(description: string | undefined, account: string): string {
+  return description?.trim() || `Withdrawal from ${account}`;
+}
+
+function formatCompactMoney(value: number): string {
+  const abs = Math.abs(value);
+  if (abs >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
+  if (abs >= 1_000) return `$${Math.round(value / 1_000)}K`;
+  return `$${Math.round(value)}`;
 }

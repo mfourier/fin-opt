@@ -77,7 +77,25 @@ export const mockScenario: Scenario = {
       date: new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString().slice(0, 10),
     },
   ],
-  withdrawals: null,
+  withdrawals: {
+    scheduled: [
+      {
+        account: "conservative",
+        amount: 1_800_000,
+        date: new Date(Date.now() + 8 * 30 * 24 * 3600 * 1000).toISOString().slice(0, 10),
+        description: "Emergency expense",
+      },
+    ],
+    stochastic: [
+      {
+        account: "aggressive",
+        base_amount: 450_000,
+        sigma: 0.2,
+        date: new Date(Date.now() + 20 * 30 * 24 * 3600 * 1000).toISOString().slice(0, 10),
+        description: "Annual tax payment",
+      },
+    ],
+  },
   objective: "proportional",
 };
 
@@ -132,21 +150,29 @@ function buildContributions() {
   const consMean: number[] = [];
   const aggMean: number[] = [];
   const totalMean: number[] = [];
+  const consWithdrawals: number[] = [];
+  const aggWithdrawals: number[] = [];
+  const totalWithdrawals: number[] = [];
   for (let t = 0; t < H; t++) {
     const frac = t / (H - 1);
     const total = 700_000 * (1 + 0.0025 * t); // slow growth
     const aggressive = total * (0.8 - 0.5 * frac);
     const conservative = total - aggressive;
+    const conservativeWithdrawal = t === 8 ? 1_800_000 : 0;
+    const aggressiveWithdrawal = t === 20 ? 450_000 : 0;
     consMean.push(Math.round(conservative));
     aggMean.push(Math.round(aggressive));
     totalMean.push(Math.round(total));
+    consWithdrawals.push(conservativeWithdrawal);
+    aggWithdrawals.push(aggressiveWithdrawal);
+    totalWithdrawals.push(conservativeWithdrawal + aggressiveWithdrawal);
   }
-  return { consMean, aggMean, totalMean };
+  return { consMean, aggMean, totalMean, consWithdrawals, aggWithdrawals, totalWithdrawals };
 }
 
 const wealth = buildPercentiles();
 const allocation = buildAllocation();
-const { consMean, aggMean, totalMean } = buildContributions();
+const { consMean, aggMean, totalMean, consWithdrawals, aggWithdrawals, totalWithdrawals } = buildContributions();
 
 export const mockResult: Result = {
   allocation_policy: allocation,
@@ -161,6 +187,11 @@ export const mockResult: Result = {
       contributions_by_account: [
         { account: "conservative", display_name: "Safe savings", mean: consMean },
         { account: "aggressive", display_name: "Growth ETF", mean: aggMean },
+      ],
+      withdrawals_mean: totalWithdrawals,
+      withdrawals_by_account: [
+        { account: "conservative", display_name: "Safe savings", mean: consWithdrawals },
+        { account: "aggressive", display_name: "Growth ETF", mean: aggWithdrawals },
       ],
     },
   },
