@@ -105,13 +105,13 @@ export function GoalsWizard({ profiles, initialDraft, onCalculate, onCancel }: P
   const step2Valid =
     draft.terminal_goals.length > 0 &&
     draft.terminal_goals.every(
-      (g) => g.threshold > 0 && !!g.account && g.confidence >= 0.5 && g.confidence <= 0.95,
+      (g) => g.threshold > 0 && !!g.account && g.confidence >= 0.2 && g.confidence <= 0.95,
     ) &&
     draft.intermediate_goals.every(
       (g) =>
         g.threshold > 0 &&
         !!g.account &&
-        g.confidence >= 0.5 &&
+        g.confidence >= 0.2 &&
         g.confidence <= 0.95 &&
         g.date > draft.start_date,
     ) &&
@@ -323,7 +323,7 @@ function StepBasics({
                       className={cn(
                         "rounded-full px-2 py-0.5 text-[10px] font-medium ring-1",
                         o.id === "proportional"
-                          ? "bg-success-soft text-success-foreground ring-success/30"
+                          ? "bg-success-soft text-success ring-success/30"
                           : "bg-secondary text-muted-foreground ring-border",
                       )}
                     >
@@ -538,7 +538,7 @@ function StepGoals({
                       />
                     </div>
                     {g.date && g.date <= draft.start_date && (
-                      <p className="mt-2 text-xs text-danger-foreground">
+                      <p className="mt-2 text-xs text-danger">
                         The date must be after the plan's start date.
                       </p>
                     )}
@@ -592,7 +592,7 @@ function ConfidenceSlider({
       </div>
       <Slider
         className="mt-2"
-        min={50}
+        min={20}
         max={95}
         step={5}
         value={[Math.round(value * 100)]}

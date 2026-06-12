@@ -39,12 +39,16 @@ export function PlanExplainers({
   const confidenceFloor = confidenceValues.length > 0 ? Math.min(...confidenceValues) : null;
   const [openItems, setOpenItems] = useState<ExplainerSection[]>([]);
   const activeSection = focusToSection(activeFocus);
+  const pinnedSection = focusToSection(pinnedFocus);
   const activeLabel = focusToLabel(activeFocus);
 
+  // Only auto-open a section when the user *pins* a concept (a click), not on
+  // hover — hovering still highlights the matching header/token, but the panel
+  // should not expand on its own as the mouse moves across the charts.
   useEffect(() => {
-    if (!activeSection) return;
-    setOpenItems((current) => (current.includes(activeSection) ? current : [...current, activeSection]));
-  }, [activeSection]);
+    if (!pinnedSection) return;
+    setOpenItems((current) => (current.includes(pinnedSection) ? current : [...current, pinnedSection]));
+  }, [pinnedSection]);
 
   const spotlightText = useMemo(() => {
     if (!activeFocus || !activeLabel) return null;

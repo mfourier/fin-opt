@@ -221,14 +221,20 @@ export function WealthFanChart({
                 }}
               />
               {/* P25–P75 band per account (stacked-area trick: invisible
-                  baseline at P25 + filled width up to P75). */}
+                  baseline at P25 + filled width up to P75). Low-volatility
+                  accounts have a band only a few px tall on the shared axis, so
+                  we also stroke each edge (P25 on the baseline area, P75 on the
+                  width area) — that keeps a thin band perceptible instead of
+                  vanishing under the 2px median line, without inflating it. */}
               {accounts.map((a) => (
                 <Area
                   key={`${a.account}-band-lower`}
                   type="monotone"
                   dataKey={`${a.account}__bandLower`}
                   stackId={`band-${a.account}`}
-                  stroke="transparent"
+                  stroke={colorOf(a.account)}
+                  strokeWidth={highlightLikelyBand ? 1.25 : 1}
+                  strokeOpacity={highlightLikelyBand ? 0.7 : dimForFocus ? 0.25 : 0.45}
                   fill="transparent"
                   isAnimationActive={false}
                   activeDot={false}
@@ -242,7 +248,9 @@ export function WealthFanChart({
                   type="monotone"
                   dataKey={`${a.account}__bandWidth`}
                   stackId={`band-${a.account}`}
-                  stroke="transparent"
+                  stroke={colorOf(a.account)}
+                  strokeWidth={highlightLikelyBand ? 1.25 : 1}
+                  strokeOpacity={highlightLikelyBand ? 0.7 : dimForFocus ? 0.25 : 0.45}
                   fill={colorOf(a.account)}
                   fillOpacity={highlightLikelyBand ? 0.32 : dimForFocus ? 0.08 : 0.16}
                   isAnimationActive={false}

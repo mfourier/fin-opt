@@ -3,7 +3,6 @@ import {
   Area,
   CartesianGrid,
   ComposedChart,
-  Line,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -206,22 +205,13 @@ export function ContributionPlan({
                 onMouseLeave={() => setHoverFocus(null)}
               />
             ))}
-            {mode === "amount" && hasWithdrawals && (
-              <Line
-                type="monotone"
-                dataKey="withdrawalsTotal"
-                stroke="var(--color-danger)"
-                strokeWidth={highlightWithdrawals ? 3 : 2}
-                strokeDasharray="6 4"
-                opacity={dimForFocus && !highlightWithdrawals ? 0.35 : 1}
-                dot={false}
-                isAnimationActive={false}
-                onClick={() => togglePin("withdrawal")}
-                onMouseEnter={() => setHoverFocus("withdrawal")}
-                onMouseLeave={() => setHoverFocus(null)}
-                activeDot={{ r: 4, stroke: "var(--color-danger)", fill: "var(--color-background)", strokeWidth: 2 }}
-              />
-            )}
+            {/*
+             * Withdrawals are intentionally NOT plotted as a Y-valued series:
+             * a one-off withdrawal (e.g. $8M) dwarfs the monthly contributions
+             * (~$1M) and crushes the Y scale. We mark only the date + amount via
+             * the vertical ReferenceLine below — the magnitude never affects the
+             * axis. What matters here is *when* money comes out.
+             */}
             {withdrawals.map((w, idx) => (
               <ReferenceLine
                 key={`contrib-withdrawal-${idx}-${w.month}`}

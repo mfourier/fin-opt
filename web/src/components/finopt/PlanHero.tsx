@@ -118,9 +118,9 @@ function StatusBadge({
   children: React.ReactNode;
 }) {
   const toneClasses = {
-    success: "bg-success-soft text-success-foreground ring-success/30",
-    warning: "bg-warning-soft text-warning-foreground ring-warning/30",
-    danger: "bg-danger-soft text-danger-foreground ring-danger/30",
+    success: "bg-success-soft text-success ring-success/30",
+    warning: "bg-warning-soft text-warning ring-warning/30",
+    danger: "bg-danger-soft text-danger ring-danger/30",
   } as const;
   const dot = {
     success: "bg-success",

@@ -585,7 +585,7 @@ function AccountCard({
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-sm font-medium text-foreground">{p.title}</p>
                   {"tag" in p && p.tag && (
-                    <span className="rounded-full bg-success-soft px-1.5 py-0.5 text-[10px] font-medium text-success-foreground ring-1 ring-success/30">
+                    <span className="rounded-full bg-success-soft px-1.5 py-0.5 text-[10px] font-medium text-success ring-1 ring-success/30">
                       {p.tag}
                     </span>
                   )}

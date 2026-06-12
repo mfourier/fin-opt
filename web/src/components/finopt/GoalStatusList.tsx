@@ -130,8 +130,8 @@ function ProbabilityBar({
 
 function Pill({ tone, children }: { tone: "success" | "warning"; children: React.ReactNode }) {
   const cls = {
-    success: "bg-success-soft text-success-foreground ring-success/30",
-    warning: "bg-warning-soft text-warning-foreground ring-warning/30",
+    success: "bg-success-soft text-success ring-success/30",
+    warning: "bg-warning-soft text-warning ring-warning/30",
   } as const;
   return (
     <span

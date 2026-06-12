@@ -1,5 +1,8 @@
 import { Outlet, Link, useLocation } from 'react-router-dom'
+import { LogOut } from 'lucide-react'
 import { useAuthStore } from '../lib/store'
+import { FinOptWordmark } from './finopt/FinOptWordmark'
+import { Button } from './ui/button'
 
 const navigation = [
   { name: 'Dashboard', href: '/' },
@@ -13,26 +16,26 @@ export default function Layout() {
   const user = useAuthStore((state) => state.user)
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       {/* Header */}
-      <nav className="bg-white shadow">
+      <nav className="sticky top-0 z-30 border-b border-border bg-card/80 backdrop-blur-md">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex h-16 justify-between">
-            <div className="flex">
-              <div className="flex flex-shrink-0 items-center">
-                <img src="/icon.png" alt="FinOpt" className="h-8 w-8" />
-              </div>
-              <div className="ml-10 flex items-center space-x-4">
+          <div className="flex h-16 items-center justify-between gap-4">
+            <div className="flex items-center gap-8">
+              <Link to="/" className="text-primary transition-opacity hover:opacity-80">
+                <FinOptWordmark />
+              </Link>
+              <div className="hidden items-center gap-1 sm:flex">
                 {navigation.map((item) => {
                   const isActive = location.pathname === item.href
                   return (
                     <Link
                       key={item.name}
                       to={item.href}
-                      className={`rounded-md px-3 py-2 text-sm font-medium ${
+                      className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                         isActive
-                          ? 'bg-primary-100 text-primary-700'
-                          : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
+                          ? 'bg-accent text-accent-foreground'
+                          : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                       }`}
                     >
                       {item.name}
@@ -41,15 +44,35 @@ export default function Layout() {
                 })}
               </div>
             </div>
-            <div className="flex items-center gap-4">
-              <span className="text-sm text-gray-500">{user?.email}</span>
-              <button
-                onClick={signOut}
-                className="rounded-md bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200"
-              >
-                Sign Out
-              </button>
+            <div className="flex items-center gap-3">
+              <span className="hidden max-w-[14rem] truncate text-sm text-muted-foreground md:inline">
+                {user?.email}
+              </span>
+              <Button variant="outline" size="sm" className="rounded-lg" onClick={signOut}>
+                <LogOut className="h-4 w-4" />
+                <span className="hidden sm:inline">Sign out</span>
+              </Button>
             </div>
+          </div>
+
+          {/* Mobile nav row */}
+          <div className="flex items-center gap-1 border-t border-border py-2 sm:hidden">
+            {navigation.map((item) => {
+              const isActive = location.pathname === item.href
+              return (
+                <Link
+                  key={item.name}
+                  to={item.href}
+                  className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                    isActive
+                      ? 'bg-accent text-accent-foreground'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  }`}
+                >
+                  {item.name}
+                </Link>
+              )
+            })}
           </div>
         </div>
       </nav>

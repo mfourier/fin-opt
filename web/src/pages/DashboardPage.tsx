@@ -1,8 +1,26 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
+import {
+  ArrowRight,
+  CheckCircle2,
+  FolderKanban,
+  Loader2,
+  Plus,
+  Target,
+  Users,
+} from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
 import type { Profile, Scenario, Job } from '../types/database'
+import { Card } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+
+const statusStyles: Record<string, string> = {
+  completed: 'bg-success-soft text-success',
+  running: 'bg-accent text-accent-foreground',
+  failed: 'bg-danger-soft text-danger',
+  pending: 'bg-muted text-muted-foreground',
+}
 
 export default function DashboardPage() {
   const user = useAuthStore((state) => state.user)
@@ -37,99 +55,128 @@ export default function DashboardPage() {
     enabled: !!user,
   })
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'completed': return 'bg-green-100 text-green-800'
-      case 'running': return 'bg-blue-100 text-blue-800'
-      case 'failed': return 'bg-red-100 text-red-800'
-      default: return 'bg-gray-100 text-gray-800'
-    }
-  }
+  const activeJobs = recentJobs?.filter((j) => j.status === 'running').length ?? 0
+  const completedToday =
+    recentJobs?.filter(
+      (j) =>
+        j.status === 'completed' &&
+        new Date(j.completed_at ?? '').toDateString() === new Date().toDateString(),
+    ).length ?? 0
+
+  const stats = [
+    {
+      label: 'Profiles',
+      value: profilesLoading ? '—' : profiles?.length ?? 0,
+      icon: Users,
+    },
+    {
+      label: 'Active plans',
+      value: jobsLoading ? '—' : activeJobs,
+      icon: Loader2,
+    },
+    {
+      label: 'Completed today',
+      value: jobsLoading ? '—' : completedToday,
+      icon: CheckCircle2,
+    },
+  ]
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Welcome back! Here's an overview of your portfolio optimization work.
+      <div className="animate-fade-in-up">
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">Dashboard</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Welcome back. Here's an overview of your goal-based plans.
         </p>
       </div>
 
       {/* Quick stats */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="rounded-lg bg-white p-6 shadow">
-          <p className="text-sm font-medium text-gray-500">Total Profiles</p>
-          <p className="mt-2 text-3xl font-semibold text-gray-900">
-            {profilesLoading ? '...' : profiles?.length ?? 0}
-          </p>
-        </div>
-        <div className="rounded-lg bg-white p-6 shadow">
-          <p className="text-sm font-medium text-gray-500">Active Jobs</p>
-          <p className="mt-2 text-3xl font-semibold text-gray-900">
-            {jobsLoading ? '...' : recentJobs?.filter(j => j.status === 'running').length ?? 0}
-          </p>
-        </div>
-        <div className="rounded-lg bg-white p-6 shadow">
-          <p className="text-sm font-medium text-gray-500">Completed Today</p>
-          <p className="mt-2 text-3xl font-semibold text-gray-900">
-            {jobsLoading ? '...' : recentJobs?.filter(j =>
-              j.status === 'completed' &&
-              new Date(j.completed_at ?? '').toDateString() === new Date().toDateString()
-            ).length ?? 0}
-          </p>
-        </div>
+        {stats.map(({ label, value, icon: Icon }) => (
+          <Card key={label} className="flex items-center gap-4 p-5 shadow-sm">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent text-primary">
+              <Icon className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">{label}</p>
+              <p className="mt-0.5 text-2xl font-semibold tabular text-foreground">{value}</p>
+            </div>
+          </Card>
+        ))}
       </div>
 
       {/* Quick actions */}
-      <div className="flex gap-4">
-        <Link
-          to="/profiles"
-          className="rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
-        >
-          Create Profile
-        </Link>
-        <Link
-          to="/scenarios"
-          className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-        >
-          New Scenario
-        </Link>
+      <div className="flex flex-wrap gap-3">
+        <Button asChild className="rounded-xl">
+          <Link to="/profiles">
+            <Plus className="h-4 w-4" />
+            Add a situation
+          </Link>
+        </Button>
+        <Button asChild variant="outline" className="rounded-xl">
+          <Link to="/scenarios">
+            <Target className="h-4 w-4" />
+            New plan
+          </Link>
+        </Button>
       </div>
 
       {/* Recent jobs */}
-      <div className="rounded-lg bg-white shadow">
-        <div className="border-b border-gray-200 px-6 py-4">
-          <h2 className="text-lg font-medium text-gray-900">Recent Jobs</h2>
+      <Card className="overflow-hidden">
+        <div className="flex items-center gap-2 border-b border-border px-6 py-4">
+          <FolderKanban className="h-4 w-4 text-muted-foreground" />
+          <h2 className="text-base font-semibold text-foreground">Recent plans</h2>
         </div>
-        <div className="divide-y divide-gray-200">
+        <div className="divide-y divide-border">
           {jobsLoading ? (
-            <div className="px-6 py-4 text-sm text-gray-500">Loading...</div>
+            <div className="flex items-center gap-2 px-6 py-5 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading…
+            </div>
           ) : recentJobs?.length === 0 ? (
-            <div className="px-6 py-4 text-sm text-gray-500">No jobs yet. Create a scenario to get started.</div>
+            <div className="px-6 py-10 text-center">
+              <p className="text-sm text-muted-foreground">
+                No plans yet. Create one to see when your goals become achievable.
+              </p>
+              <Button asChild variant="outline" size="sm" className="mt-4 rounded-xl">
+                <Link to="/scenarios">
+                  <Target className="h-4 w-4" />
+                  Create your first plan
+                </Link>
+              </Button>
+            </div>
           ) : (
             recentJobs?.map((job) => (
-              <div key={job.id} className="flex items-center justify-between px-6 py-4">
-                <div>
-                  <p className="font-medium text-gray-900">
-                    {job.scenarios?.name ?? 'Unknown Scenario'}
+              <div
+                key={job.id}
+                className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 transition-colors hover:bg-muted/50"
+              >
+                <div className="min-w-0">
+                  <p className="truncate font-medium text-foreground">
+                    {job.scenarios?.name ?? 'Untitled plan'}
                   </p>
-                  <p className="text-sm text-gray-500">
-                    {job.job_type} - {job.scenarios?.profiles?.name ?? 'Unknown Profile'}
+                  <p className="truncate text-sm text-muted-foreground">
+                    {job.job_type} · {job.scenarios?.profiles?.name ?? 'Unknown situation'}
                   </p>
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3">
                   {job.status === 'running' && (
-                    <span className="text-sm text-gray-500">{job.progress}%</span>
+                    <span className="tabular text-sm text-muted-foreground">{job.progress}%</span>
                   )}
-                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${getStatusColor(job.status)}`}>
+                  <span
+                    className={`rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${
+                      statusStyles[job.status] ?? statusStyles.pending
+                    }`}
+                  >
                     {job.status}
                   </span>
                   {job.status === 'completed' && (
                     <Link
                       to={`/results/${job.id}`}
-                      className="text-sm text-primary-600 hover:text-primary-500"
+                      className="inline-flex items-center gap-1 text-sm font-medium text-primary transition-colors hover:text-primary/80"
                     >
-                      View Results
+                      View
+                      <ArrowRight className="h-3.5 w-3.5" />
                     </Link>
                   )}
                 </div>
@@ -137,7 +184,7 @@ export default function DashboardPage() {
             ))
           )}
         </div>
-      </div>
+      </Card>
     </div>
   )
 }

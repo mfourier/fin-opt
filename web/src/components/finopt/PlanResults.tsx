@@ -163,7 +163,7 @@ export function PlanResults({
           </div>
         </div>
         {actionError && (
-          <p className="mt-3 rounded-lg border border-danger/30 bg-danger-soft px-3 py-2 text-sm text-danger-foreground">
+          <p className="mt-3 rounded-lg border border-danger/30 bg-danger-soft px-3 py-2 text-sm text-danger">
             {actionError}
           </p>
         )}
