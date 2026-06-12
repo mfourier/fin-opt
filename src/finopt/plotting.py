@@ -837,7 +837,17 @@ class ModelPlottingMixin:
 
         # Panel 2: Final distribution boxplots
         final_data = [r.total_wealth[:, -1] for r in results.values()]
-        bp = axes[1].boxplot(final_data, labels=results.keys(), patch_artist=True)
+
+        # Matplotlib 3.10 renamed `labels` to `tick_labels`.
+        from inspect import signature
+        boxplot_kwargs = {"patch_artist": True}
+        label_param = (
+            "tick_labels"
+            if "tick_labels" in signature(axes[1].boxplot).parameters
+            else "labels"
+        )
+        boxplot_kwargs[label_param] = list(results.keys())
+        bp = axes[1].boxplot(final_data, **boxplot_kwargs)
 
         # Color boxes
         colors = plt.cm.Set3(np.linspace(0, 1, len(results)))
