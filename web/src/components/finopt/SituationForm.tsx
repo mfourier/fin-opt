@@ -46,9 +46,35 @@ function uniqueSlug(base: string, taken: Set<string>): string {
 }
 
 const RISK_PRESETS = [
-  { id: "conservative", title: "Conservative", subtitle: "Smaller ups and downs.", ret: 0.08, vol: 0.09 },
-  { id: "balanced", title: "Balanced", subtitle: "A steady mix.", ret: 0.1, vol: 0.12, tag: "Recommended" },
-  { id: "aggressive", title: "Aggressive", subtitle: "Bigger swings, more growth.", ret: 0.14, vol: 0.18 },
+  {
+    id: "savings",
+    title: "Savings & cash",
+    subtitle: "Savings accounts, term deposits and money-market funds. Barely moves.",
+    ret: 0.045,
+    vol: 0.01,
+  },
+  {
+    id: "conservative",
+    title: "Conservative",
+    subtitle: "Fixed-income / bond mutual funds. Small ups and downs.",
+    ret: 0.065,
+    vol: 0.05,
+  },
+  {
+    id: "balanced",
+    title: "Balanced",
+    subtitle: "Mixed funds — stocks and bonds together. A steady mix.",
+    ret: 0.1,
+    vol: 0.1,
+    tag: "Recommended",
+  },
+  {
+    id: "aggressive",
+    title: "Aggressive",
+    subtitle: "Stocks and global equity funds or ETFs. Bigger swings, more growth.",
+    ret: 0.14,
+    vol: 0.17,
+  },
   { id: "custom", title: "Custom", subtitle: "Set your own numbers." },
 ] as const;
 
@@ -89,7 +115,7 @@ function emptyAccount(taken: Set<string>): AccountConfig {
     name,
     display_name: "",
     annual_return: 0.1,
-    annual_volatility: 0.12,
+    annual_volatility: 0.1,
     initial_wealth: 0,
   };
 }
@@ -557,7 +583,7 @@ function AccountCard({
         <div
           role="radiogroup"
           aria-label="Risk preset"
-          className="mt-2 grid gap-2 sm:grid-cols-4"
+          className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3"
         >
           {RISK_PRESETS.map((p) => {
             const selected =
