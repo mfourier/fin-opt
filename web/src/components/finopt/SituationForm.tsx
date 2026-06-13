@@ -50,6 +50,7 @@ const RISK_PRESETS = [
     id: "savings",
     title: "Savings & cash",
     subtitle: "Savings accounts, term deposits and money-market funds. Barely moves.",
+    range: "~3–6% / yr",
     ret: 0.045,
     vol: 0.01,
   },
@@ -57,6 +58,7 @@ const RISK_PRESETS = [
     id: "conservative",
     title: "Conservative",
     subtitle: "Fixed-income / bond mutual funds. Small ups and downs.",
+    range: "~5–8% / yr",
     ret: 0.065,
     vol: 0.05,
   },
@@ -64,6 +66,7 @@ const RISK_PRESETS = [
     id: "balanced",
     title: "Balanced",
     subtitle: "Mixed funds — stocks and bonds together. A steady mix.",
+    range: "~8–12% / yr",
     ret: 0.1,
     vol: 0.1,
     tag: "Recommended",
@@ -72,6 +75,7 @@ const RISK_PRESETS = [
     id: "aggressive",
     title: "Aggressive",
     subtitle: "Stocks and global equity funds or ETFs. Bigger swings, more growth.",
+    range: "~12–16% / yr",
     ret: 0.14,
     vol: 0.17,
   },
@@ -617,6 +621,11 @@ function AccountCard({
                   )}
                 </div>
                 <p className="mt-0.5 text-xs text-muted-foreground">{p.subtitle}</p>
+                {"range" in p && p.range && (
+                  <span className="mt-1.5 inline-block rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium tabular-nums text-foreground/70">
+                    {p.range}
+                  </span>
+                )}
               </button>
             );
           })}
