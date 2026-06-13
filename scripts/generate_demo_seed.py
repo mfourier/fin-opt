@@ -48,16 +48,17 @@ JOB_ID = "00000000-0000-4000-8000-000000000003"
 RESULT_ID = "00000000-0000-4000-8000-000000000004"
 
 # ---------------------------------------------------------------------------
-# Demo content. Generic English names, CLP nominal figures, three accounts
-# spanning the recalibrated risk ladder (money-market / fixed-income / equity).
+# Demo content. Generic English names, USD-scale nominal figures, three
+# accounts spanning the recalibrated risk ladder
+# (money-market / fixed-income / equity).
 # ---------------------------------------------------------------------------
 PROFILE = {
     "name": "Demo — First home & nest egg",
     "description": "A worked example showing the full machinery: three accounts, "
     "scheduled and surprise withdrawals, dated milestones and a long-term goal.",
     "income_config": {
-        "fixed": {"base": 1_500_000, "annual_growth": 0.03},
-        "variable": {"base": 250_000, "sigma": 0.15, "annual_growth": 0.02, "floor": 0},
+        "fixed": {"base": 2_000, "annual_growth": 0.03},
+        "variable": {"base": 400, "sigma": 0.15, "annual_growth": 0.02, "floor": 0},
         "contribution_rate_fixed": 0.3,
         "contribution_rate_variable": 1.0,
     },
@@ -67,21 +68,21 @@ PROFILE = {
             "display_name": "Safe savings",
             "annual_return": 0.045,
             "annual_volatility": 0.01,
-            "initial_wealth": 2_000_000,
+            "initial_wealth": 2_500,
         },
         {
             "name": "house_savings",
             "display_name": "House savings",
             "annual_return": 0.065,
             "annual_volatility": 0.05,
-            "initial_wealth": 3_000_000,
+            "initial_wealth": 3_500,
         },
         {
             "name": "global_etf",
             "display_name": "Global ETF",
             "annual_return": 0.14,
             "annual_volatility": 0.17,
-            "initial_wealth": 1_000_000,
+            "initial_wealth": 2_000,
         },
     ],
     "correlation_matrix": [
@@ -99,25 +100,25 @@ SCENARIO = {
     "intermediate_goals": [
         {
             "account": "safe_savings",
-            "threshold": 3_000_000,
+            "threshold": 4_000,
             "confidence": 0.90,
             "date": "2027-07-01",
         },
         {
             "account": "house_savings",
-            "threshold": 8_000_000,
+            "threshold": 10_000,
             "confidence": 0.85,
             "date": "2028-07-01",
         },
     ],
     "terminal_goals": [
-        {"account": "global_etf", "threshold": 15_000_000, "confidence": 0.80},
+        {"account": "global_etf", "threshold": 20_000, "confidence": 0.80},
     ],
     "withdrawals": {
         "scheduled": [
             {
                 "account": "safe_savings",
-                "amount": 1_500_000,
+                "amount": 2_000,
                 "date": "2027-01-01",
                 "description": "Planned trip",
             }
@@ -125,7 +126,7 @@ SCENARIO = {
         "stochastic": [
             {
                 "account": "safe_savings",
-                "base_amount": 400_000,
+                "base_amount": 500,
                 "sigma": 0.2,
                 "date": "2027-10-01",
                 "floor": 0,
