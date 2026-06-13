@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Slider } from "@/components/ui/slider";
 import {
   Select,
   SelectContent,
@@ -19,7 +18,12 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { cn } from "@/lib/utils";
-import { describeConfidence, formatCLP, formatPercent } from "@/lib/format";
+import {
+  CONFIDENCE_PRESETS,
+  DEFAULT_CONFIDENCE,
+  formatCLP,
+  presetForConfidence,
+} from "@/lib/format";
 import type {
   Profile,
   ScenarioDraft,
@@ -62,11 +66,16 @@ function todayISO() {
 }
 
 function emptyGoal(account: string): TerminalGoal {
-  return { account, threshold: 0, confidence: 0.8 };
+  return { account, threshold: 0, confidence: DEFAULT_CONFIDENCE };
 }
 
 function emptyIntermediate(account: string, date: string): IntermediateGoal {
-  return { account, threshold: 0, confidence: 0.8, date };
+  return { account, threshold: 0, confidence: DEFAULT_CONFIDENCE, date };
+}
+
+/** Round a goal's stored confidence to the nearest preset level. */
+function snapGoalConfidence<T extends { confidence: number }>(goal: T): T {
+  return { ...goal, confidence: presetForConfidence(goal.confidence).value };
 }
 
 export function GoalsWizard({ profiles, initialDraft, onCalculate, onCancel }: Props) {
@@ -79,8 +88,10 @@ export function GoalsWizard({ profiles, initialDraft, onCalculate, onCancel }: P
     description: initialDraft?.description ?? "",
     start_date: initialDraft?.start_date ?? todayISO(),
     objective: initialDraft?.objective ?? "proportional",
-    terminal_goals: initialDraft?.terminal_goals ?? [],
-    intermediate_goals: initialDraft?.intermediate_goals ?? [],
+    // Snap any stored confidence to the nearest preset so the chooser's selection
+    // and the value we'll submit always agree (legacy plans used a free slider).
+    terminal_goals: (initialDraft?.terminal_goals ?? []).map(snapGoalConfidence),
+    intermediate_goals: (initialDraft?.intermediate_goals ?? []).map(snapGoalConfidence),
     withdrawals: initialDraft?.withdrawals ?? null,
   }));
 
@@ -102,18 +113,13 @@ export function GoalsWizard({ profiles, initialDraft, onCalculate, onCancel }: P
   const step1Valid =
     !!draft.profile_id && draft.name.trim().length > 0 && !!draft.start_date;
 
+  // Certainty is now picked from 3 presets (always a valid level), so there is
+  // no confidence range to validate — just require a goal with an amount/account.
   const step2Valid =
     draft.terminal_goals.length > 0 &&
-    draft.terminal_goals.every(
-      (g) => g.threshold > 0 && !!g.account && g.confidence >= 0.2 && g.confidence <= 0.95,
-    ) &&
+    draft.terminal_goals.every((g) => g.threshold > 0 && !!g.account) &&
     draft.intermediate_goals.every(
-      (g) =>
-        g.threshold > 0 &&
-        !!g.account &&
-        g.confidence >= 0.2 &&
-        g.confidence <= 0.95 &&
-        g.date > draft.start_date,
+      (g) => g.threshold > 0 && !!g.account && g.date > draft.start_date,
     ) &&
     (draft.withdrawals?.scheduled ?? []).every((w) => w.amount > 0 && !!w.account && !!w.date) &&
     // The backend requires either `date` or `month` on stochastic withdrawals;
@@ -456,7 +462,7 @@ function StepGoals({
                 </Field>
               </div>
               <div className="mt-4">
-                <ConfidenceSlider
+                <ConfidenceChooser
                   value={g.confidence}
                   onChange={(v) => updateTerminal(i, { confidence: v })}
                 />
@@ -532,7 +538,7 @@ function StepGoals({
                       </Field>
                     </div>
                     <div className="mt-4">
-                      <ConfidenceSlider
+                      <ConfidenceChooser
                         value={g.confidence}
                         onChange={(v) => updateInter(i, { confidence: v })}
                       />
@@ -575,31 +581,50 @@ function StepGoals({
   );
 }
 
-function ConfidenceSlider({
+function ConfidenceChooser({
   value,
   onChange,
 }: {
   value: number;
   onChange: (v: number) => void;
 }) {
+  const selectedId = presetForConfidence(value).id;
   return (
     <div>
-      <div className="flex items-end justify-between">
-        <Label className="text-sm">How sure do you want to be?</Label>
-        <span className="tabular text-sm font-medium text-foreground">
-          {formatPercent(value)}
-        </span>
+      <Label className="text-sm">How sure do you want to be?</Label>
+      <div
+        role="radiogroup"
+        aria-label="How sure do you want to be?"
+        className="mt-2 grid gap-2 sm:grid-cols-3"
+      >
+        {CONFIDENCE_PRESETS.map((p) => {
+          const selected = p.id === selectedId;
+          return (
+            <button
+              type="button"
+              key={p.id}
+              role="radio"
+              aria-checked={selected}
+              onClick={() => onChange(p.value)}
+              className={cn(
+                "rounded-xl border bg-card p-3 text-left transition-all",
+                "hover:border-primary/40 hover:shadow-sm",
+                selected ? "border-primary ring-2 ring-primary/30" : "border-border",
+              )}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-medium text-foreground">{p.label}</span>
+                {selected && (
+                  <span className="grid size-4 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground">
+                    <Check className="size-2.5" aria-hidden />
+                  </span>
+                )}
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">{p.blurb}</p>
+            </button>
+          );
+        })}
       </div>
-      <Slider
-        className="mt-2"
-        min={20}
-        max={95}
-        step={5}
-        value={[Math.round(value * 100)]}
-        onValueChange={([v]) => onChange((v ?? 80) / 100)}
-        aria-label="Confidence"
-      />
-      <p className="mt-1.5 text-xs text-muted-foreground">{describeConfidence(value)}.</p>
     </div>
   );
 }
@@ -838,7 +863,7 @@ function StepReview({
                 in <span className="font-medium text-foreground">{accountName(g.account)}</span>
               </span>
               <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                {Math.round(g.confidence * 10)} out of 10
+                {presetForConfidence(g.confidence).label}
               </span>
             </li>
           ))}
@@ -859,7 +884,7 @@ function StepReview({
                   in <span className="font-medium text-foreground">{accountName(g.account)}</span>
                 </span>
                 <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                  {Math.round(g.confidence * 10)} out of 10
+                  {presetForConfidence(g.confidence).label}
                 </span>
               </li>
             ))}
