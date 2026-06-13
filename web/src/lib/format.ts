@@ -68,10 +68,80 @@ export function formatPercent(value: number, digits = 0): string {
   return `${(value * 100).toFixed(digits)}%`;
 }
 
-/** "8 out of 10 scenarios meet the goal" for a confidence in [0,1]. */
-export function describeConfidence(confidence: number): string {
-  const n = Math.round(confidence * 10);
+/**
+ * Certainty presets shown to the user. Each maps to a hidden CVaR confidence
+ * level (1 - eps) passed to the optimizer as the goal's `confidence`. The levels
+ * 0.10 / 0.60 / 0.90 were chosen by the P0 calibration sweep (see
+ * docs/dev-notes/calibration-table.md): on the real model they yield ~59% / ~83%
+ * / ~96% *measured* empirical success. We never show the CVaR level — only the
+ * preset label here, and the measured empirical on the results page.
+ */
+export type ConfidencePreset = {
+  id: "reach_sooner" | "balanced" | "play_it_safe";
+  /** Hidden CVaR confidence level written to the goal's `confidence`. */
+  value: number;
+  label: string;
+  /** One-line, hedged description of the trade-off (no hard promise). */
+  blurb: string;
+};
+
+export const CONFIDENCE_PRESETS: ConfidencePreset[] = [
+  {
+    id: "reach_sooner",
+    value: 0.1,
+    label: "Reach sooner",
+    blurb: "Aim for the earliest date. Less certain, but you get there faster.",
+  },
+  {
+    id: "balanced",
+    value: 0.6,
+    label: "Balanced",
+    blurb: "A sensible middle ground between speed and certainty.",
+  },
+  {
+    id: "play_it_safe",
+    value: 0.9,
+    label: "Play it safe",
+    blurb: "Aim for high certainty. The plan may take a little longer.",
+  },
+];
+
+export const DEFAULT_CONFIDENCE = CONFIDENCE_PRESETS[1].value; // Balanced (0.60)
+
+/** Nearest preset for a stored confidence value (snaps legacy/arbitrary values). */
+export function presetForConfidence(confidence: number): ConfidencePreset {
+  return CONFIDENCE_PRESETS.reduce((best, p) =>
+    Math.abs(p.value - confidence) < Math.abs(best.value - confidence) ? p : best,
+  );
+}
+
+/**
+ * Plain-language description of a *measured* success probability in [0,1].
+ * Feed this the empirical likelihood from the results — never the hidden CVaR
+ * level (a 0.10 "reach sooner" goal is not "1 out of 10": its measured empirical
+ * is typically far higher).
+ */
+export function describeConfidence(probability: number): string {
+  const n = Math.round(probability * 10);
   return `${n} out of 10 scenarios meet the goal`;
+}
+
+/**
+ * A goal is in the "floor" / collapse regime when it is reached in virtually
+ * every simulated scenario **even though** a relaxed certainty was requested.
+ * In that regime the certainty preset can't meaningfully move the outcome — the
+ * goal is comfortably within reach at any setting (the Shape-C case from the P0
+ * calibration: ~100% empirical at every CVaR level). We can infer this honestly
+ * at render time because we know both the measured empirical and the requested
+ * level: a near-certain result from a low/moderate request means the goal sits on
+ * its convex floor. (A high request, e.g. "Play it safe", legitimately yields a
+ * high number and is NOT flagged.)
+ *
+ * @param empirical measured success probability in [0,1]
+ * @param requestedConfidence the goal's required_confidence (the hidden CVaR level)
+ */
+export function isFloorGoal(empirical: number, requestedConfidence: number): boolean {
+  return empirical >= 0.99 && requestedConfidence <= 0.6;
 }
 
 /** Add `monthsFromNow` months to today, return short label like "Aug 2028". */

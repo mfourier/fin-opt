@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import type { Profile, Result, Scenario } from "@/mocks/types";
-import { formatPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { ExplainerFocus } from "./plan-explainer-focus";
 import { focusToLabel, focusToSection, type ExplainerSection } from "./plan-explainer-focus";
@@ -32,11 +31,6 @@ export function PlanExplainers({
     && ((scenario.withdrawals.scheduled?.length ?? 0) > 0 || (scenario.withdrawals.stochastic?.length ?? 0) > 0),
   );
   const goalsCount = scenario.terminal_goals.length + scenario.intermediate_goals.length;
-  const confidenceValues = [
-    ...scenario.terminal_goals.map((goal) => goal.confidence),
-    ...scenario.intermediate_goals.map((goal) => goal.confidence),
-  ];
-  const confidenceFloor = confidenceValues.length > 0 ? Math.min(...confidenceValues) : null;
   const [openItems, setOpenItems] = useState<ExplainerSection[]>([]);
   const activeSection = focusToSection(activeFocus);
   const pinnedSection = focusToSection(pinnedFocus);
@@ -257,7 +251,7 @@ export function PlanExplainers({
             <FormulaBlock>
               <FormulaLine
                 left={<FocusToken focus="goal-probability" activeFocus={activeFocus} pinnedFocus={pinnedFocus} onFocusChange={onFocusChange} onTogglePin={onTogglePin}>Pr(W_t^m &gt;= target)</FocusToken>}
-                right={confidenceFloor !== null ? `>= ${formatPercent(confidenceFloor)}` : ">= chosen confidence"}
+                right=">= your chosen certainty"
               />
               <FormulaLine
                 left={<FocusToken focus="horizon" activeFocus={activeFocus} pinnedFocus={pinnedFocus} onFocusChange={onFocusChange} onTogglePin={onTogglePin}>T*</FocusToken>}
@@ -288,7 +282,7 @@ export function PlanExplainers({
               ]}
             />
             <Callout>
-              The goal list below compares the achieved probability against each goal's required confidence.
+              The goal list below shows each goal's likelihood, measured across the simulated futures.
               If one goal forces the plan to wait longer, it can determine the minimum horizon for the full plan.
             </Callout>
           </AccordionContent>
