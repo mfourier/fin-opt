@@ -33,6 +33,7 @@ export type Profile = {
   income_config: IncomeConfig;
   accounts_config: AccountConfig[];
   correlation_matrix: number[][] | null;
+  is_demo?: boolean;
 };
 
 export type TerminalGoal = {
@@ -81,6 +82,7 @@ export type Scenario = {
   intermediate_goals: IntermediateGoal[];
   withdrawals: WithdrawalsConfig | null;
   objective: "risky" | "balanced" | "conservative" | "proportional";
+  is_demo?: boolean;
 };
 
 export type WealthPercentiles = {

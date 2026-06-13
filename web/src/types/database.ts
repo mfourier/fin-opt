@@ -180,6 +180,7 @@ export interface Profile {
   income_config: IncomeConfig
   accounts_config: AccountConfig[]
   correlation_matrix: number[][] | null
+  is_demo?: boolean
   created_at: string
   updated_at: string
 }
@@ -199,6 +200,7 @@ export interface Scenario {
   t_min?: number
   solver: string
   objective: string
+  is_demo?: boolean
   created_at: string
   updated_at: string
 }

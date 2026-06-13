@@ -50,6 +50,10 @@ export default function ScenariosPage() {
     enabled: !!user,
   })
 
+  // The shared demo profile is read-only (owned by no user), so it can't back a
+  // new plan — keep it out of the wizard's profile picker and the empty-state checks.
+  const ownProfiles = profiles?.filter((p) => !p.is_demo)
+
   const { data: scenarios, isLoading } = useQuery({
     queryKey: ['scenarios', user?.id],
     queryFn: async () => {
@@ -132,6 +136,24 @@ export default function ScenariosPage() {
     }
   }
 
+  // Demo plans are read-only and pre-computed: jump straight to their existing
+  // completed job instead of queuing a new (RLS-blocked) optimization.
+  const viewResults = async (scenarioId: string) => {
+    const { data, error } = await supabase
+      .from('jobs')
+      .select('id')
+      .eq('scenario_id', scenarioId)
+      .eq('status', 'completed')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (error || !data) {
+      toast.error('No results yet', 'This demo has no computed results.')
+      return
+    }
+    navigate(`/results/${data.id}`)
+  }
+
   const resetForm = () => {
     setShowForm(false)
     setEditingScenario(null)
@@ -207,14 +229,14 @@ export default function ScenariosPage() {
         </div>
         <button
           onClick={() => setShowForm(true)}
-          disabled={!profiles?.length}
+          disabled={!ownProfiles?.length}
           className="rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
         >
           New Plan
         </button>
       </div>
 
-      {!profiles?.length && (
+      {!ownProfiles?.length && (
         <div className="rounded-md bg-yellow-50 p-4 text-sm text-yellow-700">
           Create a profile first before creating a plan.
         </div>
@@ -233,7 +255,7 @@ export default function ScenariosPage() {
               </Button>
             </div>
             <GoalsWizard
-              profiles={profiles ?? []}
+              profiles={ownProfiles ?? []}
               initialDraft={initialDraft}
               onCalculate={handleCalculate}
               onCancel={resetForm}
@@ -255,7 +277,14 @@ export default function ScenariosPage() {
             {scenarios?.map((scenario) => (
               <div key={scenario.id} className="flex items-center justify-between p-6">
                 <div>
-                  <h3 className="font-medium text-gray-900">{scenario.name}</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-medium text-gray-900">{scenario.name}</h3>
+                    {scenario.is_demo && (
+                      <span className="rounded-full bg-primary-100 px-2 py-0.5 text-xs font-medium text-primary-700">
+                        Demo
+                      </span>
+                    )}
+                  </div>
                   <p className="mt-1 text-sm text-gray-500">
                     Profile: {scenario.profiles?.name}
                   </p>
@@ -273,6 +302,15 @@ export default function ScenariosPage() {
                   </div>
                 </div>
                 <div className="flex gap-2">
+                  {scenario.is_demo ? (
+                    <button
+                      onClick={() => viewResults(scenario.id)}
+                      className="rounded-md bg-primary-600 px-3 py-1.5 text-sm text-white hover:bg-primary-700"
+                    >
+                      View results
+                    </button>
+                  ) : (
+                  <>
                   <button
                     onClick={() => handleEdit(scenario)}
                     className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
@@ -295,6 +333,8 @@ export default function ScenariosPage() {
                   >
                     Delete
                   </button>
+                  </>
+                  )}
                 </div>
               </div>
             ))}

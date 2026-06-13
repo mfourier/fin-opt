@@ -193,7 +193,14 @@ export default function ProfilesPage() {
             {profiles?.map((profile) => (
               <div key={profile.id} className="flex items-center justify-between p-6">
                 <div>
-                  <h3 className="font-medium text-gray-900">{profile.name}</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-medium text-gray-900">{profile.name}</h3>
+                    {profile.is_demo && (
+                      <span className="rounded-full bg-primary-100 px-2 py-0.5 text-xs font-medium text-primary-700">
+                        Demo
+                      </span>
+                    )}
+                  </div>
                   <p className="mt-1 text-sm text-gray-500">{profile.description || 'No description'}</p>
                   <div className="mt-1 flex flex-wrap gap-2 text-xs text-gray-400">
                     <span>{profile.accounts_config.length} accounts</span>
@@ -207,6 +214,9 @@ export default function ProfilesPage() {
                     )}
                   </div>
                 </div>
+                {profile.is_demo ? (
+                  <span className="text-xs text-gray-400">Read-only example</span>
+                ) : (
                 <div className="flex gap-2">
                   <button
                     onClick={() => handleEdit(profile)}
@@ -225,6 +235,7 @@ export default function ProfilesPage() {
                     Delete
                   </button>
                 </div>
+                )}
               </div>
             ))}
           </div>
