@@ -242,6 +242,12 @@ export default function ProfilesPage() {
         ))}
       </div>
 
+      {latestProfile && (
+        <div className="rounded-2xl border border-border/70 bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+          Top-level metrics on this page are based on your primary situation, <span className="font-medium text-foreground">{latestProfile.name}</span>.
+        </div>
+      )}
+
       {/* Form overlay (redesigned) */}
       {showForm && (
         <div

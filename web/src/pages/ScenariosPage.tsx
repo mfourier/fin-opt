@@ -286,6 +286,7 @@ export default function ScenariosPage() {
     })
 
   const ownScenarioEntries = scenarioEntries.filter((entry) => !entry.scenario.is_demo)
+  const demoScenarioEntries = scenarioEntries.filter((entry) => entry.scenario.is_demo)
   const healthCounts = ownScenarioEntries.reduce(
     (counts, entry) => {
       counts[entry.health] += 1
@@ -402,7 +403,7 @@ export default function ScenariosPage() {
       <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
         {isLoading ? (
           <div className="p-6 text-center text-muted-foreground">Loading your plans...</div>
-        ) : scenarios?.length === 0 ? (
+        ) : scenarioEntries.length === 0 ? (
           <div className="p-8 text-center">
             <p className="text-base font-medium text-foreground">No plans yet.</p>
             <p className="mt-2 text-sm text-muted-foreground">
@@ -419,8 +420,25 @@ export default function ScenariosPage() {
             </Button>
           </div>
         ) : (
-          <div className="divide-y divide-border">
-            {scenarioEntries.map(({ scenario, latestJob, latestResult, health, goals }) => (
+          <div>
+            {ownScenarioEntries.length > 0 ? (
+              <div className="border-b border-border px-6 py-4">
+                <h2 className="text-base font-semibold text-foreground">Your plans</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Live plans connected to your own situations and results.
+                </p>
+              </div>
+            ) : (
+              <div className="border-b border-border px-6 py-4">
+                <h2 className="text-base font-semibold text-foreground">Your plans</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Create your first plan to start tracking timeline, health, and progress here.
+                </p>
+              </div>
+            )}
+
+            <div className="divide-y divide-border">
+              {ownScenarioEntries.map(({ scenario, latestJob, latestResult, health, goals }) => (
               <div
                 key={scenario.id}
                 className="flex flex-col gap-5 p-6 transition-colors hover:bg-muted/20 lg:flex-row lg:items-start lg:justify-between"
@@ -478,7 +496,7 @@ export default function ScenariosPage() {
                       {describeLatestRunDetail(scenario, latestJob, latestResultsByJobId)}
                     </p>
                     {!scenario.is_demo && (
-                      <div className="mt-4 grid grid-cols-3 gap-2">
+                      <div className="mt-4 grid grid-cols-3 gap-2 rounded-xl border border-border/70 bg-card/70 p-3">
                         <PlanRunMetric
                           label="Goals met"
                           value={goals.total > 0 ? `${goals.met}/${goals.total}` : '—'}
@@ -544,7 +562,73 @@ export default function ScenariosPage() {
                   )}
                 </div>
               </div>
-            ))}
+              ))}
+            </div>
+
+            {demoScenarioEntries.length > 0 && (
+              <>
+                <div className="border-y border-border bg-muted/20 px-6 py-4">
+                  <h2 className="text-base font-semibold text-foreground">Examples</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Demo plans you can explore without affecting your own data.
+                  </p>
+                </div>
+                <div className="divide-y divide-border">
+                  {demoScenarioEntries.map(({ scenario, latestJob }) => (
+                    <div
+                      key={scenario.id}
+                      className="flex flex-col gap-5 px-6 py-5 transition-colors hover:bg-muted/10 lg:flex-row lg:items-start lg:justify-between"
+                    >
+                      <div className="min-w-0 flex-1 opacity-90">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-lg font-semibold text-foreground">{scenario.name}</h3>
+                          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                            Demo
+                          </span>
+                          <span className="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground">
+                            {OBJECTIVE_LABELS[scenario.objective] ?? scenario.objective}
+                          </span>
+                        </div>
+                        <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
+                          {scenario.description || `Built from ${scenario.profiles?.name ?? 'a demo situation'}.`}
+                        </p>
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                          <PlanMetricPill label="Situation" value={scenario.profiles?.name ?? 'Demo situation'} />
+                          <PlanMetricPill
+                            label="Goals"
+                            value={`${scenario.terminal_goals?.length ?? 0} terminal${(scenario.intermediate_goals?.length ?? 0) > 0 ? ` · ${scenario.intermediate_goals.length} dated` : ''}`}
+                          />
+                          <PlanMetricPill
+                            label="Withdrawals"
+                            value={`${(scenario.withdrawals?.scheduled?.length ?? 0) + (scenario.withdrawals?.stochastic?.length ?? 0)}`}
+                          />
+                          <PlanMetricPill label="Start date" value={formatMonthYear(scenario.start_date)} />
+                        </div>
+                      </div>
+
+                      <div className="flex w-full max-w-md flex-col gap-3 lg:items-end">
+                        <div className="w-full rounded-2xl bg-muted/40 px-4 py-3 lg:max-w-sm">
+                          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                            Latest run
+                          </p>
+                          <p className="mt-1 font-medium text-foreground">
+                            {describeLatestRun(scenario, latestJob, latestResultsByJobId)}
+                          </p>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            {describeLatestRunDetail(scenario, latestJob, latestResultsByJobId)}
+                          </p>
+                        </div>
+
+                        <Button type="button" size="sm" className="rounded-xl" onClick={() => viewResults(scenario.id)}>
+                          View demo result
+                          <ArrowRight className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>

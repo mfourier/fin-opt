@@ -49,7 +49,7 @@ type DashboardJobRow = Pick<
   Job,
   'id' | 'scenario_id' | 'job_type' | 'status' | 'progress' | 'created_at' | 'completed_at'
 > & {
-  scenarios: DashboardScenarioRow[] | null
+  scenarios: DashboardScenarioRow[] | DashboardScenarioRow | null
 }
 
 const toneStyles = {
@@ -88,7 +88,7 @@ export default function DashboardPage() {
       if (error) throw error
       return ((data ?? []) as DashboardScenarioRow[]).map((scenario) => ({
         ...scenario,
-        profiles: scenario.profiles?.[0] ?? null,
+        profiles: relationToOne(scenario.profiles),
       }))
     },
     enabled: !!user,
@@ -102,15 +102,18 @@ export default function DashboardPage() {
         .select('id, scenario_id, job_type, status, progress, created_at, completed_at, scenarios(id, name, is_demo, start_date, profiles(name))')
         .order('created_at', { ascending: false })
       if (error) throw error
-      return ((data ?? []) as DashboardJobRow[]).map((job) => ({
-        ...job,
-        scenarios: job.scenarios?.[0]
-          ? {
-              ...job.scenarios[0],
-              profiles: job.scenarios[0].profiles?.[0] ?? null,
-            }
-          : null,
-      }))
+      return ((data ?? []) as DashboardJobRow[]).map((job) => {
+        const scenario = relationToOne(job.scenarios)
+        return {
+          ...job,
+          scenarios: scenario
+            ? {
+                ...scenario,
+                profiles: relationToOne(scenario.profiles),
+              }
+            : null,
+        }
+      })
     },
     enabled: !!user,
   })
@@ -176,6 +179,7 @@ export default function DashboardPage() {
   const ownProfiles = profiles?.filter((profile) => !profile.is_demo) ?? []
   const ownScenarios = scenarios?.filter((scenario) => !scenario.is_demo) ?? []
   const latestSituation = ownProfiles[0] ?? null
+  const scenariosById = Object.fromEntries((scenarios ?? []).map((scenario) => [scenario.id, scenario])) as Record<string, DashboardScenario>
   const recentResultsByJobId = Object.fromEntries((recentResults ?? []).map((result) => [result.job_id, result])) as Record<string, ResultPreviewLite>
   const latestResultsByJobId = Object.fromEntries((latestScenarioResults ?? []).map((result) => [result.job_id, result])) as Record<string, ResultPreviewLite>
 
@@ -395,6 +399,9 @@ export default function DashboardPage() {
                 <SnapshotMetric label="Investing power" value={`${formatCLP(getProfileMonthlyContributionCapacity(latestSituation))}/mo`} />
                 <SnapshotMetric label="Expected annual return" value={formatPercent(getProfileWeightedReturn(latestSituation), 1)} />
               </div>
+              <p className="text-sm text-muted-foreground">
+                These metrics are based on your primary situation, <span className="font-medium text-foreground">{latestSituation.name}</span>.
+              </p>
 
               <div className="rounded-2xl bg-muted/50 p-4">
                 <div className="flex items-center justify-between gap-3">
@@ -542,6 +549,8 @@ export default function DashboardPage() {
               const health = getPlanHealth(job, result)
               const status = recentRunStatusCopy(health, result)
               const isDeleting = deleteJobMutation.isPending && deleteJobMutation.variables === job.id
+              const scenario = job.scenarios ?? scenariosById[job.scenario_id] ?? null
+              const goals = summarizeGoalStatus(result?.goal_status)
 
               return (
                 <div
@@ -551,14 +560,24 @@ export default function DashboardPage() {
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="truncate font-medium text-foreground">
-                        {job.scenarios?.name ?? 'Untitled plan'}
+                        {scenario?.name ?? 'Untitled plan'}
                       </p>
                       <StatusPill tone={status.tone}>{status.label}</StatusPill>
                     </div>
                     <p className="mt-1 truncate text-sm text-muted-foreground">
-                      {job.scenarios?.profiles?.name ?? 'Unknown situation'} · {formatJobTimestamp(job)}
+                      {scenario?.profiles?.name ?? 'Unknown situation'} · {formatJobTimestamp(job)}
                     </p>
                     <p className="mt-2 text-sm text-muted-foreground">{status.summary}</p>
+                    {(result?.optimal_horizon || goals.total > 0) && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {goals.total > 0 && (
+                          <InlineMetric label="Goals met" value={`${goals.met}/${goals.total}`} />
+                        )}
+                        {result?.optimal_horizon && (
+                          <InlineMetric label="Horizon" value={formatMonthsLong(result.optimal_horizon)} />
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2 lg:justify-end">
@@ -807,4 +826,17 @@ function EmptyPanel({
       </Button>
     </div>
   )
+}
+
+function InlineMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
+      {label}: <span className="text-foreground">{value}</span>
+    </span>
+  )
+}
+
+function relationToOne<T>(value: T[] | T | null | undefined): T | null {
+  if (!value) return null
+  return Array.isArray(value) ? value[0] ?? null : value
 }
