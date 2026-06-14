@@ -11,6 +11,28 @@
       rel="stylesheet"
     />
     <title>FinOpt - Portfolio Optimization</title>
+    <script>
+      (() => {
+        let stored = null
+        try {
+          stored = window.localStorage.getItem('finopt-theme')
+        } catch {}
+
+        const theme =
+          stored === 'light' || stored === 'dark' || stored === 'system'
+            ? stored
+            : 'system'
+        const resolved =
+          theme === 'system'
+            ? window.matchMedia('(prefers-color-scheme: dark)').matches
+              ? 'dark'
+              : 'light'
+            : theme
+
+        document.documentElement.classList.toggle('dark', resolved === 'dark')
+        document.documentElement.style.colorScheme = resolved
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

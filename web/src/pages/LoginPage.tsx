@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { FinOptHeroPanel } from '@/components/finopt/FinOptHeroPanel'
 import { FinOptWordmark } from '@/components/finopt/FinOptWordmark'
+import { ThemeToggle } from '@/components/ThemeToggle'
 
 type Notice = { kind: 'error' | 'success'; message: string } | null
 
@@ -79,7 +80,11 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="grid min-h-screen w-full bg-background lg:grid-cols-[3fr_2fr]">
+    <div className="relative grid min-h-screen w-full bg-background lg:grid-cols-[3fr_2fr]">
+      <div className="absolute right-5 top-5 z-20">
+        <ThemeToggle className="rounded-lg bg-card/90 backdrop-blur-sm" />
+      </div>
+
       {/* Left: brand hero (below the form on mobile) */}
       <div className="relative order-2 hidden min-h-[16rem] lg:order-1 lg:block">
         <FinOptHeroPanel />

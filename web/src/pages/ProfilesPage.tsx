@@ -143,20 +143,21 @@ export default function ProfilesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">My situation</h1>
-          <p className="mt-1 text-sm text-gray-500">
+          <h1 className="text-2xl font-bold text-foreground">My situation</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             Your income and investment accounts — the basis your plans are built on.
           </p>
         </div>
-        <button
+        <Button
+          type="button"
           onClick={() => {
             setEditingProfile(null)
             setShowForm(true)
           }}
-          className="rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
+          className="rounded-md"
         >
           New situation
-        </button>
+        </Button>
       </div>
 
       {/* Form overlay (redesigned) */}
@@ -181,28 +182,33 @@ export default function ProfilesPage() {
       )}
 
       {/* Situations list */}
-      <div className="rounded-lg bg-white shadow">
+      <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
         {isLoading ? (
-          <div className="p-6 text-center text-gray-500">Loading...</div>
+          <div className="p-6 text-center text-muted-foreground">Loading...</div>
         ) : profiles?.length === 0 ? (
-          <div className="p-6 text-center text-gray-500">
+          <div className="p-6 text-center text-muted-foreground">
             No situations yet. Create one to get started.
           </div>
         ) : (
-          <div className="divide-y divide-gray-200">
+          <div className="divide-y divide-border">
             {profiles?.map((profile) => (
-              <div key={profile.id} className="flex items-center justify-between p-6">
+              <div
+                key={profile.id}
+                className="flex items-center justify-between gap-4 p-6 transition-colors hover:bg-muted/30"
+              >
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="font-medium text-gray-900">{profile.name}</h3>
+                    <h3 className="font-medium text-foreground">{profile.name}</h3>
                     {profile.is_demo && (
-                      <span className="rounded-full bg-primary-100 px-2 py-0.5 text-xs font-medium text-primary-700">
+                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
                         Demo
                       </span>
                     )}
                   </div>
-                  <p className="mt-1 text-sm text-gray-500">{profile.description || 'No description'}</p>
-                  <div className="mt-1 flex flex-wrap gap-2 text-xs text-gray-400">
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {profile.description || 'No description'}
+                  </p>
+                  <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
                     <span>{profile.accounts_config.length} accounts</span>
                     <span>|</span>
                     <span>Salary: ${profile.income_config.fixed?.base?.toLocaleString() ?? 0}/mo</span>
@@ -215,26 +221,26 @@ export default function ProfilesPage() {
                   </div>
                 </div>
                 {profile.is_demo ? (
-                  <span className="text-xs text-gray-400">Read-only example</span>
+                  <span className="text-xs text-muted-foreground">Read-only example</span>
                 ) : (
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleEdit(profile)}
-                    className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (confirm('Delete this situation?')) {
-                        deleteMutation.mutate(profile.id)
-                      }
-                    }}
-                    className="rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm text-red-700 hover:bg-red-50"
-                  >
-                    Delete
-                  </button>
-                </div>
+                  <div className="flex gap-2">
+                    <Button type="button" variant="outline" size="sm" onClick={() => handleEdit(profile)}>
+                      Edit
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="border-danger/30 text-danger hover:bg-danger-soft hover:text-danger"
+                      onClick={() => {
+                        if (confirm('Delete this situation?')) {
+                          deleteMutation.mutate(profile.id)
+                        }
+                      }}
+                    >
+                      Delete
+                    </Button>
+                  </div>
                 )}
               </div>
             ))}

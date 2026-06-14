@@ -28,7 +28,7 @@ export function MiniMetricCard({
     <div
       style={style}
       className={cn(
-        "flex items-center gap-3 rounded-2xl border border-white/40 bg-white/85 p-3 pr-4 shadow-lg shadow-[#005C99]/10 backdrop-blur-md",
+        "flex items-center gap-3 rounded-2xl border border-white/20 bg-card/82 p-3 pr-4 text-card-foreground shadow-lg shadow-black/10 backdrop-blur-md",
         className,
       )}
     >
@@ -36,19 +36,17 @@ export function MiniMetricCard({
         <span
           className={cn(
             "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl",
-            tone === "success"
-              ? "bg-[#DCFCE7] text-[#15803D]"
-              : "bg-[#E6F4FB] text-[#008FD3]",
+            tone === "success" ? "bg-success-soft text-success" : "bg-accent text-primary",
           )}
         >
           <Icon className="h-4 w-4" />
         </span>
       )}
       <div className="min-w-0">
-        <p className="text-[11px] font-medium uppercase tracking-wide text-[#6B7280]">
+        <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
           {label}
         </p>
-        <p className="truncate text-sm font-semibold text-[#111827]">{value}</p>
+        <p className="truncate text-sm font-semibold text-foreground">{value}</p>
       </div>
     </div>
   );

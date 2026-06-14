@@ -199,5 +199,5 @@
 
 /* Existing app pages still rely on this neutral body background. */
 body {
-  @apply bg-gray-50 text-gray-900 antialiased;
+  @apply bg-background text-foreground antialiased;
 }

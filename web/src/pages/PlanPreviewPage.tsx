@@ -1,6 +1,5 @@
-import { useState } from 'react'
 import { PlanResults } from '@/components/finopt/PlanResults'
-import { Button } from '@/components/ui/button'
+import { ThemeToggle } from '@/components/ThemeToggle'
 import { mockProfile, mockScenario, mockResult } from '@/mocks/plan'
 
 /**
@@ -9,13 +8,8 @@ import { mockProfile, mockScenario, mockResult } from '@/mocks/plan'
  * visual review only — it is not wired to real jobs/Supabase yet.
  */
 export default function PlanPreviewPage() {
-  const [dark, setDark] = useState(false)
-
   return (
-    <div
-      className={dark ? 'dark' : ''}
-      style={{ fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif' }}
-    >
+    <div style={{ fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif' }}>
       <div className="min-h-screen bg-background text-foreground">
         <div className="mx-auto w-full max-w-5xl px-4 py-10">
           <div className="mb-6 flex items-center justify-between">
@@ -23,9 +17,7 @@ export default function PlanPreviewPage() {
               <p className="text-xs uppercase tracking-wide text-muted-foreground">Preview · mock data</p>
               <h1 className="text-lg font-semibold text-foreground">My plan (redesign)</h1>
             </div>
-            <Button variant="outline" size="sm" onClick={() => setDark((d) => !d)}>
-              {dark ? 'Light mode' : 'Dark mode'}
-            </Button>
+            <ThemeToggle />
           </div>
 
           <PlanResults

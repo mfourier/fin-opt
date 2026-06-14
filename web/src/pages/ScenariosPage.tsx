@@ -222,22 +222,23 @@ export default function ScenariosPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Plans</h1>
-          <p className="mt-1 text-sm text-gray-500">
+          <h1 className="text-2xl font-bold text-foreground">Plans</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             Tell us your goals and we'll find the shortest path to reach them.
           </p>
         </div>
-        <button
+        <Button
+          type="button"
           onClick={() => setShowForm(true)}
           disabled={!ownProfiles?.length}
-          className="rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+          className="rounded-md"
         >
           New Plan
-        </button>
+        </Button>
       </div>
 
       {!ownProfiles?.length && (
-        <div className="rounded-md bg-yellow-50 p-4 text-sm text-yellow-700">
+        <div className="rounded-xl border border-warning/30 bg-warning-soft p-4 text-sm text-warning">
           Create a profile first before creating a plan.
         </div>
       )}
@@ -265,30 +266,33 @@ export default function ScenariosPage() {
       )}
 
       {/* Plans list */}
-      <div className="rounded-lg bg-white shadow">
+      <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
         {isLoading ? (
-          <div className="p-6 text-center text-gray-500">Loading...</div>
+          <div className="p-6 text-center text-muted-foreground">Loading...</div>
         ) : scenarios?.length === 0 ? (
-          <div className="p-6 text-center text-gray-500">
+          <div className="p-6 text-center text-muted-foreground">
             No plans yet. Create one to get started.
           </div>
         ) : (
-          <div className="divide-y divide-gray-200">
+          <div className="divide-y divide-border">
             {scenarios?.map((scenario) => (
-              <div key={scenario.id} className="flex items-center justify-between p-6">
+              <div
+                key={scenario.id}
+                className="flex items-center justify-between gap-4 p-6 transition-colors hover:bg-muted/30"
+              >
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="font-medium text-gray-900">{scenario.name}</h3>
+                    <h3 className="font-medium text-foreground">{scenario.name}</h3>
                     {scenario.is_demo && (
-                      <span className="rounded-full bg-primary-100 px-2 py-0.5 text-xs font-medium text-primary-700">
+                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
                         Demo
                       </span>
                     )}
                   </div>
-                  <p className="mt-1 text-sm text-gray-500">
+                  <p className="mt-1 text-sm text-muted-foreground">
                     Profile: {scenario.profiles?.name}
                   </p>
-                  <div className="mt-1 flex flex-wrap gap-2 text-xs text-gray-400">
+                  <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
                     <span>{scenario.terminal_goals?.length ?? 0} goals</span>
                     {(scenario.intermediate_goals?.length ?? 0) > 0 && (
                       <span>| {scenario.intermediate_goals.length} dated</span>
@@ -303,37 +307,45 @@ export default function ScenariosPage() {
                 </div>
                 <div className="flex gap-2">
                   {scenario.is_demo ? (
-                    <button
+                    <Button
+                      type="button"
+                      size="sm"
                       onClick={() => viewResults(scenario.id)}
-                      className="rounded-md bg-primary-600 px-3 py-1.5 text-sm text-white hover:bg-primary-700"
                     >
                       View results
-                    </button>
+                    </Button>
                   ) : (
-                  <>
-                  <button
-                    onClick={() => handleEdit(scenario)}
-                    className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => runOptimization(scenario.id)}
-                    className="rounded-md bg-green-600 px-3 py-1.5 text-sm text-white hover:bg-green-700"
-                  >
-                    Run
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (confirm('Delete this plan?')) {
-                        deleteMutation.mutate(scenario.id)
-                      }
-                    }}
-                    className="rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm text-red-700 hover:bg-red-50"
-                  >
-                    Delete
-                  </button>
-                  </>
+                    <>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleEdit(scenario)}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="bg-success text-success-foreground hover:bg-success/90"
+                        onClick={() => runOptimization(scenario.id)}
+                      >
+                        Run
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="border-danger/30 text-danger hover:bg-danger-soft hover:text-danger"
+                        onClick={() => {
+                          if (confirm('Delete this plan?')) {
+                            deleteMutation.mutate(scenario.id)
+                          }
+                        }}
+                      >
+                        Delete
+                      </Button>
+                    </>
                   )}
                 </div>
               </div>

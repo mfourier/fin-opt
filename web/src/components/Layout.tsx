@@ -1,8 +1,11 @@
+import { Suspense } from 'react'
 import { Outlet, Link, useLocation } from 'react-router-dom'
 import { LogOut } from 'lucide-react'
 import { useAuthStore } from '../lib/store'
 import { FinOptWordmark } from './finopt/FinOptWordmark'
 import { Button } from './ui/button'
+import { ThemeToggle } from './ThemeToggle'
+import RouteLoader from './RouteLoader'
 
 const navigation = [
   { name: 'Dashboard', href: '/' },
@@ -45,6 +48,7 @@ export default function Layout() {
               </div>
             </div>
             <div className="flex items-center gap-3">
+              <ThemeToggle className="rounded-lg" />
               <span className="hidden max-w-[14rem] truncate text-sm text-muted-foreground md:inline">
                 {user?.email}
               </span>
@@ -79,7 +83,9 @@ export default function Layout() {
 
       {/* Main content */}
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <Outlet />
+        <Suspense fallback={<RouteLoader label="Loading section…" />}>
+          <Outlet />
+        </Suspense>
       </main>
     </div>
   )
