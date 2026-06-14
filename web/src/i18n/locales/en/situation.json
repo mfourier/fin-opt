@@ -43,7 +43,7 @@
     "removeAccount": "Remove account {{n}}",
     "remove": "Remove",
     "nameLabel": "Account name",
-    "namePlaceholder": "e.g. Safe savings",
+    "namePlaceholder": "e.g. Emergency fund",
     "initialLabel": "How much is already there?",
     "riskLabel": "Risk",
     "riskGroupLabel": "Risk preset",

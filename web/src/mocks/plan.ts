@@ -13,7 +13,7 @@ export const mockProfile: Profile = {
   accounts_config: [
     {
       name: "conservative",
-      display_name: "Safe savings",
+      display_name: "Emergency fund",
       annual_return: 0.08,
       annual_volatility: 0.09,
       initial_wealth: 2_000_000,
@@ -185,12 +185,12 @@ export const mockResult: Result = {
     cash_flow: {
       contributions_mean: totalMean,
       contributions_by_account: [
-        { account: "conservative", display_name: "Safe savings", mean: consMean },
+        { account: "conservative", display_name: "Emergency fund", mean: consMean },
         { account: "aggressive", display_name: "Growth ETF", mean: aggMean },
       ],
       withdrawals_mean: totalWithdrawals,
       withdrawals_by_account: [
-        { account: "conservative", display_name: "Safe savings", mean: consWithdrawals },
+        { account: "conservative", display_name: "Emergency fund", mean: consWithdrawals },
         { account: "aggressive", display_name: "Growth ETF", mean: aggWithdrawals },
       ],
     },
@@ -216,7 +216,7 @@ export const mockResult: Result = {
       satisfied: true,
       actual_probability: 0.93,
       empirical_probability: 0.93,
-      note: "Safe savings will cover this within the first year.",
+      note: "Your Emergency fund reaches this target within the first year.",
     },
   ],
 };

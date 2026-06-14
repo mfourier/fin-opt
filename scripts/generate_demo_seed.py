@@ -65,7 +65,7 @@ PROFILE = {
     "accounts_config": [
         {
             "name": "safe_savings",
-            "display_name": "Safe savings",
+            "display_name": "Emergency fund",
             "annual_return": 0.045,
             "annual_volatility": 0.01,
             "initial_wealth": 2_500,

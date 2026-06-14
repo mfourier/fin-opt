@@ -43,7 +43,7 @@
     "removeAccount": "Quitar cuenta {{n}}",
     "remove": "Quitar",
     "nameLabel": "Nombre de la cuenta",
-    "namePlaceholder": "ej. Ahorro seguro",
+    "namePlaceholder": "ej. Fondo de emergencia",
     "initialLabel": "¿Cuánto hay ya ahí?",
     "riskLabel": "Riesgo",
     "riskGroupLabel": "Preajuste de riesgo",
