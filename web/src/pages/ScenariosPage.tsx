@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import { ArrowRight, BriefcaseBusiness, PlayCircle, Plus, Target, TrendingUp } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
 import { queueOptimization } from '../lib/api'
 import { useToast } from '../components/Toast'
 import { GoalsWizard } from '@/components/finopt/GoalsWizard'
 import { Button } from '@/components/ui/button'
-import type { Profile, Scenario, ScenarioInsert } from '../types/database'
+import { Card } from '@/components/ui/card'
+import { formatDateShort, formatMonthYear, formatMonthsLong } from '@/lib/format'
+import type { Job, Profile, Result, Scenario, ScenarioInsert } from '../types/database'
 import type { ScenarioDraft } from '@/mocks/types'
 
 // Plain-language labels for the optimization objective (no solver jargon).
@@ -66,6 +69,47 @@ export default function ScenariosPage() {
     },
     enabled: !!user,
   })
+
+  const { data: jobs } = useQuery({
+    queryKey: ['scenario-jobs', user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('jobs')
+        .select('id, scenario_id, status, progress, created_at, completed_at')
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      return data as Pick<Job, 'id' | 'scenario_id' | 'status' | 'progress' | 'created_at' | 'completed_at'>[]
+    },
+    enabled: !!user,
+  })
+
+  const latestJobsByScenarioId = Object.fromEntries(
+    (jobs ?? []).reduce<[string, Pick<Job, 'id' | 'scenario_id' | 'status' | 'progress' | 'created_at' | 'completed_at'>][]>((entries, job) => {
+      if (!entries.find(([scenarioId]) => scenarioId === job.scenario_id)) {
+        entries.push([job.scenario_id, job])
+      }
+      return entries
+    }, []),
+  )
+
+  const latestCompletedJobIds = Object.values(latestJobsByScenarioId)
+    .filter((job) => job.status === 'completed')
+    .map((job) => job.id)
+
+  const { data: latestResults } = useQuery({
+    queryKey: ['scenario-latest-results', latestCompletedJobIds],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('results')
+        .select('job_id, feasible, optimal_horizon')
+        .in('job_id', latestCompletedJobIds)
+      if (error) throw error
+      return data as Pick<Result, 'job_id' | 'feasible' | 'optimal_horizon'>[]
+    },
+    enabled: latestCompletedJobIds.length > 0,
+  })
+
+  const latestResultsByJobId = Object.fromEntries((latestResults ?? []).map((result) => [result.job_id, result]))
 
   const createMutation = useMutation({
     mutationFn: async (scenario: ScenarioInsert) => {
@@ -218,28 +262,80 @@ export default function ScenariosPage() {
       }
     : undefined
 
+  const ownScenarios = scenarios?.filter((scenario) => !scenario.is_demo) ?? []
+  const summaryCards = [
+    {
+      label: 'Plans built',
+      value: ownScenarios.length,
+      detail: ownScenarios.length > 0 ? 'Reusable goal-based plans connected to your situations.' : 'No plans created yet.',
+      icon: Target,
+    },
+    {
+      label: 'Results ready',
+      value: ownScenarios.filter((scenario) => latestJobsByScenarioId[scenario.id]?.status === 'completed').length,
+      detail: 'Plans with a completed run you can review right now.',
+      icon: TrendingUp,
+    },
+    {
+      label: 'Running now',
+      value: ownScenarios.filter((scenario) => {
+        const status = latestJobsByScenarioId[scenario.id]?.status
+        return status === 'running' || status === 'pending'
+      }).length,
+      detail: 'Calculations currently in progress.',
+      icon: PlayCircle,
+    },
+    {
+      label: 'Linked situations',
+      value: new Set(ownScenarios.map((scenario) => scenario.profile_id)).size,
+      detail: 'Saved situations currently being used by your plans.',
+      icon: BriefcaseBusiness,
+    },
+  ]
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Plans</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Tell us your goals and we'll find the shortest path to reach them.
+            Turn your goals into concrete timelines, then run FinOpt to see the shortest path toward them.
           </p>
         </div>
         <Button
           type="button"
           onClick={() => setShowForm(true)}
           disabled={!ownProfiles?.length}
-          className="rounded-md"
+          className="rounded-xl"
         >
+          <Plus className="h-4 w-4" />
           New Plan
         </Button>
       </div>
 
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {summaryCards.map(({ label, value, detail, icon: Icon }) => (
+          <Card key={label} className="p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">{label}</p>
+                <p className="mt-2 text-2xl font-semibold tabular text-foreground">{value}</p>
+                <p className="mt-2 text-sm text-muted-foreground">{detail}</p>
+              </div>
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-accent text-primary">
+                <Icon className="h-5 w-5" />
+              </span>
+            </div>
+          </Card>
+        ))}
+      </div>
+
       {!ownProfiles?.length && (
         <div className="rounded-xl border border-warning/30 bg-warning-soft p-4 text-sm text-warning">
-          Create a profile first before creating a plan.
+          Create a situation first before building a plan.
+          <Button asChild variant="link" className="ml-2 h-auto px-0 text-warning">
+            <Link to="/profiles">Go to My situation</Link>
+          </Button>
         </div>
       )}
 
@@ -268,58 +364,92 @@ export default function ScenariosPage() {
       {/* Plans list */}
       <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
         {isLoading ? (
-          <div className="p-6 text-center text-muted-foreground">Loading...</div>
+          <div className="p-6 text-center text-muted-foreground">Loading your plans...</div>
         ) : scenarios?.length === 0 ? (
-          <div className="p-6 text-center text-muted-foreground">
-            No plans yet. Create one to get started.
+          <div className="p-8 text-center">
+            <p className="text-base font-medium text-foreground">No plans yet.</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Start with a goal and FinOpt will estimate how long it may take to reach it.
+            </p>
+            <Button
+              type="button"
+              className="mt-4 rounded-xl"
+              onClick={() => setShowForm(true)}
+              disabled={!ownProfiles?.length}
+            >
+              <Plus className="h-4 w-4" />
+              Create your first plan
+            </Button>
           </div>
         ) : (
           <div className="divide-y divide-border">
             {scenarios?.map((scenario) => (
               <div
                 key={scenario.id}
-                className="flex items-center justify-between gap-4 p-6 transition-colors hover:bg-muted/30"
+                className="flex flex-col gap-5 p-6 transition-colors hover:bg-muted/20 lg:flex-row lg:items-start lg:justify-between"
               >
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-medium text-foreground">{scenario.name}</h3>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-lg font-semibold text-foreground">{scenario.name}</h3>
                     {scenario.is_demo && (
                       <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
                         Demo
                       </span>
                     )}
+                    <span className="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground">
+                      {OBJECTIVE_LABELS[scenario.objective] ?? scenario.objective}
+                    </span>
                   </div>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Profile: {scenario.profiles?.name}
+                  <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
+                    {scenario.description || `Built from ${scenario.profiles?.name ?? 'your saved situation'}.`}
                   </p>
-                  <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                    <span>{scenario.terminal_goals?.length ?? 0} goals</span>
-                    {(scenario.intermediate_goals?.length ?? 0) > 0 && (
-                      <span>| {scenario.intermediate_goals.length} dated</span>
-                    )}
-                    {scenario.withdrawals && (
-                      <span>
-                        | {(scenario.withdrawals.scheduled?.length ?? 0) + (scenario.withdrawals.stochastic?.length ?? 0)} withdrawals
-                      </span>
-                    )}
-                    <span>| {OBJECTIVE_LABELS[scenario.objective] ?? scenario.objective}</span>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <PlanMetricPill label="Situation" value={scenario.profiles?.name ?? 'Unknown'} />
+                    <PlanMetricPill
+                      label="Goals"
+                      value={`${scenario.terminal_goals?.length ?? 0} terminal${(scenario.intermediate_goals?.length ?? 0) > 0 ? ` · ${scenario.intermediate_goals.length} dated` : ''}`}
+                    />
+                    <PlanMetricPill
+                      label="Withdrawals"
+                      value={`${(scenario.withdrawals?.scheduled?.length ?? 0) + (scenario.withdrawals?.stochastic?.length ?? 0)}`}
+                    />
+                    <PlanMetricPill label="Start date" value={formatMonthYear(scenario.start_date)} />
                   </div>
                 </div>
-                <div className="flex gap-2">
+
+                <div className="flex w-full max-w-md flex-col gap-3 lg:items-end">
+                  <div className="w-full rounded-2xl bg-muted/50 px-4 py-3 lg:max-w-sm">
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Latest run
+                    </p>
+                    <p className="mt-1 font-medium text-foreground">
+                      {describeLatestRun(scenario, latestJobsByScenarioId[scenario.id], latestResultsByJobId)}
+                    </p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {describeLatestRunDetail(scenario, latestJobsByScenarioId[scenario.id], latestResultsByJobId)}
+                    </p>
+                  </div>
+
                   {scenario.is_demo ? (
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() => viewResults(scenario.id)}
-                    >
-                      View results
+                    <Button type="button" size="sm" className="rounded-xl" onClick={() => viewResults(scenario.id)}>
+                      View demo result
+                      <ArrowRight className="h-3.5 w-3.5" />
                     </Button>
                   ) : (
-                    <>
+                    <div className="flex flex-wrap gap-2 lg:justify-end">
+                      {latestJobsByScenarioId[scenario.id] && (
+                        <Button asChild size="sm" className="rounded-xl">
+                          <Link to={`/results/${latestJobsByScenarioId[scenario.id].id}`}>
+                            {latestJobsByScenarioId[scenario.id].status === 'completed' ? 'View latest result' : 'Open latest run'}
+                            <ArrowRight className="h-3.5 w-3.5" />
+                          </Link>
+                        </Button>
+                      )}
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
+                        className="rounded-xl"
                         onClick={() => handleEdit(scenario)}
                       >
                         Edit
@@ -327,7 +457,7 @@ export default function ScenariosPage() {
                       <Button
                         type="button"
                         size="sm"
-                        className="bg-success text-success-foreground hover:bg-success/90"
+                        className="rounded-xl bg-success text-success-foreground hover:bg-success/90"
                         onClick={() => runOptimization(scenario.id)}
                       >
                         Run
@@ -336,7 +466,7 @@ export default function ScenariosPage() {
                         type="button"
                         variant="outline"
                         size="sm"
-                        className="border-danger/30 text-danger hover:bg-danger-soft hover:text-danger"
+                        className="rounded-xl border-danger/30 text-danger hover:bg-danger-soft hover:text-danger"
                         onClick={() => {
                           if (confirm('Delete this plan?')) {
                             deleteMutation.mutate(scenario.id)
@@ -345,7 +475,7 @@ export default function ScenariosPage() {
                       >
                         Delete
                       </Button>
-                    </>
+                    </div>
                   )}
                 </div>
               </div>
@@ -355,4 +485,59 @@ export default function ScenariosPage() {
       </div>
     </div>
   )
+}
+
+function PlanMetricPill({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl bg-muted/60 px-4 py-3">
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="mt-1 text-base font-semibold text-foreground">{value}</p>
+    </div>
+  )
+}
+
+function describeLatestRun(
+  scenario: Pick<Scenario, 'is_demo'>,
+  job: Pick<Job, 'id' | 'status'> | undefined,
+  resultsByJobId: Record<string, Pick<Result, 'job_id' | 'feasible' | 'optimal_horizon'>>,
+) {
+  if (scenario.is_demo) return 'Precomputed example available.'
+  if (!job) return 'No runs yet.'
+
+  if (job.status === 'completed') {
+    const result = resultsByJobId[job.id]
+    if (result?.feasible === false) return 'Latest result needs changes.'
+    if (result?.optimal_horizon) return `Latest result: ${formatMonthsLong(result.optimal_horizon)}`
+    return 'Latest result is ready.'
+  }
+
+  if (job.status === 'failed') return 'Latest run failed.'
+  if (job.status === 'running') return 'FinOpt is calculating this plan.'
+  return 'Run queued.'
+}
+
+function describeLatestRunDetail(
+  scenario: Pick<Scenario, 'is_demo'>,
+  job: Pick<Job, 'id' | 'status' | 'created_at' | 'completed_at'> | undefined,
+  resultsByJobId: Record<string, Pick<Result, 'job_id' | 'feasible' | 'optimal_horizon'>>,
+) {
+  if (scenario.is_demo) return 'Open the saved result to explore how a complete example looks.'
+  if (!job) return 'Run the optimizer to estimate the path toward your goals.'
+
+  if (job.status === 'completed') {
+    const result = resultsByJobId[job.id]
+    const completedLabel = job.completed_at ? formatDateShort(job.completed_at) : formatDateShort(job.created_at)
+    if (result?.feasible === false) return `Completed ${completedLabel}. Review the result and adjust your inputs.`
+    return `Completed ${completedLabel}. Open the result to review the allocation path.`
+  }
+
+  if (job.status === 'failed') {
+    return `Last attempt was on ${formatDateShort(job.created_at)}. Update the plan and try again.`
+  }
+
+  if (job.status === 'running') {
+    return `Started ${formatDateShort(job.created_at)}. You can open the run to follow progress.`
+  }
+
+  return `Queued ${formatDateShort(job.created_at)}.`
 }

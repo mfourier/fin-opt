@@ -1,11 +1,15 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
+import { ArrowRight, BriefcaseBusiness, Plus, TrendingUp, Wallet } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
 import { useToast } from '../components/Toast'
 import { SituationForm } from '@/components/finopt/SituationForm'
 import { Button } from '@/components/ui/button'
-import type { Profile, ProfileInsert } from '../types/database'
+import { Card } from '@/components/ui/card'
+import { formatCLP } from '@/lib/format'
+import type { Profile, ProfileInsert, Scenario } from '../types/database'
 import type { ProfileDraft } from '@/mocks/types'
 
 export default function ProfilesPage() {
@@ -25,6 +29,16 @@ export default function ProfilesPage() {
         .order('created_at', { ascending: false })
       if (error) throw error
       return data as Profile[]
+    },
+    enabled: !!user,
+  })
+
+  const { data: scenarios } = useQuery({
+    queryKey: ['profile-scenarios', user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('scenarios').select('id, profile_id')
+      if (error) throw error
+      return data as Pick<Scenario, 'id' | 'profile_id'>[]
     },
     enabled: !!user,
   })
@@ -139,13 +153,48 @@ export default function ProfilesPage() {
     }
   }
 
+  const ownProfiles = profiles?.filter((profile) => !profile.is_demo) ?? []
+  const latestProfile = ownProfiles[0] ?? profiles?.[0] ?? null
+  const summaryCards = [
+    {
+      label: 'Saved situations',
+      value: ownProfiles.length,
+      detail: ownProfiles.length > 0 ? 'Reusable financial setups for future plans.' : 'Create your first situation.',
+      icon: BriefcaseBusiness,
+    },
+    {
+      label: 'Tracked accounts',
+      value: ownProfiles.reduce((sum, profile) => sum + profile.accounts_config.length, 0),
+      detail: 'Accounts and portfolios available across your saved situations.',
+      icon: Wallet,
+    },
+    {
+      label: 'Latest monthly income',
+      value: latestProfile ? `${formatCLP(getMonthlyIncome(latestProfile))}/mo` : '—',
+      detail: latestProfile ? `From ${latestProfile.name}.` : 'Add income details to unlock better plans.',
+      icon: TrendingUp,
+    },
+  ]
+
+  const scenarioCountByProfileId = Object.fromEntries(
+    (scenarios ?? []).reduce<[string, number][]>((entries, scenario) => {
+      const current = entries.find(([profileId]) => profileId === scenario.profile_id)
+      if (current) {
+        current[1] += 1
+        return entries
+      }
+      entries.push([scenario.profile_id, 1])
+      return entries
+    }, []),
+  )
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">My situation</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Your income and investment accounts — the basis your plans are built on.
+            Organize the income, balances, and accounts that power every plan you build in FinOpt.
           </p>
         </div>
         <Button
@@ -154,10 +203,28 @@ export default function ProfilesPage() {
             setEditingProfile(null)
             setShowForm(true)
           }}
-          className="rounded-md"
+          className="rounded-xl"
         >
+          <Plus className="h-4 w-4" />
           New situation
         </Button>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        {summaryCards.map(({ label, value, detail, icon: Icon }) => (
+          <Card key={label} className="p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">{label}</p>
+                <p className="mt-2 text-2xl font-semibold tabular text-foreground">{value}</p>
+                <p className="mt-2 text-sm text-muted-foreground">{detail}</p>
+              </div>
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-accent text-primary">
+                <Icon className="h-5 w-5" />
+              </span>
+            </div>
+          </Card>
+        ))}
       </div>
 
       {/* Form overlay (redesigned) */}
@@ -184,54 +251,94 @@ export default function ProfilesPage() {
       {/* Situations list */}
       <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
         {isLoading ? (
-          <div className="p-6 text-center text-muted-foreground">Loading...</div>
+          <div className="p-6 text-center text-muted-foreground">Loading your situations...</div>
         ) : profiles?.length === 0 ? (
-          <div className="p-6 text-center text-muted-foreground">
-            No situations yet. Create one to get started.
+          <div className="p-8 text-center">
+            <p className="text-base font-medium text-foreground">No situations yet.</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Add your income and account balances first, then use them across as many plans as you want.
+            </p>
+            <Button
+              type="button"
+              className="mt-4 rounded-xl"
+              onClick={() => {
+                setEditingProfile(null)
+                setShowForm(true)
+              }}
+            >
+              <Plus className="h-4 w-4" />
+              Create your first situation
+            </Button>
           </div>
         ) : (
           <div className="divide-y divide-border">
             {profiles?.map((profile) => (
               <div
                 key={profile.id}
-                className="flex items-center justify-between gap-4 p-6 transition-colors hover:bg-muted/30"
+                className="flex flex-col gap-5 p-6 transition-colors hover:bg-muted/20 lg:flex-row lg:items-start lg:justify-between"
               >
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-medium text-foreground">{profile.name}</h3>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-lg font-semibold text-foreground">{profile.name}</h3>
                     {profile.is_demo && (
                       <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
                         Demo
                       </span>
                     )}
-                  </div>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {profile.description || 'No description'}
-                  </p>
-                  <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                    <span>{profile.accounts_config.length} accounts</span>
-                    <span>|</span>
-                    <span>Salary: ${profile.income_config.fixed?.base?.toLocaleString() ?? 0}/mo</span>
-                    {profile.income_config.variable && (
-                      <>
-                        <span>|</span>
-                        <span>Variable: ${profile.income_config.variable.base?.toLocaleString() ?? 0}/mo</span>
-                      </>
+                    {!profile.is_demo && (
+                      <span className="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground">
+                        {describeRisk(profile)}
+                      </span>
                     )}
+                  </div>
+                  <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
+                    {profile.description || 'A reusable financial setup for future plans.'}
+                  </p>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <MetricPill
+                      label="Starting balance"
+                      value={formatCLP(getStartingBalance(profile))}
+                    />
+                    <MetricPill
+                      label="Monthly income"
+                      value={`${formatCLP(getMonthlyIncome(profile))}/mo`}
+                    />
+                    <MetricPill
+                      label="Accounts"
+                      value={`${profile.accounts_config.length}`}
+                    />
+                    <MetricPill
+                      label="Linked plans"
+                      value={`${scenarioCountByProfileId[profile.id] ?? 0}`}
+                    />
                   </div>
                 </div>
                 {profile.is_demo ? (
-                  <span className="text-xs text-muted-foreground">Read-only example</span>
+                  <div className="flex flex-col items-start gap-2 lg:items-end">
+                    <span className="text-xs text-muted-foreground">Read-only example</span>
+                    <Button asChild variant="outline" size="sm" className="rounded-xl">
+                      <Link to="/scenarios">
+                        View demo plan
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </Link>
+                    </Button>
+                  </div>
                 ) : (
-                  <div className="flex gap-2">
-                    <Button type="button" variant="outline" size="sm" onClick={() => handleEdit(profile)}>
+                  <div className="flex flex-wrap gap-2 lg:justify-end">
+                    <Button asChild size="sm" className="rounded-xl">
+                      <Link to="/scenarios">
+                        Create plan
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </Link>
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={() => handleEdit(profile)}>
                       Edit
                     </Button>
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="border-danger/30 text-danger hover:bg-danger-soft hover:text-danger"
+                      className="rounded-xl border-danger/30 text-danger hover:bg-danger-soft hover:text-danger"
                       onClick={() => {
                         if (confirm('Delete this situation?')) {
                           deleteMutation.mutate(profile.id)
@@ -247,6 +354,36 @@ export default function ProfilesPage() {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+function getStartingBalance(profile: Pick<Profile, 'accounts_config'>) {
+  return profile.accounts_config.reduce((sum, account) => sum + (account.initial_wealth ?? 0), 0)
+}
+
+function getMonthlyIncome(profile: Pick<Profile, 'income_config'>) {
+  const fixedIncome = profile.income_config.fixed?.base ?? 0
+  const variableIncome = profile.income_config.variable?.base ?? 0
+  return fixedIncome + variableIncome
+}
+
+function describeRisk(profile: Pick<Profile, 'accounts_config'>) {
+  if (profile.accounts_config.length === 0) return 'No accounts'
+  const averageVolatility =
+    profile.accounts_config.reduce((sum, account) => sum + account.annual_volatility, 0)
+    / profile.accounts_config.length
+
+  if (averageVolatility >= 0.14) return 'Growth oriented'
+  if (averageVolatility >= 0.08) return 'Balanced risk'
+  return 'Lower volatility'
+}
+
+function MetricPill({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl bg-muted/60 px-4 py-3">
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="mt-1 text-base font-semibold tabular text-foreground">{value}</p>
     </div>
   )
 }
