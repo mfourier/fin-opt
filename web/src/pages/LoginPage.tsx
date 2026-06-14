@@ -18,10 +18,9 @@ export default function LoginPage() {
   const [isSignUp, setIsSignUp] = useState(false)
   const [notice, setNotice] = useState<Notice>(null)
   const [loading, setLoading] = useState(false)
-  const [googleLoading, setGoogleLoading] = useState(false)
 
   const navigate = useNavigate()
-  const { signIn, signUp, signInWithGoogle, user } = useAuthStore()
+  const { signIn, signUp, user } = useAuthStore()
 
   useEffect(() => {
     if (user) {
@@ -46,19 +45,6 @@ export default function LoginPage() {
       setNotice({ kind: 'error', message: err instanceof Error ? err.message : 'An error occurred' })
     } finally {
       setLoading(false)
-    }
-  }
-
-  const handleGoogle = async () => {
-    setNotice(null)
-    setGoogleLoading(true)
-    try {
-      // Redirects on success; on failure (e.g. provider not enabled) we surface
-      // the real error and reset the button.
-      await signInWithGoogle()
-    } catch (err) {
-      setNotice({ kind: 'error', message: err instanceof Error ? err.message : 'Google sign-in is unavailable' })
-      setGoogleLoading(false)
     }
   }
 
@@ -128,30 +114,6 @@ export default function LoginPage() {
               </div>
             )}
 
-            {/* Social auth */}
-            <Button
-              type="button"
-              variant="outline"
-              className="h-11 w-full rounded-xl text-sm font-medium"
-              onClick={handleGoogle}
-              disabled={googleLoading || loading}
-            >
-              {googleLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <GoogleGlyph />
-              )}
-              Continue with Google
-            </Button>
-
-            <div className="my-5 flex items-center gap-3">
-              <span className="h-px flex-1 bg-border" />
-              <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                or
-              </span>
-              <span className="h-px flex-1 bg-border" />
-            </div>
-
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-1.5">
                 <Label htmlFor="email">Email</Label>
@@ -195,7 +157,7 @@ export default function LoginPage() {
 
               <Button
                 type="submit"
-                disabled={loading || googleLoading}
+                disabled={loading}
                 className="h-11 w-full rounded-xl text-sm font-semibold"
               >
                 {loading && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -224,29 +186,5 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
-  )
-}
-
-/** Inline multicolor Google "G" — no external image. */
-function GoogleGlyph() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
-      <path
-        fill="#4285F4"
-        d="M23.52 12.27c0-.82-.07-1.6-.2-2.36H12v4.46h6.47a5.53 5.53 0 0 1-2.4 3.63v3.02h3.88c2.27-2.09 3.57-5.17 3.57-8.75z"
-      />
-      <path
-        fill="#34A853"
-        d="M12 24c3.24 0 5.96-1.08 7.95-2.91l-3.88-3.02c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96H1.27v3.12A12 12 0 0 0 12 24z"
-      />
-      <path
-        fill="#FBBC05"
-        d="M5.27 14.27a7.2 7.2 0 0 1 0-4.54V6.61H1.27a12 12 0 0 0 0 10.78l4-3.12z"
-      />
-      <path
-        fill="#EA4335"
-        d="M12 4.77c1.76 0 3.35.61 4.6 1.8l3.43-3.43A11.98 11.98 0 0 0 12 0 12 12 0 0 0 1.27 6.61l4 3.12C6.22 6.88 8.87 4.77 12 4.77z"
-      />
-    </svg>
   )
 }
