@@ -10,6 +10,7 @@ import { GoalsWizard } from '@/components/finopt/GoalsWizard'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { formatDateShort, formatMonthYear, formatMonthsLong } from '@/lib/format'
+import { type PlanHealth, getPlanHealth, summarizeGoalStatus } from '@/lib/finance'
 import type { Job, Profile, Result, Scenario, ScenarioInsert } from '../types/database'
 import type { ScenarioDraft } from '@/mocks/types'
 
@@ -101,10 +102,10 @@ export default function ScenariosPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('results')
-        .select('job_id, feasible, optimal_horizon')
+        .select('job_id, feasible, optimal_horizon, goal_status')
         .in('job_id', latestCompletedJobIds)
       if (error) throw error
-      return data as Pick<Result, 'job_id' | 'feasible' | 'optimal_horizon'>[]
+      return data as Pick<Result, 'job_id' | 'feasible' | 'optimal_horizon' | 'goal_status'>[]
     },
     enabled: latestCompletedJobIds.length > 0,
   })
@@ -262,33 +263,69 @@ export default function ScenariosPage() {
       }
     : undefined
 
-  const ownScenarios = scenarios?.filter((scenario) => !scenario.is_demo) ?? []
+  const scenarioEntries = (scenarios ?? [])
+    .map((scenario) => {
+      const latestJob = latestJobsByScenarioId[scenario.id]
+      const latestResult = latestJob ? latestResultsByJobId[latestJob.id] : undefined
+      const health = getPlanHealth(latestJob, latestResult)
+      const goals = summarizeGoalStatus(latestResult?.goal_status)
+      return {
+        scenario,
+        latestJob,
+        latestResult,
+        health,
+        goals,
+      }
+    })
+    .sort((left, right) => {
+      const rankDelta = planPriority(left.health) - planPriority(right.health)
+      if (rankDelta !== 0) return rankDelta
+      const leftHorizon = left.latestResult?.optimal_horizon ?? Number.POSITIVE_INFINITY
+      const rightHorizon = right.latestResult?.optimal_horizon ?? Number.POSITIVE_INFINITY
+      return leftHorizon - rightHorizon
+    })
+
+  const ownScenarioEntries = scenarioEntries.filter((entry) => !entry.scenario.is_demo)
+  const healthCounts = ownScenarioEntries.reduce(
+    (counts, entry) => {
+      counts[entry.health] += 1
+      return counts
+    },
+    {
+      on_track: 0,
+      tight: 0,
+      needs_changes: 0,
+      running: 0,
+      queued: 0,
+      failed: 0,
+      draft: 0,
+      completed: 0,
+    } satisfies Record<PlanHealth, number>,
+  )
+
   const summaryCards = [
     {
-      label: 'Plans built',
-      value: ownScenarios.length,
-      detail: ownScenarios.length > 0 ? 'Reusable goal-based plans connected to your situations.' : 'No plans created yet.',
+      label: 'On track',
+      value: healthCounts.on_track,
+      detail: healthCounts.on_track > 0 ? 'Plans whose latest result currently meets every goal.' : 'No fully on-track plans yet.',
       icon: Target,
     },
     {
-      label: 'Results ready',
-      value: ownScenarios.filter((scenario) => latestJobsByScenarioId[scenario.id]?.status === 'completed').length,
-      detail: 'Plans with a completed run you can review right now.',
+      label: 'Need review',
+      value: healthCounts.tight + healthCounts.needs_changes + healthCounts.failed,
+      detail: 'Plans that are tight, infeasible, or had a failed run.',
       icon: TrendingUp,
     },
     {
       label: 'Running now',
-      value: ownScenarios.filter((scenario) => {
-        const status = latestJobsByScenarioId[scenario.id]?.status
-        return status === 'running' || status === 'pending'
-      }).length,
+      value: healthCounts.running + healthCounts.queued,
       detail: 'Calculations currently in progress.',
       icon: PlayCircle,
     },
     {
-      label: 'Linked situations',
-      value: new Set(ownScenarios.map((scenario) => scenario.profile_id)).size,
-      detail: 'Saved situations currently being used by your plans.',
+      label: 'Need first run',
+      value: healthCounts.draft,
+      detail: 'Plans that have been drafted but never calculated.',
       icon: BriefcaseBusiness,
     },
   ]
@@ -383,7 +420,7 @@ export default function ScenariosPage() {
           </div>
         ) : (
           <div className="divide-y divide-border">
-            {scenarios?.map((scenario) => (
+            {scenarioEntries.map(({ scenario, latestJob, latestResult, health, goals }) => (
               <div
                 key={scenario.id}
                 className="flex flex-col gap-5 p-6 transition-colors hover:bg-muted/20 lg:flex-row lg:items-start lg:justify-between"
@@ -399,6 +436,11 @@ export default function ScenariosPage() {
                     <span className="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground">
                       {OBJECTIVE_LABELS[scenario.objective] ?? scenario.objective}
                     </span>
+                    {!scenario.is_demo && (
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${planStatusTone(health)}`}>
+                        {planStatusLabel(health)}
+                      </span>
+                    )}
                   </div>
                   <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
                     {scenario.description || `Built from ${scenario.profiles?.name ?? 'your saved situation'}.`}
@@ -419,15 +461,38 @@ export default function ScenariosPage() {
 
                 <div className="flex w-full max-w-md flex-col gap-3 lg:items-end">
                   <div className="w-full rounded-2xl bg-muted/50 px-4 py-3 lg:max-w-sm">
-                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      Latest run
-                    </p>
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Latest run
+                      </p>
+                      {!scenario.is_demo && (
+                        <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${planStatusTone(health)}`}>
+                          {planStatusLabel(health)}
+                        </span>
+                      )}
+                    </div>
                     <p className="mt-1 font-medium text-foreground">
-                      {describeLatestRun(scenario, latestJobsByScenarioId[scenario.id], latestResultsByJobId)}
+                      {describeLatestRun(scenario, latestJob, latestResultsByJobId)}
                     </p>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      {describeLatestRunDetail(scenario, latestJobsByScenarioId[scenario.id], latestResultsByJobId)}
+                      {describeLatestRunDetail(scenario, latestJob, latestResultsByJobId)}
                     </p>
+                    {!scenario.is_demo && (
+                      <div className="mt-4 grid grid-cols-3 gap-2">
+                        <PlanRunMetric
+                          label="Goals met"
+                          value={goals.total > 0 ? `${goals.met}/${goals.total}` : '—'}
+                        />
+                        <PlanRunMetric
+                          label="Horizon"
+                          value={latestResult?.optimal_horizon ? formatMonthsLong(latestResult.optimal_horizon) : '—'}
+                        />
+                        <PlanRunMetric
+                          label="Updated"
+                          value={latestJob ? formatDateShort(latestJob.completed_at ?? latestJob.created_at) : '—'}
+                        />
+                      </div>
+                    )}
                   </div>
 
                   {scenario.is_demo ? (
@@ -437,10 +502,10 @@ export default function ScenariosPage() {
                     </Button>
                   ) : (
                     <div className="flex flex-wrap gap-2 lg:justify-end">
-                      {latestJobsByScenarioId[scenario.id] && (
+                      {latestJob && (
                         <Button asChild size="sm" className="rounded-xl">
-                          <Link to={`/results/${latestJobsByScenarioId[scenario.id].id}`}>
-                            {latestJobsByScenarioId[scenario.id].status === 'completed' ? 'View latest result' : 'Open latest run'}
+                          <Link to={`/results/${latestJob.id}`}>
+                            {latestJob.status === 'completed' ? 'View latest result' : 'Open latest run'}
                             <ArrowRight className="h-3.5 w-3.5" />
                           </Link>
                         </Button>
@@ -496,16 +561,80 @@ function PlanMetricPill({ label, value }: { label: string; value: string }) {
   )
 }
 
+function PlanRunMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl bg-card px-3 py-2">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-foreground">{value}</p>
+    </div>
+  )
+}
+
+function planPriority(health: PlanHealth) {
+  const priorities: Record<PlanHealth, number> = {
+    needs_changes: 0,
+    tight: 1,
+    failed: 2,
+    running: 3,
+    queued: 4,
+    completed: 5,
+    on_track: 6,
+    draft: 7,
+  }
+  return priorities[health]
+}
+
+function planStatusLabel(health: PlanHealth) {
+  switch (health) {
+    case 'needs_changes':
+      return 'Needs changes'
+    case 'tight':
+      return 'Tight plan'
+    case 'failed':
+      return 'Failed'
+    case 'running':
+      return 'Calculating'
+    case 'queued':
+      return 'Queued'
+    case 'completed':
+      return 'Completed'
+    case 'on_track':
+      return 'On track'
+    default:
+      return 'Needs run'
+  }
+}
+
+function planStatusTone(health: PlanHealth) {
+  switch (health) {
+    case 'needs_changes':
+    case 'failed':
+      return 'bg-danger-soft text-danger'
+    case 'tight':
+      return 'bg-warning-soft text-warning'
+    case 'running':
+    case 'queued':
+      return 'bg-accent text-accent-foreground'
+    case 'completed':
+      return 'bg-muted text-muted-foreground'
+    case 'on_track':
+      return 'bg-success-soft text-success'
+    default:
+      return 'bg-muted text-muted-foreground'
+  }
+}
+
 function describeLatestRun(
   scenario: Pick<Scenario, 'is_demo'>,
   job: Pick<Job, 'id' | 'status'> | undefined,
-  resultsByJobId: Record<string, Pick<Result, 'job_id' | 'feasible' | 'optimal_horizon'>>,
+  resultsByJobId: Record<string, Pick<Result, 'job_id' | 'feasible' | 'optimal_horizon' | 'goal_status'>>,
 ) {
   if (scenario.is_demo) return 'Precomputed example available.'
   if (!job) return 'No runs yet.'
 
   if (job.status === 'completed') {
     const result = resultsByJobId[job.id]
+    if (!result) return 'Latest run completed.'
     if (result?.feasible === false) return 'Latest result needs changes.'
     if (result?.optimal_horizon) return `Latest result: ${formatMonthsLong(result.optimal_horizon)}`
     return 'Latest result is ready.'
@@ -519,7 +648,7 @@ function describeLatestRun(
 function describeLatestRunDetail(
   scenario: Pick<Scenario, 'is_demo'>,
   job: Pick<Job, 'id' | 'status' | 'created_at' | 'completed_at'> | undefined,
-  resultsByJobId: Record<string, Pick<Result, 'job_id' | 'feasible' | 'optimal_horizon'>>,
+  resultsByJobId: Record<string, Pick<Result, 'job_id' | 'feasible' | 'optimal_horizon' | 'goal_status'>>,
 ) {
   if (scenario.is_demo) return 'Open the saved result to explore how a complete example looks.'
   if (!job) return 'Run the optimizer to estimate the path toward your goals.'
@@ -527,6 +656,7 @@ function describeLatestRunDetail(
   if (job.status === 'completed') {
     const result = resultsByJobId[job.id]
     const completedLabel = job.completed_at ? formatDateShort(job.completed_at) : formatDateShort(job.created_at)
+    if (!result) return `Completed ${completedLabel}. The saved result summary is not available yet.`
     if (result?.feasible === false) return `Completed ${completedLabel}. Review the result and adjust your inputs.`
     return `Completed ${completedLabel}. Open the result to review the allocation path.`
   }

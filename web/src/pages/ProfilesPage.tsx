@@ -8,7 +8,16 @@ import { useToast } from '../components/Toast'
 import { SituationForm } from '@/components/finopt/SituationForm'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { formatCLP } from '@/lib/format'
+import { formatCLP, formatPercent } from '@/lib/format'
+import {
+  describeProfileRisk,
+  getProfileIncomeMix,
+  getProfileMonthlyContributionCapacity,
+  getProfileMonthlyIncome,
+  getProfileStartingBalance,
+  getProfileTopAccounts,
+  getProfileWeightedReturn,
+} from '@/lib/finance'
 import type { Profile, ProfileInsert, Scenario } from '../types/database'
 import type { ProfileDraft } from '@/mocks/types'
 
@@ -163,15 +172,21 @@ export default function ProfilesPage() {
       icon: BriefcaseBusiness,
     },
     {
-      label: 'Tracked accounts',
-      value: ownProfiles.reduce((sum, profile) => sum + profile.accounts_config.length, 0),
-      detail: 'Accounts and portfolios available across your saved situations.',
+      label: 'Primary balance',
+      value: latestProfile ? formatCLP(getProfileStartingBalance(latestProfile)) : '—',
+      detail: latestProfile ? `From ${latestProfile.name}.` : 'Add account balances to build a baseline.',
       icon: Wallet,
     },
     {
-      label: 'Latest monthly income',
-      value: latestProfile ? `${formatCLP(getMonthlyIncome(latestProfile))}/mo` : '—',
-      detail: latestProfile ? `From ${latestProfile.name}.` : 'Add income details to unlock better plans.',
+      label: 'Monthly investing power',
+      value: latestProfile ? `${formatCLP(getProfileMonthlyContributionCapacity(latestProfile))}/mo` : '—',
+      detail: latestProfile ? `Estimated from ${latestProfile.name}.` : 'Add income details to unlock better plans.',
+      icon: TrendingUp,
+    },
+    {
+      label: 'Expected annual return',
+      value: latestProfile ? formatPercent(getProfileWeightedReturn(latestProfile), 1) : '—',
+      detail: latestProfile ? `Weighted by the balances in ${latestProfile.name}.` : 'Add accounts to estimate portfolio growth.',
       icon: TrendingUp,
     },
   ]
@@ -287,7 +302,7 @@ export default function ProfilesPage() {
                     )}
                     {!profile.is_demo && (
                       <span className="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground">
-                        {describeRisk(profile)}
+                        {describeProfileRisk(profile)}
                       </span>
                     )}
                   </div>
@@ -297,20 +312,85 @@ export default function ProfilesPage() {
                   <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                     <MetricPill
                       label="Starting balance"
-                      value={formatCLP(getStartingBalance(profile))}
+                      value={formatCLP(getProfileStartingBalance(profile))}
                     />
                     <MetricPill
                       label="Monthly income"
-                      value={`${formatCLP(getMonthlyIncome(profile))}/mo`}
+                      value={`${formatCLP(getProfileMonthlyIncome(profile))}/mo`}
                     />
                     <MetricPill
-                      label="Accounts"
-                      value={`${profile.accounts_config.length}`}
+                      label="Investing power"
+                      value={`${formatCLP(getProfileMonthlyContributionCapacity(profile))}/mo`}
                     />
                     <MetricPill
                       label="Linked plans"
                       value={`${scenarioCountByProfileId[profile.id] ?? 0}`}
                     />
+                  </div>
+
+                  <div className="mt-4 grid gap-4 xl:grid-cols-[0.9fr,1.1fr]">
+                    <div className="rounded-2xl bg-muted/50 p-4">
+                      <p className="text-sm font-medium text-foreground">Funding snapshot</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        How this situation turns income into long-term savings.
+                      </p>
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                        <MetricPill
+                          label="Fixed income"
+                          value={`${formatCLP(getProfileIncomeMix(profile).fixedIncome)}/mo`}
+                        />
+                        <MetricPill
+                          label="Variable income"
+                          value={`${formatCLP(getProfileIncomeMix(profile).variableIncome)}/mo`}
+                        />
+                        <MetricPill
+                          label="Expected return"
+                          value={formatPercent(getProfileWeightedReturn(profile), 1)}
+                        />
+                        <MetricPill
+                          label="Income mix"
+                          value={`${formatPercent(getProfileIncomeMix(profile).fixedShare, 0)} fixed`}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl bg-muted/50 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-medium text-foreground">Account mix</p>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            The highest-balance accounts inside this situation.
+                          </p>
+                        </div>
+                        <span className="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground">
+                          {describeProfileRisk(profile)}
+                        </span>
+                      </div>
+                      <div className="mt-4 space-y-3">
+                        {getProfileTopAccounts(profile, 4).map((account) => (
+                          <div key={account.id}>
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-medium text-foreground">{account.name}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {formatPercent(account.annualReturn, 1)} return · {formatPercent(account.annualVolatility, 1)} vol
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <p className="tabular text-sm font-semibold text-foreground">{formatCLP(account.balance)}</p>
+                                <p className="text-xs text-muted-foreground">{formatPercent(account.share, 0)} of total</p>
+                              </div>
+                            </div>
+                            <div className="mt-2 h-2 overflow-hidden rounded-full bg-background">
+                              <div
+                                className="h-full rounded-full bg-primary"
+                                style={{ width: `${Math.max(account.share * 100, 6)}%` }}
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
                 {profile.is_demo ? (
@@ -356,27 +436,6 @@ export default function ProfilesPage() {
       </div>
     </div>
   )
-}
-
-function getStartingBalance(profile: Pick<Profile, 'accounts_config'>) {
-  return profile.accounts_config.reduce((sum, account) => sum + (account.initial_wealth ?? 0), 0)
-}
-
-function getMonthlyIncome(profile: Pick<Profile, 'income_config'>) {
-  const fixedIncome = profile.income_config.fixed?.base ?? 0
-  const variableIncome = profile.income_config.variable?.base ?? 0
-  return fixedIncome + variableIncome
-}
-
-function describeRisk(profile: Pick<Profile, 'accounts_config'>) {
-  if (profile.accounts_config.length === 0) return 'No accounts'
-  const averageVolatility =
-    profile.accounts_config.reduce((sum, account) => sum + account.annual_volatility, 0)
-    / profile.accounts_config.length
-
-  if (averageVolatility >= 0.14) return 'Growth oriented'
-  if (averageVolatility >= 0.08) return 'Balanced risk'
-  return 'Lower volatility'
 }
 
 function MetricPill({ label, value }: { label: string; value: string }) {
