@@ -742,7 +742,7 @@ class WithdrawalModel:
         if self.stochastic is not None:
             account_names = [acc.name for acc in accounts]
 
-            for withdrawal in self.stochastic:
+            for idx, withdrawal in enumerate(self.stochastic):
                 # Resolve account index
                 if isinstance(withdrawal.account, int):
                     if not (0 <= withdrawal.account < M):
@@ -781,8 +781,9 @@ class WithdrawalModel:
                 # Use global seed if provided, otherwise use withdrawal's seed
                 effective_seed = seed if seed is not None else withdrawal.seed
                 if effective_seed is not None:
-                    # Derive unique seed per withdrawal to avoid correlation
-                    effective_seed = effective_seed + hash((withdrawal.account, month)) % 10000
+                    # Derive a stable per-withdrawal seed without relying on Python's
+                    # process-randomized hash() implementation.
+                    effective_seed = effective_seed + idx
 
                 # Create a new StochasticWithdrawal with the effective seed
                 temp_withdrawal = StochasticWithdrawal(
