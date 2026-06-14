@@ -8,7 +8,7 @@ All settings are loaded from environment variables or .env file.
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import AliasChoices, Field
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -70,7 +70,7 @@ class Settings(BaseSettings):
     # -------------------------------------------------------------------------
     cors_origins_str: str = Field(
         default="http://localhost:3000,http://localhost:5173",
-        validation_alias=AliasChoices("CORS_ORIGINS", "CORS_ORIGINS_STR"),
+        validation_alias="CORS_ORIGINS",
         description="Allowed CORS origins (comma-separated string)"
     )
 
@@ -90,6 +90,7 @@ class Settings(BaseSettings):
     )
     debug: bool = Field(
         default=False,
+        validation_alias="FINOPT_DEBUG",
         description="Enable debug mode (verbose errors)"
     )
 

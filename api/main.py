@@ -20,14 +20,15 @@ from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from typing import Annotated
 
+import httpx
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
 from api import __version__
 from api.config import Settings, get_settings
-from api.services.optimization import run_optimization
-from api.services.simulation import run_simulation
+from api.supabase_client import authorize_job_for_user
 
 # Configure logging
 logging.basicConfig(
@@ -35,6 +36,21 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
+security = HTTPBearer(auto_error=False)
+
+
+def run_simulation(scenario_id: str, job_id: str) -> None:
+    """Lazy-import and execute the simulation worker."""
+    from api.services.simulation import run_simulation as _run_simulation
+
+    _run_simulation(scenario_id, job_id)
+
+
+def run_optimization(scenario_id: str, job_id: str) -> None:
+    """Lazy-import and execute the optimization worker."""
+    from api.services.optimization import run_optimization as _run_optimization
+
+    _run_optimization(scenario_id, job_id)
 
 
 # ---------------------------------------------------------------------------
@@ -189,6 +205,47 @@ class ErrorResponse(BaseModel):
     error_code: str | None = None
 
 
+class AuthenticatedUser(BaseModel):
+    """Minimal authenticated Supabase user payload."""
+
+    id: str
+    email: str | None = None
+
+
+def get_current_user(
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(security)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> AuthenticatedUser:
+    """Validate a Supabase bearer token and return the authenticated user."""
+    if credentials is None or credentials.scheme.lower() != "bearer":
+        raise HTTPException(status_code=401, detail="Missing bearer token")
+
+    try:
+        response = httpx.get(
+            f"{settings.supabase_url}/auth/v1/user",
+            headers={
+                "Authorization": f"Bearer {credentials.credentials}",
+                "apikey": settings.supabase_anon_key,
+            },
+            timeout=10.0,
+        )
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Unable to validate the current session with Supabase Auth",
+        ) from exc
+
+    if response.status_code != 200:
+        raise HTTPException(status_code=401, detail="Invalid or expired session")
+
+    payload = response.json()
+    user_id = payload.get("id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid auth payload")
+
+    return AuthenticatedUser(id=user_id, email=payload.get("email"))
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -229,6 +286,7 @@ async def health(
 async def simulate(
     request: SimulateRequest,
     background_tasks: BackgroundTasks,
+    current_user: Annotated[AuthenticatedUser, Depends(get_current_user)],
 ) -> JobResponse:
     """
     Queue a Monte Carlo simulation job.
@@ -246,7 +304,24 @@ async def simulate(
     - Saves results to Supabase
     - Updates job status throughout
     """
-    logger.info(f"Queueing simulation job {request.job_id} for scenario {request.scenario_id}")
+    try:
+        authorize_job_for_user(
+            job_id=request.job_id,
+            scenario_id=request.scenario_id,
+            user_id=current_user.id,
+            expected_job_type="simulation",
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    logger.info(
+        "Queueing simulation job %s for scenario %s (user=%s)",
+        request.job_id,
+        request.scenario_id,
+        current_user.id,
+    )
 
     # Queue the job as a background task
     background_tasks.add_task(
@@ -276,6 +351,7 @@ async def simulate(
 async def optimize(
     request: OptimizeRequest,
     background_tasks: BackgroundTasks,
+    current_user: Annotated[AuthenticatedUser, Depends(get_current_user)],
 ) -> JobResponse:
     """
     Queue a CVaR optimization job with goal-seeking.
@@ -293,7 +369,24 @@ async def optimize(
     - Saves results to Supabase
     - Updates job status throughout
     """
-    logger.info(f"Queueing optimization job {request.job_id} for scenario {request.scenario_id}")
+    try:
+        authorize_job_for_user(
+            job_id=request.job_id,
+            scenario_id=request.scenario_id,
+            user_id=current_user.id,
+            expected_job_type="optimization",
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    logger.info(
+        "Queueing optimization job %s for scenario %s (user=%s)",
+        request.job_id,
+        request.scenario_id,
+        current_user.id,
+    )
 
     # Queue the job as a background task
     background_tasks.add_task(

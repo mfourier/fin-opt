@@ -368,7 +368,9 @@ def mock_env_vars(monkeypatch):
     monkeypatch.setenv("SUPABASE_ANON_KEY", "test-anon-key")
     monkeypatch.setenv("SUPABASE_SERVICE_KEY", "test-service-key")
     monkeypatch.setenv("ENVIRONMENT", "development")
-    monkeypatch.setenv("CORS_ORIGINS_STR", "http://localhost:3000,http://localhost:5173")
+    monkeypatch.setenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173")
+    monkeypatch.delenv("DEBUG", raising=False)
+    monkeypatch.delenv("FINOPT_DEBUG", raising=False)
 
     # Clear settings cache to force reload with test env vars
     from api.config import get_settings
@@ -462,7 +464,7 @@ def sample_scenario_data(sample_profile_data):
 
 
 @pytest.fixture
-def fastapi_test_client(mock_env_vars):
+def fastapi_test_client(mock_env_vars, monkeypatch):
     """
     FastAPI TestClient for testing API endpoints.
 
@@ -471,6 +473,15 @@ def fastapi_test_client(mock_env_vars):
     """
     from fastapi.testclient import TestClient
 
-    from api.main import app
+    from api.main import AuthenticatedUser, app, get_current_user
 
-    return TestClient(app)
+    app.dependency_overrides[get_current_user] = lambda: AuthenticatedUser(
+        id="test-user-id",
+        email="test@example.com",
+    )
+    monkeypatch.setattr("api.main.authorize_job_for_user", lambda *args, **kwargs: None)
+    monkeypatch.setattr("api.supabase_client.reap_orphaned_jobs", lambda *args, **kwargs: 0)
+
+    with TestClient(app) as client:
+        yield client
+    app.dependency_overrides.clear()

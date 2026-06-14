@@ -115,6 +115,7 @@ export default function ResultsPage() {
   const handleRecalculate = async () => {
     setRecalculating(true)
     setActionError(null)
+    let newJobId: string | null = null
     try {
       const { data: newJob, error } = await supabase
         .from('jobs')
@@ -122,9 +123,19 @@ export default function ResultsPage() {
         .select()
         .single()
       if (error) throw error
+      newJobId = newJob.id
       await queueOptimization({ scenario_id: job.scenario_id, job_id: newJob.id })
       navigate(`/results/${newJob.id}`)
     } catch (e) {
+      if (newJobId) {
+        await supabase
+          .from('jobs')
+          .update({
+            status: 'failed',
+            error_message: e instanceof Error ? e.message : 'Failed to reach the compute service',
+          })
+          .eq('id', newJobId)
+      }
       setActionError(e instanceof Error ? e.message : 'Failed to recalculate')
     } finally {
       setRecalculating(false)

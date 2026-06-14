@@ -264,3 +264,77 @@ def fetch_scenario_with_profile(scenario_id: str) -> dict[str, Any]:
         raise ValueError(f"Scenario not found: {scenario_id}")
 
     return response.data
+
+
+def authorize_job_for_user(
+    job_id: str,
+    scenario_id: str,
+    user_id: str,
+    expected_job_type: str,
+) -> None:
+    """
+    Ensure a queued job belongs to the authenticated user and matches the API call.
+
+    Parameters
+    ----------
+    job_id : str
+        UUID of the job row created by the frontend.
+    scenario_id : str
+        UUID of the scenario referenced in the API request.
+    user_id : str
+        Authenticated Supabase user id from the bearer token.
+    expected_job_type : str
+        Expected job_type for the endpoint ('simulation' or 'optimization').
+
+    Raises
+    ------
+    PermissionError
+        If the job/scenario does not belong to the authenticated user.
+    ValueError
+        If the job/scenario are inconsistent or not queueable.
+    """
+    client = get_supabase_client()
+
+    job_response = (
+        client.table("jobs")
+        .select("id, scenario_id, job_type, status")
+        .eq("id", job_id)
+        .single()
+        .execute()
+    )
+    job = job_response.data
+    if not job:
+        raise ValueError(f"Job not found: {job_id}")
+
+    if job.get("scenario_id") != scenario_id:
+        raise PermissionError("Job does not belong to the requested scenario")
+    if job.get("job_type") != expected_job_type:
+        raise ValueError(
+            f"Job type mismatch: expected {expected_job_type}, got {job.get('job_type')!r}"
+        )
+    if job.get("status") != "pending":
+        raise ValueError(
+            f"Job must be pending before queueing, got {job.get('status')!r}"
+        )
+
+    scenario_response = (
+        client.table("scenarios")
+        .select("id, is_demo, profiles(user_id)")
+        .eq("id", scenario_id)
+        .single()
+        .execute()
+    )
+    scenario = scenario_response.data
+    if not scenario:
+        raise ValueError(f"Scenario not found: {scenario_id}")
+
+    if scenario.get("is_demo"):
+        raise PermissionError("Demo scenarios cannot be queued for compute jobs")
+
+    profile_data = scenario.get("profiles")
+    if isinstance(profile_data, list):
+        profile_data = profile_data[0] if profile_data else None
+
+    owner_user_id = profile_data.get("user_id") if isinstance(profile_data, dict) else None
+    if owner_user_id != user_id:
+        raise PermissionError("You do not have access to this scenario")

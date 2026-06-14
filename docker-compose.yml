@@ -23,7 +23,7 @@ services:
       - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
       - CORS_ORIGINS=http://localhost:3000,http://localhost:5173
       - LOG_LEVEL=DEBUG
-      - DEBUG=true
+      - FINOPT_DEBUG=true
     volumes:
       # Mount source code for hot reload in development
       - ./src:/app/src:ro

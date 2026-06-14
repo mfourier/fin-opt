@@ -177,6 +177,13 @@ export default function ScenariosPage() {
       toast.info('Calculating your plan', 'Redirecting to results…')
       navigate(`/results/${job.id}`)
     } catch (err) {
+      await supabase
+        .from('jobs')
+        .update({
+          status: 'failed',
+          error_message: err instanceof Error ? err.message : 'Failed to reach the compute service',
+        })
+        .eq('id', job.id)
       toast.error('Failed to start calculation', err instanceof Error ? err.message : 'Unknown error')
     }
   }

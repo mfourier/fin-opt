@@ -45,7 +45,7 @@ def test_cors_origins_parser_string(monkeypatch):
     monkeypatch.setenv("SUPABASE_URL", "https://test.supabase.co")
     monkeypatch.setenv("SUPABASE_ANON_KEY", "key1")
     monkeypatch.setenv("SUPABASE_SERVICE_KEY", "key2")
-    monkeypatch.setenv("CORS_ORIGINS_STR", "http://example.com,https://app.example.com, http://localhost:3000")
+    monkeypatch.setenv("CORS_ORIGINS", "http://example.com,https://app.example.com, http://localhost:3000")
 
     from api.config import get_settings
     get_settings.cache_clear()
@@ -67,7 +67,7 @@ def test_cors_origins_parser_list(monkeypatch):
     monkeypatch.setenv("SUPABASE_URL", "https://test.supabase.co")
     monkeypatch.setenv("SUPABASE_ANON_KEY", "key1")
     monkeypatch.setenv("SUPABASE_SERVICE_KEY", "key2")
-    monkeypatch.setenv("CORS_ORIGINS_STR", "http://example.com,https://app.example.com")
+    monkeypatch.setenv("CORS_ORIGINS", "http://example.com,https://app.example.com")
 
     from api.config import get_settings
     get_settings.cache_clear()

@@ -248,6 +248,63 @@ def test_fetch_scenario_with_profile_not_found_raises(mocker, mock_env_vars):
     assert "nonexistent-id" in str(exc_info.value)
 
 
+def test_authorize_job_for_user_success(mocker, mock_env_vars):
+    """Test authorize_job_for_user accepts a matching pending job."""
+    mock_client = MagicMock()
+    job_response = MagicMock()
+    scenario_response = MagicMock()
+    job_response.data = {
+        "id": "job-123",
+        "scenario_id": "scenario-123",
+        "job_type": "optimization",
+        "status": "pending",
+    }
+    scenario_response.data = {
+        "id": "scenario-123",
+        "is_demo": False,
+        "profiles": {"user_id": "user-123"},
+    }
+
+    mock_client.table.return_value.select.return_value.eq.return_value.single.return_value.execute.side_effect = [
+        job_response,
+        scenario_response,
+    ]
+    mocker.patch('api.supabase_client.get_supabase_client', return_value=mock_client)
+
+    from api.supabase_client import authorize_job_for_user
+
+    authorize_job_for_user("job-123", "scenario-123", "user-123", "optimization")
+
+
+def test_authorize_job_for_user_rejects_wrong_owner(mocker, mock_env_vars):
+    """Test authorize_job_for_user rejects access to another user's scenario."""
+    mock_client = MagicMock()
+    job_response = MagicMock()
+    scenario_response = MagicMock()
+    job_response.data = {
+        "id": "job-123",
+        "scenario_id": "scenario-123",
+        "job_type": "optimization",
+        "status": "pending",
+    }
+    scenario_response.data = {
+        "id": "scenario-123",
+        "is_demo": False,
+        "profiles": {"user_id": "someone-else"},
+    }
+
+    mock_client.table.return_value.select.return_value.eq.return_value.single.return_value.execute.side_effect = [
+        job_response,
+        scenario_response,
+    ]
+    mocker.patch('api.supabase_client.get_supabase_client', return_value=mock_client)
+
+    from api.supabase_client import authorize_job_for_user
+
+    with pytest.raises(PermissionError, match="do not have access"):
+        authorize_job_for_user("job-123", "scenario-123", "user-123", "optimization")
+
+
 def test_reap_orphaned_jobs_marks_running_and_pending_failed(mocker, mock_env_vars):
     """reap_orphaned_jobs marks pending/running jobs failed and returns the count."""
     mock_client = MagicMock()

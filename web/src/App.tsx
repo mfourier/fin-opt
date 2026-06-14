@@ -6,9 +6,10 @@ import Layout from './components/Layout'
 import LoginPage from './pages/LoginPage'
 import RouteLoader from './components/RouteLoader'
 
-const PlanPreviewPage = lazy(() => import('./pages/PlanPreviewPage'))
-const GoalsPreviewPage = lazy(() => import('./pages/GoalsPreviewPage'))
-const SituationPreviewPage = lazy(() => import('./pages/SituationPreviewPage'))
+const ENABLE_PREVIEW_ROUTES = import.meta.env.DEV
+const PlanPreviewPage = ENABLE_PREVIEW_ROUTES ? lazy(() => import('./pages/PlanPreviewPage')) : null
+const GoalsPreviewPage = ENABLE_PREVIEW_ROUTES ? lazy(() => import('./pages/GoalsPreviewPage')) : null
+const SituationPreviewPage = ENABLE_PREVIEW_ROUTES ? lazy(() => import('./pages/SituationPreviewPage')) : null
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
 const ProfilesPage = lazy(() => import('./pages/ProfilesPage'))
 const ScenariosPage = lazy(() => import('./pages/ScenariosPage'))
@@ -47,30 +48,36 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
-          <Route
-            path="/plan-preview"
-            element={
-              <LazyPage>
-                <PlanPreviewPage />
-              </LazyPage>
-            }
-          />
-          <Route
-            path="/goals-preview"
-            element={
-              <LazyPage>
-                <GoalsPreviewPage />
-              </LazyPage>
-            }
-          />
-          <Route
-            path="/situation-preview"
-            element={
-              <LazyPage>
-                <SituationPreviewPage />
-              </LazyPage>
-            }
-          />
+          {ENABLE_PREVIEW_ROUTES && PlanPreviewPage && (
+            <Route
+              path="/plan-preview"
+              element={
+                <LazyPage>
+                  <PlanPreviewPage />
+                </LazyPage>
+              }
+            />
+          )}
+          {ENABLE_PREVIEW_ROUTES && GoalsPreviewPage && (
+            <Route
+              path="/goals-preview"
+              element={
+                <LazyPage>
+                  <GoalsPreviewPage />
+                </LazyPage>
+              }
+            />
+          )}
+          {ENABLE_PREVIEW_ROUTES && SituationPreviewPage && (
+            <Route
+              path="/situation-preview"
+              element={
+                <LazyPage>
+                  <SituationPreviewPage />
+                </LazyPage>
+              }
+            />
+          )}
           <Route
             path="/"
             element={
