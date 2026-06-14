@@ -1,14 +1,194 @@
 # FinOpt
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://github.com/mfourier/finopt/actions/workflows/test.yml/badge.svg)](https://github.com/mfourier/finopt/actions/workflows/test.yml)
-[![Coverage](https://img.shields.io/badge/coverage-85%25-brightgreen.svg)](tests/)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 > **Goal-based portfolio optimization via CVaR-reformulated convex programming**
 
-FinOpt inverts the classical planning question: instead of *"given horizon T, what wealth can I achieve?"*, it solves *"what is the minimum horizon T\* to achieve my goals with probabilistic guarantees?"*
+FinOpt is a portfolio planning toolkit built around one question: instead of asking "given horizon T, what wealth can I achieve?", it asks "what is the minimum horizon T* to achieve my goals with probabilistic guarantees?"
+
+Today the repository contains three layers:
+
+- A Python library for simulation and CVaR-based optimization.
+- A FastAPI compute service that runs jobs and persists results in Supabase.
+- A React/Vite frontend for profiles, scenarios, and result exploration.
+
+---
+
+## Current Status
+
+The current repo is best understood as a full-stack app backed by the original optimization library.
+
+- `src/finopt/`: simulation, goal modeling, optimization, plotting, serialization.
+- `api/`: FastAPI service with `/health`, `/simulate`, and `/optimize`.
+- `web/`: authenticated frontend built with React, Vite, React Query, and Supabase.
+- `supabase/`: SQL schema, migrations, and seed data for local/cloud projects.
+- `run-local.sh`: recommended local entrypoint for running API + web together.
+
+If you only want the research/library side, you can still use `finopt` directly from Python. If you want the product experience reflected by the repo today, start with the local app flow below.
+
+---
+
+## Quick Start
+
+### Run the app locally
+
+1. Create env files:
+
+```bash
+cp .env.example .env
+cp web/.env.example web/.env
+```
+
+2. Fill in your Supabase values in `.env` and `web/.env`.
+
+You need a Supabase project for local app usage. The frontend is auth-protected and will redirect to `/login` until you sign in with that project, and the compute API expects authenticated requests tied to Supabase jobs.
+
+3. Start everything:
+
+```bash
+./run-local.sh --install
+```
+
+This starts:
+
+- API: `http://localhost:8000`
+- API docs: `http://localhost:8000/docs`
+- Frontend: `http://localhost:5173`
+
+The script installs Python dependencies from `finopt[web]`, installs the frontend packages, and launches both dev servers together.
+
+### Installation options
+
+Use the flavor that matches what you want to do:
+
+```bash
+# Core Python library only
+pip install -e .
+
+# Library + CLI
+pip install -e ".[cli]"
+
+# Library + FastAPI compute service
+pip install -e ".[web]"
+
+# Everything used for local development
+pip install -e ".[dev,web,cli,notebook]"
+```
+
+If you prefer the Conda environment defined in the repo:
+
+```bash
+conda env create -f environment.yml
+conda activate finance
+pip install -e .
+```
+
+Note: `environment.yml` only installs a small scientific Python base. It does not install the `finopt` package or optional extras by itself.
+
+### Python example
+
+```python
+from finopt import FinancialModel, Account, IncomeModel, FixedIncome
+from finopt.goals import TerminalGoal
+from finopt.optimization import CVaROptimizer
+
+income = IncomeModel(fixed=FixedIncome(base=1_500_000, annual_growth=0.03))
+accounts = [
+    Account.from_annual("Conservative", annual_return=0.08, annual_volatility=0.09),
+    Account.from_annual("Aggressive", annual_return=0.14, annual_volatility=0.15),
+]
+model = FinancialModel(income, accounts)
+goals = [TerminalGoal(account="Aggressive", threshold=5_000_000, confidence=0.80)]
+
+optimizer = CVaROptimizer(n_accounts=2, objective="proportional")
+result = model.optimize(goals=goals, optimizer=optimizer, T_max=120, n_sims=500, seed=42)
+
+print(f"Minimum horizon: T* = {result.T} months")
+model.plot("wealth", result=result, show_trajectories=True)
+```
+
+### Command-line interface
+
+Installing `finopt[cli]` exposes a `finopt` console script for config-driven runs:
+
+```bash
+finopt simulate --config examples/basic_config.json
+finopt optimize --config examples/basic_config.json --goals examples/basic_goals.json --horizon 36
+finopt config validate examples/basic_config.json
+finopt report --result results/simulation_result.json
+finopt info
+```
+
+Run `finopt COMMAND --help` for command-specific options.
+
+Important: the CLI currently supports fixed-horizon optimization via `--horizon`. The minimum-horizon goal-seeking flow is available in the Python API and the app/backend, but is not fully wired into the CLI yet.
+
+### Optimization objectives
+
+The `objective` parameter controls the inner optimization program:
+
+| Value | Formulation | Use case |
+|-------|-------------|----------|
+| `"proportional"` | $-\sum_{t,m}(x_{t,m} - w_m)^2$ | Even, stable monthly split - keeps every account funded (default) |
+| `"balanced"` | $-\sum_{t,m}(\Delta x_{t,m})^2$ | Stable allocations (turnover penalty only) |
+| `"risky"` | $\mathbb{E}[\sum_m W_T^m]$ | Maximum wealth accumulation |
+| `"conservative"` | $\mathbb{E}[W_T] - \lambda \mathrm{Std}(W_T)$ | Risk-averse mean-variance |
+| `"risky_turnover"` | $\mathbb{E}[W_T] - \lambda\sum(\Delta x)^2$ | Wealth + stability tradeoff |
+
+`"proportional"` anchors each month's split toward target weights $w$ (default uniform $1/M$). It is a single strictly-convex quadratic, so it acts as a tie-breaker among optimal-horizon policies without changing $T^\star$.
+
+---
+
+## Project Structure
+
+```text
+fin-opt/
+├── src/finopt/          # Core simulation and optimization library
+├── api/                 # FastAPI compute service
+├── web/                 # React/Vite frontend
+├── supabase/            # Migrations and seed data
+├── examples/            # Sample configs, goals, and demos
+├── notebooks/           # Research / exploratory workflows
+├── docs/                # MkDocs source
+├── docker/              # Dockerfiles for API/web
+├── run-local.sh         # Recommended local dev entrypoint
+├── render.yaml          # Render deployment blueprint
+└── pyproject.toml       # Python package + tool configuration
+```
+
+---
+
+## Development
+
+```bash
+# Local test setup (mirrors CI)
+pip install -e ".[dev,web]"
+export SUPABASE_URL=https://test.supabase.co
+export SUPABASE_ANON_KEY=test-anon-key
+export SUPABASE_SERVICE_KEY=test-service-key
+export ENVIRONMENT=development
+pytest
+
+# Lint Python code
+ruff check src/ api/ tests/
+
+# Frontend dev server only
+cd web
+npm run dev
+```
+
+Use Python 3.11 for local verification when possible. It matches `environment.yml` and the GitHub Actions workflow.
+
+CI runs on every push and pull request via [`.github/workflows/test.yml`](.github/workflows/test.yml).
+
+For deployment planning and infrastructure notes, see:
+
+- [docs/deployment/web-app-plan.md](docs/deployment/web-app-plan.md)
+- [docs/deployment/mvp-go-live-checklist.md](docs/deployment/mvp-go-live-checklist.md)
+- [docker-compose.yml](docker-compose.yml)
+- [render.yaml](render.yaml)
 
 ---
 
@@ -28,7 +208,7 @@ where $\Delta^T = \lbrace X \in \mathbb{R}_{\geq 0}^{T \times M} : \mathbf{x}_t^
 
 $$\min_{T \in \mathbb{N}, X \in \Delta^T} \quad T \qquad \text{s.t.} \quad \mathbb{P}\left(W_t^m(X) \geq b_t^m\right) \geq 1 - \varepsilon_t^m \quad \forall \text{ goals}$$
 
-Here $T^\star$ is fixed by feasibility alone, and the secondary objective $f(X)$ — an even-split diversification anchor (default), turnover, expected wealth, or mean–variance (see the [objective table](#quick-start) below) — only selects *which* optimal-horizon policy to deploy.
+Here $T^\star$ is fixed by feasibility alone, and the secondary objective $f(X)$ — an even-split diversification anchor (default), turnover, expected wealth, or mean–variance (see the [objective table](#optimization-objectives) below) — only selects *which* optimal-horizon policy to deploy.
 
 `GoalSeeker` runs the outer search over $T$ — `linear` (sequential, safest), `binary` (≈50% fewer iterations, assumes monotonicity), or `bracketed` (two-sided galloping from a computed bracket) — using the inner convex program's solver status (`OPTIMAL` vs `INFEASIBLE`) as the feasibility oracle for $\mathcal{F}(T)$. The inner program, $\min_X f(X)$ subject to the CVaR constraints below, is solved by CVXPY.
 
@@ -59,111 +239,16 @@ where $F_{s,t}^m = \prod_{\tau=s+1}^{t}(1 + R_\tau^m)$ are stochastic accumulati
 ![Wealth Dynamics](docs/images/wealth_dynamics.png)
 *Monte Carlo wealth trajectories under the optimal allocation policy $X^\*$*
 
-![Wealth Dynamics](docs/images/allocation_analysis.png)
+![Allocation Analysis](docs/images/allocation_analysis.png)
 *Optimal allocation policy $X^\*$*
-
----
-
-## Quick Start
-
-```bash
-conda env create -f environment.yml && conda activate finance
-pip install -e .
-```
-
-```python
-from finopt import FinancialModel, Account, IncomeModel, FixedIncome
-from finopt.goals import TerminalGoal
-from finopt.optimization import CVaROptimizer
-
-income = IncomeModel(fixed=FixedIncome(base=1_500_000, annual_growth=0.03))
-accounts = [
-    Account.from_annual("Conservative", annual_return=0.08, annual_volatility=0.09),
-    Account.from_annual("Aggressive",   annual_return=0.14, annual_volatility=0.15),
-]
-model = FinancialModel(income, accounts)
-goals = [TerminalGoal(account="Aggressive", threshold=5_000_000, confidence=0.80)]
-
-optimizer = CVaROptimizer(n_accounts=2, objective="proportional")
-result = model.optimize(goals=goals, optimizer=optimizer, T_max=120, n_sims=500, seed=42)
-
-print(f"Minimum horizon: T* = {result.T} months")
-model.plot("wealth", result=result, show_trajectories=True)
-```
-
-The `objective` parameter controls the inner optimization program:
-
-| Value | Formulation | Use case |
-|-------|-------------|----------|
-| `"proportional"` | $-\sum_{t,m}(x_{t,m} - w_m)^2$ | Even, stable monthly split — keeps every account funded (default) |
-| `"balanced"` | $-\sum_{t,m}(\Delta x_{t,m})^2$ | Stable allocations (turnover penalty only) |
-| `"risky"` | $\mathbb{E}[\sum_m W_T^m]$ | Maximum wealth accumulation |
-| `"conservative"` | $\mathbb{E}[W_T] - \lambda \mathrm{Std}(W_T)$ | Risk-averse mean-variance |
-| `"risky_turnover"` | $\mathbb{E}[W_T] - \lambda\sum(\Delta x)^2$ | Wealth + stability tradeoff |
-
-`"proportional"` anchors each month's split toward target weights $w$ (default uniform $1/M$). It is a single strictly-convex quadratic — hence parameter-free and with a unique minimizer — so it acts as a tie-breaker among optimal-horizon policies without changing $T^\star$.
-
-### Command-line interface
-
-Installing the package exposes a `finopt` console script for config-driven runs:
-
-```bash
-finopt simulate --config examples/basic_config.json   # Monte Carlo simulation
-finopt optimize --config examples/basic_config.json --goals examples/basic_goals.json
-finopt config validate examples/basic_config.json     # validate a config
-finopt report ...                                     # reports from saved results
-finopt info                                           # system / package info
-```
-
-Run `finopt COMMAND --help` for command-specific options.
-
----
-
-## Project Structure
-
-```
-finopt/
-├── src/finopt/          # Core library
-│   ├── income.py        # Stochastic income (seasonality, noise, growth)
-│   ├── returns.py       # Correlated lognormal return model
-│   ├── portfolio.py     # Wealth dynamics (recursive + affine)
-│   ├── goals.py         # Goal types, chance-constraint evaluation
-│   ├── optimization.py  # CVaROptimizer + GoalSeeker (horizon search)
-│   ├── model.py         # FinancialModel facade
-│   ├── withdrawal.py    # Scheduled and stochastic cash outflows
-│   ├── plotting.py      # Visualization suite
-│   ├── config.py        # Pydantic type-safe configuration
-│   ├── serialization.py # JSON model/result persistence
-│   └── cli.py           # `finopt` command-line interface
-├── api/                 # FastAPI backend — async jobs, Supabase persistence
-├── web/                 # React/Vite frontend
-├── supabase/            # SQL schema and migrations
-├── notebooks/           # Jupyter workflow examples
-├── examples/            # Sample config and goal files
-├── docs/                # MkDocs site and figures
-└── tests/               # 911 tests · 85% coverage
-```
-
----
-
-## Development
-
-```bash
-# Run tests with coverage
-pytest tests/ --cov=src
-
-# Lint
-ruff check src/ api/ tests/
-```
-
-CI runs on every push via GitHub Actions (`.github/workflows/test.yml`).
 
 ---
 
 ## References
 
-- Rockafellar, R.T. & Uryasev, S. (2000). *Optimization of Conditional Value-at-Risk*. Journal of Risk, 2(3), 21–41.
-- Shapiro, A., Dentcheva, D., & Ruszczyński, A. (2014). *Lectures on Stochastic Programming*. SIAM.
+- Rockafellar, R. T., & Uryasev, S. (2000). *Optimization of Conditional Value-at-Risk*. *Journal of Risk*, 2(3), 21-41.
+- Nemirovski, A., & Shapiro, A. (2007). *Convex Approximations of Chance Constrained Programs*. *SIAM Journal on Optimization*, 17(4), 969-996.
+- Mínguez, R., & Díaz-Cachinero, P. (2025). *Convex Risk Control with Exact Probabilities: The CVaR-Chance-Constraint Approach*. Working paper, Statistics and Econometrics, 2025-05. [PDF](https://e-archivo.uc3m.es/rest/api/core/bitstreams/42c28941-c1b5-400c-bc35-cbb3fe75750a/content)
 
 ---
 
@@ -172,7 +257,7 @@ CI runs on every push via GitHub Actions (`.github/workflows/test.yml`).
 MIT — see [LICENSE](LICENSE).
 
 **Maximiliano Lioi** — M.Sc. Applied Mathematics  
-[GitHub](https://github.com/mfourier) · [LinkedIn](https://linkedin.com/in/mlioi)
+[Repository](https://github.com/mlioi/fin-opt) · [LinkedIn](https://linkedin.com/in/mlioi)
 
 ---
 

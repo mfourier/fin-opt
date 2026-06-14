@@ -5,6 +5,7 @@ This module provides reusable fixtures for testing all FinOpt components.
 Fixtures follow the principle of "arrange-act-assert" with clear separation.
 """
 
+import os
 import sqlite3
 from datetime import date
 from pathlib import Path
@@ -13,9 +14,15 @@ from typing import List
 import numpy as np
 import pytest
 
+TEST_CACHE_DIR = Path("/tmp/finopt-test-cache")
+os.environ.setdefault("XDG_CACHE_HOME", str(TEST_CACHE_DIR))
+os.environ.setdefault("MPLCONFIGDIR", str(TEST_CACHE_DIR / "matplotlib"))
+
 
 def pytest_configure(config):
     """Clean up corrupted coverage file before test session."""
+    (TEST_CACHE_DIR / "matplotlib").mkdir(parents=True, exist_ok=True)
+
     coverage_file = Path(".coverage")
     if coverage_file.exists():
         try:

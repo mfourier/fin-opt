@@ -14,6 +14,13 @@ import pytest
 from pydantic import ValidationError
 
 
+@pytest.fixture(autouse=True)
+def clear_debug_env(monkeypatch):
+    """Keep API settings tests deterministic regardless of the shell environment."""
+    monkeypatch.delenv("DEBUG", raising=False)
+    monkeypatch.delenv("FINOPT_DEBUG", raising=False)
+
+
 def test_settings_from_complete_env(mock_env_vars):
     """Test Settings loads correctly with all environment variables set."""
     from api.config import get_settings
