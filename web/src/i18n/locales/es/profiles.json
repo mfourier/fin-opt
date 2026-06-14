@@ -1,26 +1,26 @@
 {
   "title": "Mi situación",
-  "subtitle": "Organiza lo que puedes invertir, los saldos y cuentas que alimentan cada plan que construyes en FinOpt.",
+  "subtitle": "Organiza lo que puedes invertir, tus inversiones y las cuentas que alimentan cada plan que construyes en FinOpt.",
   "newSituation": "Nueva situación",
   "summary": {
     "saved": "Situaciones guardadas",
     "savedDetail": "Configuraciones financieras reutilizables para planes futuros.",
     "savedEmpty": "Crea tu primera situación.",
-    "primaryBalance": "Saldo principal",
+    "primaryBalance": "Patrimonio principal",
     "primaryBalanceDetail": "De {{name}}.",
-    "primaryBalanceEmpty": "Agrega saldos de cuentas para construir una base.",
+    "primaryBalanceEmpty": "Agrega inversiones en tus cuentas para construir una base.",
     "investingPower": "Inversión mensual",
     "investingPowerDetail": "Estimado a partir de {{name}}.",
     "investingPowerEmpty": "Agrega cuánto puedes invertir para desbloquear mejores planes.",
     "expectedReturn": "Retorno anual esperado",
-    "expectedReturnDetail": "Ponderado por los saldos en {{name}}.",
+    "expectedReturnDetail": "Ponderado por las inversiones en {{name}}.",
     "expectedReturnEmpty": "Agrega cuentas para estimar el crecimiento del portafolio."
   },
   "primaryNote": "Las métricas principales de esta página se basan en tu situación principal, <name>{{name}}</name>.",
   "close": "Cerrar",
   "loading": "Cargando tus situaciones...",
   "emptyTitle": "Aún no hay situaciones.",
-  "emptyBody": "Primero agrega cuánto puedes invertir y los saldos de tus cuentas, luego úsalos en todos los planes que quieras.",
+  "emptyBody": "Primero agrega cuánto puedes invertir y las inversiones en tus cuentas; luego usa esa base en todos los planes que quieras.",
   "createFirst": "Crea tu primera situación",
   "demo": "Demo",
   "descriptionFallback": "Una configuración financiera reutilizable para planes futuros.",
@@ -39,8 +39,8 @@
     "incomeMixValue": "{{pct}} regular"
   },
   "accountMix": {
-    "title": "Mezcla de cuentas",
-    "subtitle": "Las cuentas con mayor saldo dentro de esta situación.",
+    "title": "Mix de cuentas",
+    "subtitle": "Las cuentas con mayor patrimonio dentro de esta situación.",
     "returnVol": "{{ret}} retorno · {{vol}} vol",
     "ofTotal": "{{pct}} del total"
   },
