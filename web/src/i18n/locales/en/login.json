@@ -1,0 +1,46 @@
+{
+  "title": {
+    "signUp": "Create your account",
+    "signIn": "Welcome back"
+  },
+  "subtitle": {
+    "signUp": "Start planning your financial goals.",
+    "signIn": "Continue to your financial planning workspace."
+  },
+  "email": "Email",
+  "password": "Password",
+  "forgotPassword": "Forgot password?",
+  "submit": {
+    "signUp": "Create account",
+    "signIn": "Sign in"
+  },
+  "switchPrompt": {
+    "signUp": "Already have an account?",
+    "signIn": "New to FinOpt?"
+  },
+  "switchAction": {
+    "signUp": "Sign in",
+    "signIn": "Create an account"
+  },
+  "disclaimer": "For educational and research purposes. Not financial advice.",
+  "hero": {
+    "headline": "Your goals, optimized.",
+    "subtitle": "Understand when your financial goals become achievable — with clear scenarios and risk-aware planning.",
+    "footer": "Clear scenarios · Confidence bands · Minimum horizon to reach your goals",
+    "previewGoalLabel": "Goal",
+    "previewConfidence": "Confidence",
+    "previewGoal": "Home",
+    "previewFeasible": "Feasible",
+    "previewMinHorizonLabel": "Minimum horizon",
+    "previewMinHorizonValue": "42 months",
+    "previewStatusLabel": "Status",
+    "previewStatusValue": "On track"
+  },
+  "notice": {
+    "checkEmail": "Check your email for a confirmation link.",
+    "genericError": "An error occurred",
+    "enterEmailFirst": "Enter your email above, then click “Forgot password?”",
+    "resetSent": "Password reset link sent. Check your email.",
+    "resetError": "Could not send reset email"
+  }
+}

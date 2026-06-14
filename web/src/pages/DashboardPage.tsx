@@ -1,10 +1,15 @@
 import type { ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
+import { Trans, useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import {
   ArrowRight,
   BriefcaseBusiness,
+  CheckCircle2,
+  Circle,
   Clock3,
+  Flag,
   FolderKanban,
   Loader2,
   Plus,
@@ -17,14 +22,13 @@ import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
 import { useToast } from '../components/Toast'
 import type { Job, Profile, Scenario } from '../types/database'
-import { formatCLP, formatDateShort, formatMonthsLong, formatPercent } from '../lib/format'
+import { formatCLP, formatDateShort, formatMonthsLong, formatPercent, monthLabel } from '../lib/format'
 import {
   type PlanHealth,
   type ResultPreviewLite,
   describeProfileRisk,
   getPlanHealth,
   getProfileMonthlyContributionCapacity,
-  getProfileMonthlyIncome,
   getProfileStartingBalance,
   getProfileTopAccounts,
   getProfileWeightedReturn,
@@ -34,7 +38,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 
 type DashboardScenario = Pick<Scenario, 'id' | 'name' | 'is_demo' | 'start_date'> & {
-  profiles: Pick<Profile, 'name'> | null
+  profiles: Pick<Profile, 'name' | 'accounts_config'> | null
 }
 type DashboardJob = Pick<
   Job,
@@ -43,7 +47,7 @@ type DashboardJob = Pick<
   scenarios: DashboardScenario | null
 }
 type DashboardScenarioRow = Pick<Scenario, 'id' | 'name' | 'is_demo' | 'start_date'> & {
-  profiles: Array<Pick<Profile, 'name'>> | null
+  profiles: Array<Pick<Profile, 'name' | 'accounts_config'>> | null
 }
 type DashboardJobRow = Pick<
   Job,
@@ -61,9 +65,11 @@ const toneStyles = {
 } as const
 
 export default function DashboardPage() {
+  const { t } = useTranslation(['dashboard', 'scenarios', 'common'])
   const queryClient = useQueryClient()
   const user = useAuthStore((state) => state.user)
   const toast = useToast()
+  const perMonth = (value: string) => `${value}${t('common:perMonth')}`
 
   const { data: profiles, isLoading: profilesLoading } = useQuery({
     queryKey: ['profiles', 'dashboard', user?.id],
@@ -83,7 +89,7 @@ export default function DashboardPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('scenarios')
-        .select('id, name, is_demo, start_date, profiles(name)')
+        .select('id, name, is_demo, start_date, profiles(name, accounts_config)')
         .order('created_at', { ascending: false })
       if (error) throw error
       return ((data ?? []) as DashboardScenarioRow[]).map((scenario) => ({
@@ -99,7 +105,7 @@ export default function DashboardPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('jobs')
-        .select('id, scenario_id, job_type, status, progress, created_at, completed_at, scenarios(id, name, is_demo, start_date, profiles(name))')
+        .select('id, scenario_id, job_type, status, progress, created_at, completed_at, scenarios(id, name, is_demo, start_date, profiles(name, accounts_config))')
         .order('created_at', { ascending: false })
       if (error) throw error
       return ((data ?? []) as DashboardJobRow[]).map((job) => {
@@ -169,10 +175,10 @@ export default function DashboardPage() {
       queryClient.invalidateQueries({ queryKey: ['dashboard-jobs'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard-recent-results'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard-latest-plan-results'] })
-      toast.success('Result deleted', 'The run and its saved result were removed from your dashboard.')
+      toast.success(t('toast.deleted'), t('toast.deletedDetail'))
     },
     onError: (error: Error) => {
-      toast.error('Failed to delete result', error.message)
+      toast.error(t('toast.deleteFailed'), error.message)
     },
   })
 
@@ -234,41 +240,48 @@ export default function DashboardPage() {
     .filter((entry) => entry.latestResult?.optimal_horizon)
     .sort((left, right) => (left.latestResult?.optimal_horizon ?? Infinity) - (right.latestResult?.optimal_horizon ?? Infinity))[0]
 
+  const milestoneAccountNames = Object.fromEntries(
+    (nextMilestonePlan?.scenario.profiles?.accounts_config ?? []).map((account) => [
+      account.name,
+      account.display_name ?? account.name,
+    ]),
+  ) as Record<string, string>
+
   const statCards = [
     {
-      label: 'Net worth',
+      label: t('stats.netWorth'),
       value: profilesLoading ? '—' : formatCLP(totalNetWorth),
       detail:
         latestSituation
-          ? `Based on your primary situation, ${latestSituation.name}.`
-          : 'Add a situation to start tracking your balance sheet.',
+          ? t('stats.netWorthDetail', { name: latestSituation.name })
+          : t('stats.netWorthEmpty'),
       icon: Wallet,
     },
     {
-      label: 'Monthly investing power',
-      value: profilesLoading ? '—' : `${formatCLP(totalMonthlyContribution)}/mo`,
+      label: t('stats.investingPower'),
+      value: profilesLoading ? '—' : perMonth(formatCLP(totalMonthlyContribution)),
       detail:
         latestSituation
-          ? 'Estimated from income and contribution settings in your primary situation.'
-          : 'No contribution plan yet.',
+          ? t('stats.investingPowerDetail')
+          : t('stats.investingPowerEmpty'),
       icon: TrendingUp,
     },
     {
-      label: 'Plans on track',
+      label: t('stats.plansOnTrack'),
       value: scenariosLoading || jobsLoading ? '—' : String(plansOnTrack),
       detail:
         plansOnTrack > 0
-          ? `${healthCounts.tight} tight plan${healthCounts.tight === 1 ? '' : 's'} still worth reviewing.`
-          : 'No fully on-track plans yet.',
+          ? t('stats.plansOnTrackDetail', { count: healthCounts.tight })
+          : t('stats.plansOnTrackEmpty'),
       icon: Target,
     },
     {
-      label: 'Need attention',
+      label: t('stats.needAttention'),
       value: scenariosLoading || jobsLoading ? '—' : String(plansNeedingReview),
       detail:
         activeRuns > 0
-          ? `${activeRuns} run${activeRuns === 1 ? '' : 's'} currently in progress.`
-          : 'No active calculations right now.',
+          ? t('stats.needAttentionDetail', { count: activeRuns })
+          : t('stats.needAttentionEmpty'),
       icon: Clock3,
     },
   ]
@@ -279,28 +292,28 @@ export default function DashboardPage() {
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-3xl">
             <span className="inline-flex rounded-full bg-secondary px-3 py-1 text-xs font-medium text-secondary-foreground">
-              Financial planning overview
+              {t('badge')}
             </span>
             <h1 className="mt-4 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-              Dashboard
+              {t('title')}
             </h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
-              See your balance sheet, current savings capacity, and which plans are closest to the finish line.
+              {t('subtitle')}
             </p>
 
             {latestSituation ? (
               <div className="mt-6 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
                 <span className="rounded-full bg-card px-3 py-1 font-medium text-foreground shadow-sm">
-                  Primary situation: {latestSituation.name}
+                  {t('primarySituation', { name: latestSituation.name })}
                 </span>
-                <span>{formatCLP(getProfileStartingBalance(latestSituation))} starting balance</span>
-                <span>{formatCLP(getProfileMonthlyContributionCapacity(latestSituation))}/mo investing power</span>
-                <span>{formatPercent(aggregatedReturn, 1)} expected return</span>
-                <span>{describeProfileRisk(latestSituation)}</span>
+                <span>{t('startingBalanceInline', { amount: formatCLP(getProfileStartingBalance(latestSituation)) })}</span>
+                <span>{t('investingPowerInline', { amount: perMonth(formatCLP(getProfileMonthlyContributionCapacity(latestSituation))) })}</span>
+                <span>{t('expectedReturnInline', { pct: formatPercent(aggregatedReturn, 1) })}</span>
+                <span>{t(`common:profileRisk.${describeProfileRisk(latestSituation)}`)}</span>
               </div>
             ) : (
               <div className="mt-6 rounded-2xl border border-dashed border-border bg-card/70 p-4 text-sm text-muted-foreground">
-                Add a situation first so FinOpt can turn your income, assets, and goals into a plan.
+                {t('addSituationFirst')}
               </div>
             )}
           </div>
@@ -310,24 +323,24 @@ export default function DashboardPage() {
               <>
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Priority plan
+                    {t('priorityPlan')}
                   </p>
                   <StatusPill tone={dashboardTone(priorityPlan.health)}>
-                    {dashboardLabel(priorityPlan.health)}
+                    {dashboardLabel(priorityPlan.health, t)}
                   </StatusPill>
                 </div>
                 <div>
                   <p className="font-semibold text-foreground">{priorityPlan.scenario.name}</p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {priorityPlan.scenario.profiles?.name ?? 'Unknown situation'}
+                    {priorityPlan.scenario.profiles?.name ?? t('unknownSituation')}
                   </p>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  {priorityPlanSummary(priorityPlan.health, priorityPlan.latestResult, priorityPlan.goals)}
+                  {priorityPlanSummary(priorityPlan.health, priorityPlan.latestResult, priorityPlan.goals, t)}
                 </p>
                 <Button asChild className="rounded-xl">
                   <Link to={`/results/${priorityPlan.latestJob.id}`}>
-                    {priorityPlan.latestJob.status === 'completed' ? 'Open priority plan' : 'Open active run'}
+                    {priorityPlan.latestJob.status === 'completed' ? t('openPriorityPlan') : t('openActiveRun')}
                     <ArrowRight className="h-4 w-4" />
                   </Link>
                 </Button>
@@ -335,24 +348,24 @@ export default function DashboardPage() {
             ) : (
               <>
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Next best step
+                  {t('nextBestStep')}
                 </p>
                 <p className="text-sm text-muted-foreground">
                   {latestSituation
-                    ? 'Create or run a plan to see which goals are already within reach.'
-                    : 'Create your first situation to start building goal-based plans.'}
+                    ? t('nextStepWithSituation')
+                    : t('nextStepNoSituation')}
                 </p>
                 <div className="flex flex-wrap gap-2">
                   <Button asChild className="rounded-xl">
                     <Link to="/profiles">
                       <Plus className="h-4 w-4" />
-                      Add a situation
+                      {t('addSituation')}
                     </Link>
                   </Button>
                   <Button asChild variant="outline" className="rounded-xl">
                     <Link to="/scenarios">
                       <Target className="h-4 w-4" />
-                      New plan
+                      {t('newPlan')}
                     </Link>
                   </Button>
                 </div>
@@ -383,9 +396,9 @@ export default function DashboardPage() {
         <Card className="p-6">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h2 className="text-lg font-semibold text-foreground">Portfolio snapshot</h2>
+              <h2 className="text-lg font-semibold text-foreground">{t('portfolio.title')}</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Use your latest saved situation as the baseline for future plans.
+                {t('portfolio.subtitle')}
               </p>
             </div>
             <BriefcaseBusiness className="h-5 w-5 text-muted-foreground" />
@@ -394,25 +407,29 @@ export default function DashboardPage() {
           {latestSituation ? (
             <div className="mt-6 space-y-5">
               <div className="grid gap-3 sm:grid-cols-2">
-                <SnapshotMetric label="Starting balance" value={formatCLP(getProfileStartingBalance(latestSituation))} />
-                <SnapshotMetric label="Monthly income" value={`${formatCLP(getProfileMonthlyIncome(latestSituation))}/mo`} />
-                <SnapshotMetric label="Investing power" value={`${formatCLP(getProfileMonthlyContributionCapacity(latestSituation))}/mo`} />
-                <SnapshotMetric label="Expected annual return" value={formatPercent(getProfileWeightedReturn(latestSituation), 1)} />
+                <SnapshotMetric label={t('portfolio.startingBalance')} value={formatCLP(getProfileStartingBalance(latestSituation))} />
+                <SnapshotMetric label={t('portfolio.monthlyInvestment')} value={perMonth(formatCLP(getProfileMonthlyContributionCapacity(latestSituation)))} />
+                <SnapshotMetric label={t('portfolio.expectedReturn')} value={formatPercent(getProfileWeightedReturn(latestSituation), 1)} />
               </div>
               <p className="text-sm text-muted-foreground">
-                These metrics are based on your primary situation, <span className="font-medium text-foreground">{latestSituation.name}</span>.
+                <Trans
+                  i18nKey="portfolio.basedOn"
+                  t={t}
+                  values={{ name: latestSituation.name }}
+                  components={{ name: <span className="font-medium text-foreground" /> }}
+                />
               </p>
 
               <div className="rounded-2xl bg-muted/50 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-sm font-medium text-foreground">Top accounts</p>
+                    <p className="text-sm font-medium text-foreground">{t('portfolio.topAccounts')}</p>
                     <p className="text-sm text-muted-foreground">
-                      Highest-balance accounts inside {latestSituation.name}.
+                      {t('portfolio.topAccountsSubtitle', { name: latestSituation.name })}
                     </p>
                   </div>
                   <span className="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground">
-                    {describeProfileRisk(latestSituation)}
+                    {t(`common:profileRisk.${describeProfileRisk(latestSituation)}`)}
                   </span>
                 </div>
                 <div className="mt-4 space-y-3">
@@ -422,12 +439,12 @@ export default function DashboardPage() {
                         <div className="min-w-0">
                           <p className="truncate text-sm font-medium text-foreground">{account.name}</p>
                           <p className="text-xs text-muted-foreground">
-                            {formatPercent(account.annualReturn, 1)} return · {formatPercent(account.annualVolatility, 1)} vol
+                            {t('portfolio.returnVol', { ret: formatPercent(account.annualReturn, 1), vol: formatPercent(account.annualVolatility, 1) })}
                           </p>
                         </div>
                         <div className="text-right">
                           <p className="tabular text-sm font-semibold text-foreground">{formatCLP(account.balance)}</p>
-                          <p className="text-xs text-muted-foreground">{formatPercent(account.share, 0)} of balance</p>
+                          <p className="text-xs text-muted-foreground">{t('portfolio.ofBalance', { pct: formatPercent(account.share, 0) })}</p>
                         </div>
                       </div>
                       <div className="mt-2 h-2 overflow-hidden rounded-full bg-background">
@@ -443,9 +460,9 @@ export default function DashboardPage() {
             </div>
           ) : (
             <EmptyPanel
-              title="No portfolio snapshot yet"
-              message="Create a situation with income and account balances to unlock a financial baseline."
-              ctaLabel="Add a situation"
+              title={t('portfolio.emptyTitle')}
+              message={t('portfolio.emptyMessage')}
+              ctaLabel={t('portfolio.emptyCta')}
               ctaHref="/profiles"
             />
           )}
@@ -454,46 +471,83 @@ export default function DashboardPage() {
         <Card className="p-6">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h2 className="text-lg font-semibold text-foreground">Plan health</h2>
+              <h2 className="text-lg font-semibold text-foreground">{t('health.nextMilestone')}</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Track where your plans stand before you open each result in detail.
+                {t('milestone.subtitle')}
               </p>
             </div>
-            <Target className="h-5 w-5 text-muted-foreground" />
+            <div className="flex items-center gap-2">
+              {nextMilestonePlan?.latestResult?.optimal_horizon && (
+                <StatusPill tone={dashboardTone(nextMilestonePlan.health)}>
+                  {dashboardLabel(nextMilestonePlan.health, t)}
+                </StatusPill>
+              )}
+              <Flag className="h-5 w-5 text-muted-foreground" />
+            </div>
           </div>
 
-          {ownScenarios.length > 0 ? (
-            <div className="mt-6 space-y-5">
-              <div className="grid grid-cols-2 gap-3">
-                <HealthMetric label="On track" value={healthCounts.on_track} tone="positive" />
-                <HealthMetric label="Tight" value={healthCounts.tight} tone="warning" />
-                <HealthMetric label="Needs changes" value={healthCounts.needs_changes + healthCounts.failed} tone="danger" />
-                <HealthMetric label="Pending or running" value={activeRuns} tone="active" />
+          {nextMilestonePlan?.latestResult?.optimal_horizon ? (
+            <div className="mt-6 space-y-4">
+              <div className="rounded-2xl bg-muted/50 p-5">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  {t('milestone.estimatedHorizon')}
+                </p>
+                <p className="mt-2 text-3xl font-semibold text-foreground">
+                  {formatMonthsLong(nextMilestonePlan.latestResult.optimal_horizon)}
+                </p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {t('health.milestoneClosest', { name: nextMilestonePlan.scenario.name })}
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <InlineMetric
+                    label={t('milestone.targetDate')}
+                    value={monthLabel(nextMilestonePlan.latestResult.optimal_horizon, nextMilestonePlan.scenario.start_date)}
+                  />
+                  {nextMilestonePlan.goals.total > 0 && (
+                    <InlineMetric
+                      label={t('recent.goalsMet')}
+                      value={`${nextMilestonePlan.goals.met}/${nextMilestonePlan.goals.total}`}
+                    />
+                  )}
+                </div>
               </div>
-
-              <div className="rounded-2xl bg-muted/50 p-4">
-                <p className="text-sm font-medium text-foreground">Next milestone</p>
-                {nextMilestonePlan?.latestResult?.optimal_horizon ? (
-                  <>
-                    <p className="mt-2 text-2xl font-semibold text-foreground">
-                      {formatMonthsLong(nextMilestonePlan.latestResult.optimal_horizon)}
-                    </p>
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      {nextMilestonePlan.scenario.name} is currently the closest plan with a visible result.
-                    </p>
-                  </>
-                ) : (
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    Run a plan to surface a likely time horizon here.
-                  </p>
-                )}
-              </div>
+              {nextMilestonePlan.latestResult.goal_status && nextMilestonePlan.latestResult.goal_status.length > 0 && (
+                <div className="rounded-2xl border border-border p-4">
+                  <p className="text-sm font-medium text-foreground">{t('milestone.goalsTitle')}</p>
+                  <ul className="mt-3 space-y-2.5">
+                    {nextMilestonePlan.latestResult.goal_status.map((goal, index) => (
+                      <li key={index} className="flex items-center justify-between gap-3 text-sm">
+                        <span className="flex min-w-0 items-center gap-2">
+                          {goal.satisfied ? (
+                            <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
+                          ) : (
+                            <Circle className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          )}
+                          <span className="truncate text-foreground">{milestoneAccountNames[goal.account] ?? goal.account}</span>
+                          <span className="shrink-0 rounded-full bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                            {goal.type === 'terminal' ? t('milestone.typeTerminal') : t('milestone.typeIntermediate')}
+                          </span>
+                        </span>
+                        <span className="shrink-0 tabular text-muted-foreground">{formatCLP(goal.threshold)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {nextMilestonePlan.latestJob && (
+                <Button asChild variant="outline" className="rounded-xl">
+                  <Link to={`/results/${nextMilestonePlan.latestJob.id}`}>
+                    {t('recent.viewResult')}
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </Button>
+              )}
             </div>
           ) : (
             <EmptyPanel
-              title="No plans to evaluate yet"
-              message="Create a plan and run FinOpt to start comparing what is on track and what needs review."
-              ctaLabel="Build a plan"
+              title={t('health.emptyTitle')}
+              message={t('health.milestoneEmpty')}
+              ctaLabel={t('health.emptyCta')}
               ctaHref="/scenarios"
             />
           )}
@@ -504,13 +558,13 @@ export default function DashboardPage() {
         <Button asChild className="rounded-xl">
           <Link to="/profiles">
             <Plus className="h-4 w-4" />
-            Add a situation
+            {t('addSituation')}
           </Link>
         </Button>
         <Button asChild variant="outline" className="rounded-xl">
           <Link to="/scenarios">
             <Target className="h-4 w-4" />
-            Build a plan
+            {t('buildPlan')}
           </Link>
         </Button>
       </div>
@@ -519,9 +573,9 @@ export default function DashboardPage() {
         <div className="flex items-center gap-2 border-b border-border px-6 py-4">
           <FolderKanban className="h-4 w-4 text-muted-foreground" />
           <div>
-            <h2 className="text-base font-semibold text-foreground">Recent results and runs</h2>
+            <h2 className="text-base font-semibold text-foreground">{t('recent.title')}</h2>
             <p className="text-sm text-muted-foreground">
-              Review the latest optimizer activity and remove runs you no longer need.
+              {t('recent.subtitle')}
             </p>
           </div>
         </div>
@@ -529,17 +583,17 @@ export default function DashboardPage() {
           {jobsLoading ? (
             <div className="flex items-center gap-2 px-6 py-5 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Loading your latest runs…
+              {t('recent.loading')}
             </div>
           ) : recentJobs.length === 0 ? (
             <div className="px-6 py-10 text-center">
               <p className="text-sm text-muted-foreground">
-                No runs yet. Create a plan and launch a calculation to start seeing results here.
+                {t('recent.empty')}
               </p>
               <Button asChild variant="outline" size="sm" className="mt-4 rounded-xl">
                 <Link to="/scenarios">
                   <Target className="h-4 w-4" />
-                  Create your first plan
+                  {t('recent.createFirst')}
                 </Link>
               </Button>
             </div>
@@ -547,7 +601,7 @@ export default function DashboardPage() {
             recentJobs.map((job) => {
               const result = recentResultsByJobId[job.id]
               const health = getPlanHealth(job, result)
-              const status = recentRunStatusCopy(health, result)
+              const status = recentRunStatusCopy(health, t, result)
               const isDeleting = deleteJobMutation.isPending && deleteJobMutation.variables === job.id
               const scenario = job.scenarios ?? scenariosById[job.scenario_id] ?? null
               const goals = summarizeGoalStatus(result?.goal_status)
@@ -560,21 +614,21 @@ export default function DashboardPage() {
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="truncate font-medium text-foreground">
-                        {scenario?.name ?? 'Untitled plan'}
+                        {scenario?.name ?? t('recent.untitled')}
                       </p>
                       <StatusPill tone={status.tone}>{status.label}</StatusPill>
                     </div>
                     <p className="mt-1 truncate text-sm text-muted-foreground">
-                      {scenario?.profiles?.name ?? 'Unknown situation'} · {formatJobTimestamp(job)}
+                      {scenario?.profiles?.name ?? t('unknownSituation')} · {formatJobTimestamp(job, t)}
                     </p>
                     <p className="mt-2 text-sm text-muted-foreground">{status.summary}</p>
                     {(result?.optimal_horizon || goals.total > 0) && (
                       <div className="mt-3 flex flex-wrap gap-2">
                         {goals.total > 0 && (
-                          <InlineMetric label="Goals met" value={`${goals.met}/${goals.total}`} />
+                          <InlineMetric label={t('recent.goalsMet')} value={`${goals.met}/${goals.total}`} />
                         )}
                         {result?.optimal_horizon && (
-                          <InlineMetric label="Horizon" value={formatMonthsLong(result.optimal_horizon)} />
+                          <InlineMetric label={t('recent.horizon')} value={formatMonthsLong(result.optimal_horizon)} />
                         )}
                       </div>
                     )}
@@ -583,12 +637,12 @@ export default function DashboardPage() {
                   <div className="flex flex-wrap items-center gap-2 lg:justify-end">
                     {(job.status === 'running' || job.status === 'pending') && (
                       <span className="rounded-full bg-accent px-3 py-1 text-xs font-medium text-accent-foreground">
-                        {job.status === 'running' ? `${job.progress}% complete` : 'Queued'}
+                        {job.status === 'running' ? t('recent.completeProgress', { pct: job.progress }) : t('recent.queued')}
                       </span>
                     )}
                     <Button asChild variant="outline" size="sm" className="rounded-xl">
                       <Link to={`/results/${job.id}`}>
-                        {job.status === 'completed' ? 'View result' : 'Open run'}
+                        {job.status === 'completed' ? t('recent.viewResult') : t('recent.openRun')}
                         <ArrowRight className="h-3.5 w-3.5" />
                       </Link>
                     </Button>
@@ -599,14 +653,14 @@ export default function DashboardPage() {
                       className="rounded-xl border-danger/30 text-danger hover:bg-danger-soft hover:text-danger"
                       disabled={isDeleting}
                       onClick={() => {
-                        const itemLabel = job.status === 'completed' ? 'result' : 'run'
-                        if (confirm(`Delete this ${itemLabel}? This action cannot be undone.`)) {
+                        const message = job.status === 'completed' ? t('recent.confirmDeleteResult') : t('recent.confirmDeleteRun')
+                        if (confirm(message)) {
                           deleteJobMutation.mutate(job.id)
                         }
                       }}
                     >
                       {isDeleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                      Delete
+                      {t('recent.delete')}
                     </Button>
                   </div>
                 </div>
@@ -633,24 +687,24 @@ function planHealthPriority(health: PlanHealth) {
   return priorities[health]
 }
 
-function dashboardLabel(health: PlanHealth) {
+function dashboardLabel(health: PlanHealth, t: TFunction) {
   switch (health) {
     case 'needs_changes':
-      return 'Needs changes'
+      return t('scenarios:status.needsChanges')
     case 'tight':
-      return 'Tight plan'
+      return t('scenarios:status.tight')
     case 'failed':
-      return 'Failed'
+      return t('scenarios:status.failed')
     case 'running':
-      return 'Calculating'
+      return t('scenarios:status.calculating')
     case 'queued':
-      return 'Queued'
+      return t('scenarios:status.queued')
     case 'completed':
-      return 'Completed'
+      return t('scenarios:status.completed')
     case 'on_track':
-      return 'On track'
+      return t('scenarios:status.onTrack')
     default:
-      return 'Needs run'
+      return t('scenarios:status.needsRun')
   }
 }
 
@@ -677,91 +731,96 @@ function priorityPlanSummary(
   health: PlanHealth,
   result: ResultPreviewLite | undefined,
   goals: { met: number; total: number },
+  t: TFunction,
 ) {
   if (health === 'needs_changes') {
-    return 'This plan is currently outside reach and likely needs adjusted contributions, goals, or timing.'
+    return t('prioritySummary.needsChanges')
   }
   if (health === 'tight') {
     return result?.optimal_horizon
-      ? `It may work in about ${formatMonthsLong(result.optimal_horizon)}, but the margin is still tight.`
-      : 'This plan may work, but it still has little room for error.'
+      ? t('prioritySummary.tightHorizon', { horizon: formatMonthsLong(result.optimal_horizon) })
+      : t('prioritySummary.tight')
   }
   if (health === 'running' || health === 'queued') {
-    return 'This is the most recent active run and should give you fresh guidance soon.'
+    return t('prioritySummary.running')
   }
   if (health === 'completed') {
-    return 'The latest run finished, but the saved result summary is not available yet.'
+    return t('prioritySummary.completed')
   }
   if (health === 'on_track') {
     return result?.optimal_horizon
-      ? `${goals.met}/${goals.total || goals.met} goals are currently satisfied with an estimated horizon of ${formatMonthsLong(result.optimal_horizon)}.`
-      : 'This completed plan currently looks achievable.'
+      ? t('prioritySummary.onTrackHorizon', {
+          met: goals.met,
+          total: goals.total || goals.met,
+          horizon: formatMonthsLong(result.optimal_horizon),
+        })
+      : t('prioritySummary.onTrack')
   }
   if (health === 'failed') {
-    return 'The last calculation failed, so this plan is the best candidate to revisit next.'
+    return t('prioritySummary.failed')
   }
-  return 'Run this plan to surface a realistic timeline.'
+  return t('prioritySummary.default')
 }
 
-function recentRunStatusCopy(health: PlanHealth, result?: ResultPreviewLite) {
+function recentRunStatusCopy(health: PlanHealth, t: TFunction, result?: ResultPreviewLite) {
   if (health === 'running') {
     return {
-      label: 'Calculating',
+      label: t('scenarios:status.calculating'),
       tone: 'active' as const,
-      summary: 'FinOpt is simulating paths and optimizing allocations for this plan.',
+      summary: t('runSummary.running'),
     }
   }
   if (health === 'queued') {
     return {
-      label: 'Queued',
+      label: t('scenarios:status.queued'),
       tone: 'neutral' as const,
-      summary: 'This run is waiting to start.',
+      summary: t('runSummary.queued'),
     }
   }
   if (health === 'completed') {
     return {
-      label: 'Completed',
+      label: t('scenarios:status.completed'),
       tone: 'neutral' as const,
-      summary: 'The run finished, but its saved result summary is not available here yet.',
+      summary: t('runSummary.completed'),
     }
   }
   if (health === 'failed') {
     return {
-      label: 'Failed',
+      label: t('scenarios:status.failed'),
       tone: 'danger' as const,
-      summary: 'This run did not finish. Review the inputs and try again.',
+      summary: t('runSummary.failed'),
     }
   }
   if (health === 'needs_changes') {
     return {
-      label: 'Needs changes',
+      label: t('scenarios:status.needsChanges'),
       tone: 'danger' as const,
-      summary: 'The current inputs are not enough to reach every goal.',
+      summary: t('runSummary.needsChanges'),
     }
   }
   if (health === 'tight') {
     return {
-      label: 'Tight plan',
+      label: t('scenarios:status.tight'),
       tone: 'warning' as const,
       summary: result?.optimal_horizon
-        ? `Goals are close, but the plan still looks tight over ${formatMonthsLong(result.optimal_horizon)}.`
-        : 'Goals are close, but this plan still has little margin.',
+        ? t('runSummary.tightHorizon', { horizon: formatMonthsLong(result.optimal_horizon) })
+        : t('runSummary.tight'),
     }
   }
   return {
-    label: 'On track',
+    label: t('scenarios:status.onTrack'),
     tone: 'positive' as const,
     summary: result?.optimal_horizon
-      ? `All goals are currently achievable in about ${formatMonthsLong(result.optimal_horizon)}.`
-      : 'The run finished successfully.',
+      ? t('runSummary.onTrackHorizon', { horizon: formatMonthsLong(result.optimal_horizon) })
+      : t('runSummary.onTrack'),
   }
 }
 
-function formatJobTimestamp(job: Pick<Job, 'status' | 'created_at' | 'completed_at'>) {
+function formatJobTimestamp(job: Pick<Job, 'status' | 'created_at' | 'completed_at'>, t: TFunction) {
   if (job.status === 'completed' && job.completed_at) {
-    return `Completed ${formatDateShort(job.completed_at)}`
+    return t('timestamp.completed', { date: formatDateShort(job.completed_at) })
   }
-  return `Started ${formatDateShort(job.created_at)}`
+  return t('timestamp.started', { date: formatDateShort(job.created_at) })
 }
 
 function SnapshotMetric({ label, value }: { label: string; value: string }) {
@@ -769,25 +828,6 @@ function SnapshotMetric({ label, value }: { label: string; value: string }) {
     <div className="rounded-2xl bg-muted/60 px-4 py-3">
       <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className="mt-1 text-base font-semibold tabular text-foreground">{value}</p>
-    </div>
-  )
-}
-
-function HealthMetric({
-  label,
-  value,
-  tone,
-}: {
-  label: string
-  value: number
-  tone: keyof typeof toneStyles
-}) {
-  return (
-    <div className="rounded-2xl border border-border bg-card px-4 py-3">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-medium text-foreground">{label}</p>
-        <StatusPill tone={tone}>{value}</StatusPill>
-      </div>
     </div>
   )
 }

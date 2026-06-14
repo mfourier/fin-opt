@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import type { Profile, Result, Scenario } from "@/mocks/types";
 import { cn } from "@/lib/utils";
 import type { ExplainerFocus } from "./plan-explainer-focus";
-import { focusToLabel, focusToSection, type ExplainerSection } from "./plan-explainer-focus";
+import { focusToSection, type ExplainerSection } from "./plan-explainer-focus";
 
 type Props = {
   profile: Profile;
@@ -30,11 +31,12 @@ export function PlanExplainers({
     scenario.withdrawals
     && ((scenario.withdrawals.scheduled?.length ?? 0) > 0 || (scenario.withdrawals.stochastic?.length ?? 0) > 0),
   );
+  const { t } = useTranslation("plan");
   const goalsCount = scenario.terminal_goals.length + scenario.intermediate_goals.length;
   const [openItems, setOpenItems] = useState<ExplainerSection[]>([]);
   const activeSection = focusToSection(activeFocus);
   const pinnedSection = focusToSection(pinnedFocus);
-  const activeLabel = focusToLabel(activeFocus);
+  const activeLabel = activeFocus ? t(`explainer.concepts.${activeFocus}`) : null;
 
   // Only auto-open a section when the user *pins* a concept (a click), not on
   // hover — hovering still highlights the matching header/token, but the panel
@@ -46,21 +48,21 @@ export function PlanExplainers({
 
   const spotlightText = useMemo(() => {
     if (!activeFocus || !activeLabel) return null;
-    if (activeSection === "wealth") return `${activeLabel} is active in the wealth equation and cash-flow visuals.`;
-    if (activeSection === "bands") return `${activeLabel} is active in the projected wealth distribution.`;
-    return `${activeLabel} is active in the goal logic for this plan.`;
-  }, [activeFocus, activeLabel, activeSection]);
+    if (activeSection === "wealth") return t("explainer.spotlightWealth", { label: activeLabel });
+    if (activeSection === "bands") return t("explainer.spotlightBands", { label: activeLabel });
+    return t("explainer.spotlightGoals", { label: activeLabel });
+  }, [activeFocus, activeLabel, activeSection, t]);
 
   return (
     <section className="rounded-2xl border bg-card p-5 sm:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-base font-semibold text-foreground">How this plan works</h2>
+          <h2 className="text-base font-semibold text-foreground">{t("explainer.title")}</h2>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            The math is here if you want it, but each section translates the equation into plain language first.
+            {t("explainer.subtitle")}
           </p>
           <p className="mt-2 text-xs text-muted-foreground">
-            Hover or focus a symbol to highlight the matching part of the charts below. Click to pin it.
+            {t("explainer.hint")}
           </p>
           <div
             className={cn(
@@ -71,7 +73,7 @@ export function PlanExplainers({
             )}
           >
             <span className="font-medium">
-              {activeLabel ? `Linked concept: ${activeLabel}` : "Linked concept: hover a formula or chart element"}
+              {activeLabel ? t("explainer.linkedConcept", { label: activeLabel }) : t("explainer.linkedConceptEmpty")}
             </span>
             {spotlightText ? <span className="ml-2 hidden text-muted-foreground sm:inline">{spotlightText}</span> : null}
             {pinnedFocus ? (
@@ -80,17 +82,17 @@ export function PlanExplainers({
                 onClick={onClearPin}
                 className="ml-3 rounded-full border border-primary/25 px-2 py-0.5 text-[11px] font-medium text-foreground transition-colors hover:bg-primary/10"
               >
-                Clear pin
+                {t("explainer.clearPin")}
               </button>
             ) : null}
           </div>
         </div>
         <div className="grid grid-cols-3 gap-2 text-center text-xs sm:min-w-[18rem]">
-          <MiniStat label="Accounts" value={String(profile.accounts_config.length)} />
-          <MiniStat label="Goals" value={String(goalsCount)} />
+          <MiniStat label={t("explainer.miniStats.accounts")} value={String(profile.accounts_config.length)} />
+          <MiniStat label={t("explainer.miniStats.goals")} value={String(goalsCount)} />
           <MiniStat
-            label="Withdrawals"
-            value={hasWithdrawals ? "Included" : "None"}
+            label={t("explainer.miniStats.withdrawals")}
+            value={hasWithdrawals ? t("explainer.withdrawalsIncluded") : t("explainer.withdrawalsNone")}
           />
         </div>
       </div>
@@ -109,12 +111,11 @@ export function PlanExplainers({
           )}
         >
           <AccordionTrigger className="py-3 text-sm no-underline hover:no-underline">
-            Wealth evolution equation
+            {t("explainer.sections.wealth.title")}
           </AccordionTrigger>
           <AccordionContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Each month, every account starts from its current balance, adds the planned contribution,
-              subtracts any withdrawal, and then grows by that month's investment return.
+              {t("explainer.sections.wealth.intro")}
             </p>
             <FormulaBlock>
               <FormulaLine
@@ -137,39 +138,38 @@ export function PlanExplainers({
                 {
                   focus: "wealth",
                   symbol: <FormulaVar base="W" sub="t" sup="m" />,
-                  description: "wealth in account m at month t",
+                  description: t("explainer.sections.wealth.var.wealth"),
                 },
                 {
                   focus: "contribution",
                   symbol: <FormulaVar base="A" sub="t" />,
-                  description: "money available to invest in month t",
+                  description: t("explainer.sections.wealth.var.contribution"),
                 },
                 {
                   focus: "allocation",
                   symbol: <FormulaVar base="x" sub="t" sup="m" />,
-                  description: "share of that month's contribution sent to account m",
+                  description: t("explainer.sections.wealth.var.allocation"),
                 },
                 {
                   focus: "withdrawal",
                   symbol: <FormulaVar base="D" sub="t" sup="m" />,
                   description: hasWithdrawals
-                    ? "withdrawal taken from account m in month t"
-                    : "withdrawal term; zero in this scenario",
+                    ? t("explainer.sections.wealth.var.withdrawalActive")
+                    : t("explainer.sections.wealth.var.withdrawalZero"),
                 },
                 {
                   focus: "return",
                   symbol: <FormulaVar base="R" sub="t" sup="m" />,
-                  description: "return earned by account m during month t",
+                  description: t("explainer.sections.wealth.var.return"),
                 },
               ]}
             />
             <Callout>
-              In this plan, the optimizer is choosing the monthly split{" "}
+              {t("explainer.sections.wealth.calloutPre")}
               <FocusToken focus="allocation" activeFocus={activeFocus} pinnedFocus={pinnedFocus} onFocusChange={onFocusChange} onTogglePin={onTogglePin}>
                 <InlineCode>x</InlineCode>
-              </FocusToken>{" "}
-              across{" "}
-              {profile.accounts_config.length} accounts while respecting your goals, withdrawals, and time horizon.
+              </FocusToken>
+              {t("explainer.sections.wealth.calloutPost", { count: profile.accounts_config.length })}
             </Callout>
           </AccordionContent>
         </AccordionItem>
@@ -182,25 +182,24 @@ export function PlanExplainers({
           )}
         >
           <AccordionTrigger className="py-3 text-sm no-underline hover:no-underline">
-            Confidence bands and uncertainty
+            {t("explainer.sections.bands.title")}
           </AccordionTrigger>
           <AccordionContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              The projected wealth chart is not one future. It summarizes many simulated futures and shows where
-              the middle of the distribution sits and how wide the range becomes over time.
+              {t("explainer.sections.bands.intro")}
             </p>
             <FormulaBlock>
               <FormulaLine
                 left={<FocusToken focus="median" activeFocus={activeFocus} pinnedFocus={pinnedFocus} onFocusChange={onFocusChange} onTogglePin={onTogglePin}>P50</FocusToken>}
-                right="median path of simulated wealth"
+                right={t("explainer.sections.bands.formula.median")}
               />
               <FormulaLine
                 left={<FocusToken focus="likely-band" activeFocus={activeFocus} pinnedFocus={pinnedFocus} onFocusChange={onFocusChange} onTogglePin={onTogglePin}>P25 - P75</FocusToken>}
-                right="likely middle range"
+                right={t("explainer.sections.bands.formula.likely")}
               />
               <FormulaLine
                 left={<FocusToken focus="possible-band" activeFocus={activeFocus} pinnedFocus={pinnedFocus} onFocusChange={onFocusChange} onTogglePin={onTogglePin}>P10 - P90</FocusToken>}
-                right="wider possible range"
+                right={t("explainer.sections.bands.formula.possible")}
               />
             </FormulaBlock>
             <VariableGrid
@@ -212,23 +211,22 @@ export function PlanExplainers({
                 {
                   focus: "median",
                   symbol: "P50",
-                  description: "half of simulated outcomes are above it and half are below it",
+                  description: t("explainer.sections.bands.var.median"),
                 },
                 {
                   focus: "likely-band",
                   symbol: "P25-P75",
-                  description: "the darker band; a tighter middle slice of outcomes",
+                  description: t("explainer.sections.bands.var.likely"),
                 },
                 {
                   focus: "possible-band",
                   symbol: "P10-P90",
-                  description: "the lighter band; a broader uncertainty envelope",
+                  description: t("explainer.sections.bands.var.possible"),
                 },
               ]}
             />
             <Callout>
-              Wider bands usually mean more uncertainty from returns, variable income, or withdrawals. Narrower
-              bands mean outcomes are clustering more tightly.
+              {t("explainer.sections.bands.callout")}
             </Callout>
           </AccordionContent>
         </AccordionItem>
@@ -241,21 +239,20 @@ export function PlanExplainers({
           )}
         >
           <AccordionTrigger className="py-3 text-sm no-underline hover:no-underline">
-            Goal probability and minimum horizon
+            {t("explainer.sections.goals.title")}
           </AccordionTrigger>
           <AccordionContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              FinOpt searches for the shortest horizon where your goals become achievable with the confidence
-              levels you selected.
+              {t("explainer.sections.goals.intro")}
             </p>
             <FormulaBlock>
               <FormulaLine
                 left={<FocusToken focus="goal-probability" activeFocus={activeFocus} pinnedFocus={pinnedFocus} onFocusChange={onFocusChange} onTogglePin={onTogglePin}>Pr(W_t^m &gt;= target)</FocusToken>}
-                right=">= your chosen certainty"
+                right={t("explainer.sections.goals.formula.probability")}
               />
               <FormulaLine
                 left={<FocusToken focus="horizon" activeFocus={activeFocus} pinnedFocus={pinnedFocus} onFocusChange={onFocusChange} onTogglePin={onTogglePin}>T*</FocusToken>}
-                right="smallest month count that satisfies all goals together"
+                right={t("explainer.sections.goals.formula.horizon")}
               />
             </FormulaBlock>
             <VariableGrid
@@ -267,23 +264,22 @@ export function PlanExplainers({
                 {
                   focus: "goal-probability",
                   symbol: "Pr(.)",
-                  description: "probability measured across simulated futures",
+                  description: t("explainer.sections.goals.var.probability"),
                 },
                 {
                   focus: "goal-target",
                   symbol: "target",
-                  description: "the threshold attached to a goal",
+                  description: t("explainer.sections.goals.var.target"),
                 },
                 {
                   focus: "horizon",
                   symbol: "T*",
-                  description: `the minimum feasible horizon; current result = ${result.optimal_horizon ?? "—"} months`,
+                  description: t("explainer.sections.goals.var.horizon", { horizon: result.optimal_horizon ?? "—" }),
                 },
               ]}
             />
             <Callout>
-              The goal list below shows each goal's likelihood, measured across the simulated futures.
-              If one goal forces the plan to wait longer, it can determine the minimum horizon for the full plan.
+              {t("explainer.sections.goals.callout")}
             </Callout>
           </AccordionContent>
         </AccordionItem>

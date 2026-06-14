@@ -7,12 +7,15 @@
  * feasibility). Fully presentational and self-contained.
  */
 import { CalendarClock, CheckCircle2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { AbstractWealthChart } from "./AbstractWealthChart";
 import { GoalPreviewCard } from "./GoalPreviewCard";
 import { MiniMetricCard } from "./MiniMetricCard";
 import { FinOptWordmark } from "./FinOptWordmark";
 
 export function FinOptHeroPanel() {
+  const { t } = useTranslation("login");
+
   return (
     <div className="relative flex h-full w-full flex-col justify-between overflow-hidden bg-[#005C99] p-10 lg:p-14">
       {/* Brand gradient + ambient blobs */}
@@ -37,14 +40,13 @@ export function FinOptHeroPanel() {
           className="max-w-md text-4xl font-extrabold leading-tight tracking-tight text-white animate-fade-in-up lg:text-5xl"
           style={{ animationDelay: "0.05s" }}
         >
-          Your goals, optimized.
+          {t("hero.headline")}
         </h1>
         <p
           className="mt-4 max-w-md text-base leading-relaxed text-white/85 animate-fade-in-up"
           style={{ animationDelay: "0.15s" }}
         >
-          Understand when your financial goals become achievable — with clear
-          scenarios and risk-aware planning.
+          {t("hero.subtitle")}
         </p>
 
         {/* Chart + floating cards */}
@@ -61,7 +63,11 @@ export function FinOptHeroPanel() {
             className="absolute -right-4 -top-8 hidden animate-float sm:block"
             style={{ animationDelay: "0.2s" }}
           >
-            <GoalPreviewCard goal="Home" status="Feasible" confidence={0.8} />
+            <GoalPreviewCard
+              goal={t("hero.previewGoal")}
+              status={t("hero.previewFeasible")}
+              confidence={0.8}
+            />
           </div>
 
           <div
@@ -69,8 +75,8 @@ export function FinOptHeroPanel() {
             style={{ animationDelay: "1.2s" }}
           >
             <MiniMetricCard
-              label="Minimum horizon"
-              value="42 months"
+              label={t("hero.previewMinHorizonLabel")}
+              value={t("hero.previewMinHorizonValue")}
               icon={CalendarClock}
             />
           </div>
@@ -80,8 +86,8 @@ export function FinOptHeroPanel() {
             style={{ animationDelay: "2s" }}
           >
             <MiniMetricCard
-              label="Status"
-              value="On track"
+              label={t("hero.previewStatusLabel")}
+              value={t("hero.previewStatusValue")}
               icon={CheckCircle2}
               tone="success"
             />
@@ -94,7 +100,7 @@ export function FinOptHeroPanel() {
         className="relative z-10 text-xs text-white/70 animate-fade-in-up"
         style={{ animationDelay: "0.35s" }}
       >
-        Clear scenarios · Confidence bands · Minimum horizon to reach your goals
+        {t("hero.footer")}
       </p>
     </div>
   );

@@ -1,0 +1,163 @@
+{
+  "hero": {
+    "minHorizon": "Tu horizonte mínimo",
+    "horizonHint": "Es el menor tiempo para alcanzar tus metas con la certeza que elegiste.",
+    "status": {
+      "feasible": { "label": "Alcanzable", "description": "Tu plan alcanza cada meta a tiempo." },
+      "tight": { "label": "Ajustado", "description": "Alcanzable, pero con poco margen. Considera subir tu tasa de ahorro." },
+      "infeasible": { "label": "Fuera de alcance", "description": "Tus metas no se pueden cumplir con el plan actual. Ajústalas y recalcula." }
+    },
+    "stats": {
+      "goalsAchieved": "Metas logradas",
+      "planStatus": "Estado del plan",
+      "computeTime": "Tiempo de cálculo",
+      "updated": "Actualizado"
+    }
+  },
+  "actions": {
+    "hint": "Actualiza tu situación o tus metas y recalcula para ver un nuevo plan.",
+    "adjust": "Ajustar",
+    "recalculate": "Recalcular",
+    "recalculating": "Recalculando…"
+  },
+  "job": {
+    "queuedTitle": "Tu plan está en cola",
+    "queuedBody": "Nos estamos preparando para calcular. Suele comenzar en unos segundos.",
+    "runningTitle": "Calculando tu plan…",
+    "runningBody": "Estamos probando miles de futuros para encontrar el camino más corto a tus metas.",
+    "failedTitle": "No pudimos calcular tu plan",
+    "failedBody": "Tus metas podrían estar fuera de alcance con la tasa de ahorro actual. Prueba bajar un objetivo, extender una fecha o subir cuánto ahorras cada mes.",
+    "adjustGoals": "Ajustar mis metas",
+    "tryAgain": "Intentar de nuevo"
+  },
+  "withdrawalFallback": "Retiro de {{account}}",
+  "goals": {
+    "title": "Tus metas",
+    "subtitle": "Qué tan probable es alcanzar cada meta, medido en miles de futuros simulados.",
+    "allFloor_one": "Esta meta está cómodamente al alcance — se logra en casi todos los escenarios. Tu elección de certeza apenas cambia este plan; afecta sobre todo el plazo.",
+    "allFloor_other": "Estas metas están cómodamente al alcance — se logran en casi todos los escenarios. Tu elección de certeza apenas cambia este plan; afecta sobre todo el plazo.",
+    "chipTerminal": "Para el fin del plan",
+    "chipBy": "Para {{date}}",
+    "chipBySpecific": "Para una fecha específica",
+    "reachLine": "Alcanzar <amount>{{amount}}</amount> en <acct>{{account}}</acct>.",
+    "onFloor": "Se logra en prácticamente todos los escenarios — buscar más certeza no cambiaría esta meta.",
+    "onTrack": "Disponible",
+    "needsAdjustment": "Necesita ajuste"
+  },
+  "contributions": {
+    "title": "Aportes mes a mes",
+    "subtitleWithdrawals": "Cuánto entra a cada cuenta cada mes, y cuándo se espera que el dinero vuelva a salir.",
+    "subtitle": "Cuánto poner en cada cuenta, cada mes.",
+    "modeAmount": "Monto",
+    "modePercent": "Porcentaje",
+    "avgPerMonth": "Promedio mensual",
+    "totalOverPlan": "Total del plan",
+    "totalWithdrawn": "Total retirado",
+    "netCashFlow": "Flujo neto",
+    "accountsInUse": "Cuentas en uso",
+    "withdrawals": "Retiros",
+    "table": {
+      "account": "Cuenta",
+      "firstMonth": "Primer mes",
+      "lastMonth": "Último mes",
+      "avgMonth": "Prom. / mes",
+      "total": "Total",
+      "withdrawn": "Retirado",
+      "net": "Neto",
+      "totalRow": "Total"
+    }
+  },
+  "wealth": {
+    "title": "Patrimonio proyectado",
+    "subtitleTotal": "Rango probable de tu ahorro total en el tiempo. Banda más oscura = más probable.",
+    "subtitleAccounts": "Línea mediana de cada cuenta con su rango probable (P25–P75) sombreado. Las líneas punteadas muestran tus metas.",
+    "subtitleAccount": "Rango probable para {{account}}. Banda más oscura = más probable.",
+    "viewAllAccounts": "Todas las cuentas",
+    "viewTotal": "Total",
+    "legend": {
+      "median": "Mediana",
+      "likelyRange": "Rango probable (P25–P75)",
+      "possibleRange": "Rango posible (P10–P90)",
+      "goal": "Meta",
+      "withdrawal": "Retiro"
+    },
+    "goalLabel": "Meta: {{amount}}",
+    "tooltip": {
+      "p50": "Mediana (P50)",
+      "p10": "Pesimista (P10)",
+      "p90": "Optimista (P90)"
+    }
+  },
+  "explainer": {
+    "title": "Cómo funciona este plan",
+    "subtitle": "Las matemáticas están aquí si las quieres, pero cada sección traduce primero la ecuación a lenguaje sencillo.",
+    "hint": "Pasa el cursor o enfoca un símbolo para resaltar la parte correspondiente de los gráficos. Haz clic para fijarlo.",
+    "linkedConcept": "Concepto vinculado: {{label}}",
+    "linkedConceptEmpty": "Concepto vinculado: pasa el cursor por una fórmula o un elemento del gráfico",
+    "spotlightWealth": "{{label}} está activo en la ecuación de patrimonio y en los gráficos de flujo.",
+    "spotlightBands": "{{label}} está activo en la distribución de patrimonio proyectado.",
+    "spotlightGoals": "{{label}} está activo en la lógica de metas de este plan.",
+    "clearPin": "Quitar fijado",
+    "miniStats": { "accounts": "Cuentas", "goals": "Metas", "withdrawals": "Retiros" },
+    "withdrawalsIncluded": "Incluidos",
+    "withdrawalsNone": "Ninguno",
+    "concepts": {
+      "wealth": "Trayectoria de patrimonio",
+      "contribution": "Aportes mensuales",
+      "allocation": "Reparto de asignación",
+      "withdrawal": "Retiros",
+      "return": "Retorno de inversión",
+      "median": "Trayectoria mediana",
+      "likely-band": "Rango probable",
+      "possible-band": "Rango posible",
+      "goal-probability": "Probabilidad de meta",
+      "goal-target": "Objetivo de meta",
+      "horizon": "Horizonte mínimo"
+    },
+    "sections": {
+      "wealth": {
+        "title": "Ecuación de evolución del patrimonio",
+        "intro": "Cada mes, cada cuenta parte de su saldo actual, suma el aporte planificado, resta cualquier retiro y luego crece según el retorno de inversión de ese mes.",
+        "var": {
+          "wealth": "patrimonio en la cuenta m en el mes t",
+          "contribution": "dinero disponible para invertir en el mes t",
+          "allocation": "fracción del aporte de ese mes enviada a la cuenta m",
+          "withdrawalActive": "retiro tomado de la cuenta m en el mes t",
+          "withdrawalZero": "término de retiro; cero en este escenario",
+          "return": "retorno obtenido por la cuenta m durante el mes t"
+        },
+        "calloutPre": "En este plan, el optimizador elige el reparto mensual ",
+        "calloutPost": " entre {{count}} cuentas respetando tus metas, retiros y horizonte temporal."
+      },
+      "bands": {
+        "title": "Bandas de confianza e incertidumbre",
+        "intro": "El gráfico de patrimonio proyectado no es un solo futuro. Resume muchos futuros simulados y muestra dónde se sitúa el centro de la distribución y cuánto se ensancha el rango con el tiempo.",
+        "formula": {
+          "median": "trayectoria mediana del patrimonio simulado",
+          "likely": "rango medio probable",
+          "possible": "rango posible más amplio"
+        },
+        "var": {
+          "median": "la mitad de los resultados simulados está por encima y la mitad por debajo",
+          "likely": "la banda más oscura; una franja media más ajustada de resultados",
+          "possible": "la banda más clara; una envolvente de incertidumbre más amplia"
+        },
+        "callout": "Bandas más anchas suelen indicar más incertidumbre por los retornos, las inversiones irregulares o los retiros. Bandas más angostas indican que los resultados se agrupan más."
+      },
+      "goals": {
+        "title": "Probabilidad de meta y horizonte mínimo",
+        "intro": "FinOpt busca el horizonte más corto en el que tus metas se vuelven alcanzables con los niveles de certeza que elegiste.",
+        "formula": {
+          "probability": ">= tu certeza elegida",
+          "horizon": "el menor número de meses que satisface todas las metas juntas"
+        },
+        "var": {
+          "probability": "probabilidad medida en los futuros simulados",
+          "target": "el umbral asociado a una meta",
+          "horizon": "el horizonte mínimo factible; resultado actual = {{horizon}} meses"
+        },
+        "callout": "La lista de metas de abajo muestra la probabilidad de cada meta, medida en los futuros simulados. Si una meta obliga al plan a esperar más, puede determinar el horizonte mínimo de todo el plan."
+      }
+    }
+  }
+}

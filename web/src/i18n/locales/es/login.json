@@ -1,0 +1,46 @@
+{
+  "title": {
+    "signUp": "Crea tu cuenta",
+    "signIn": "Bienvenido de vuelta"
+  },
+  "subtitle": {
+    "signUp": "Empieza a planificar tus metas financieras.",
+    "signIn": "Continúa a tu espacio de planificación financiera."
+  },
+  "email": "Correo electrónico",
+  "password": "Contraseña",
+  "forgotPassword": "¿Olvidaste tu contraseña?",
+  "submit": {
+    "signUp": "Crear cuenta",
+    "signIn": "Iniciar sesión"
+  },
+  "switchPrompt": {
+    "signUp": "¿Ya tienes una cuenta?",
+    "signIn": "¿Nuevo en FinOpt?"
+  },
+  "switchAction": {
+    "signUp": "Iniciar sesión",
+    "signIn": "Crear una cuenta"
+  },
+  "disclaimer": "Con fines educativos y de investigación. No es asesoría financiera.",
+  "hero": {
+    "headline": "Tus metas, optimizadas.",
+    "subtitle": "Descubre cuándo tus metas financieras se vuelven alcanzables, con escenarios claros y planificación consciente del riesgo.",
+    "footer": "Escenarios claros · Bandas de confianza · Horizonte mínimo para alcanzar tus metas",
+    "previewGoalLabel": "Meta",
+    "previewConfidence": "Certeza",
+    "previewGoal": "Casa",
+    "previewFeasible": "Alcanzable",
+    "previewMinHorizonLabel": "Horizonte mínimo",
+    "previewMinHorizonValue": "42 meses",
+    "previewStatusLabel": "Estado",
+    "previewStatusValue": "Disponible"
+  },
+  "notice": {
+    "checkEmail": "Revisa tu correo para encontrar el enlace de confirmación.",
+    "genericError": "Ocurrió un error",
+    "enterEmailFirst": "Ingresa tu correo arriba y luego haz clic en «¿Olvidaste tu contraseña?»",
+    "resetSent": "Enlace para restablecer la contraseña enviado. Revisa tu correo.",
+    "resetError": "No se pudo enviar el correo de restablecimiento"
+  }
+}

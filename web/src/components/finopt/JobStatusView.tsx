@@ -1,4 +1,5 @@
 import { Loader2, AlertCircle, Clock } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { JobStatus } from "@/mocks/types";
 import { Button } from "@/components/ui/button";
 
@@ -11,13 +12,15 @@ type Props = {
 };
 
 export function JobStatusView({ status, progress = 0.45, onAdjust, onRetry, errorMessage }: Props) {
+  const { t } = useTranslation("plan");
+
   if (status === "pending") {
     return (
       <Shell>
         <Clock className="size-8 text-muted-foreground" aria-hidden />
-        <h2 className="mt-4 text-xl font-semibold text-foreground">Your plan is queued</h2>
+        <h2 className="mt-4 text-xl font-semibold text-foreground">{t("job.queuedTitle")}</h2>
         <p className="mt-1 max-w-md text-sm text-muted-foreground">
-          We're getting ready to calculate. This usually starts in a few seconds.
+          {t("job.queuedBody")}
         </p>
       </Shell>
     );
@@ -28,9 +31,9 @@ export function JobStatusView({ status, progress = 0.45, onAdjust, onRetry, erro
     return (
       <Shell>
         <Loader2 className="size-8 animate-spin text-primary" aria-hidden />
-        <h2 className="mt-4 text-xl font-semibold text-foreground">Calculating your plan…</h2>
+        <h2 className="mt-4 text-xl font-semibold text-foreground">{t("job.runningTitle")}</h2>
         <p className="mt-1 max-w-md text-sm text-muted-foreground">
-          We're testing thousands of futures to find the shortest path to your goals.
+          {t("job.runningBody")}
         </p>
         <div
           className="mt-6 h-2 w-full max-w-sm overflow-hidden rounded-full bg-muted"
@@ -55,20 +58,19 @@ export function JobStatusView({ status, progress = 0.45, onAdjust, onRetry, erro
       <div className="rounded-full bg-danger-soft p-3">
         <AlertCircle className="size-7 text-danger" aria-hidden />
       </div>
-      <h2 className="mt-4 text-xl font-semibold text-foreground">We couldn't compute your plan</h2>
+      <h2 className="mt-4 text-xl font-semibold text-foreground">{t("job.failedTitle")}</h2>
       <p className="mt-1 max-w-md text-sm text-muted-foreground">
-        {errorMessage ??
-          "Your goals may be out of reach with the current savings rate. Try lowering a target, extending a date, or raising how much you save each month."}
+        {errorMessage ?? t("job.failedBody")}
       </p>
       <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
         {onAdjust && (
           <Button onClick={onAdjust} variant="default">
-            Adjust my goals
+            {t("job.adjustGoals")}
           </Button>
         )}
         {onRetry && (
           <Button onClick={onRetry} variant="outline">
-            Try again
+            {t("job.tryAgain")}
           </Button>
         )}
       </div>

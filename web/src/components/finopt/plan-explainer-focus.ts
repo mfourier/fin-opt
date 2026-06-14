@@ -24,22 +24,5 @@ export function focusToSection(focus: ExplainerFocus | null): ExplainerSection |
   return "goals";
 }
 
-export function focusToLabel(focus: ExplainerFocus | null): string | null {
-  if (!focus) return null;
-
-  const labels: Record<ExplainerFocus, string> = {
-    wealth: "Wealth path",
-    contribution: "Monthly contributions",
-    allocation: "Allocation split",
-    withdrawal: "Withdrawals",
-    return: "Investment return",
-    median: "Median path",
-    "likely-band": "Likely range",
-    "possible-band": "Possible range",
-    "goal-probability": "Goal probability",
-    "goal-target": "Goal target",
-    horizon: "Minimum horizon",
-  };
-
-  return labels[focus];
-}
+// Human-readable label per focus id lives in `plan:explainer.concepts.<focus>`
+// (resolved with t() in the component), so there is no label map here.

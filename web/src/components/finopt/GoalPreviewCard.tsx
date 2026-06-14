@@ -5,6 +5,7 @@
  * product idea on the marketing surface.
  */
 import { Target } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 
 interface GoalPreviewCardProps {
@@ -22,6 +23,7 @@ export function GoalPreviewCard({
   className,
   style,
 }: GoalPreviewCardProps) {
+  const { t } = useTranslation("login");
   const pct = Math.round(confidence * 100);
 
   return (
@@ -39,7 +41,7 @@ export function GoalPreviewCard({
           </span>
           <div>
             <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              Goal
+              {t("hero.previewGoalLabel")}
             </p>
             <p className="text-sm font-semibold text-foreground">{goal}</p>
           </div>
@@ -51,7 +53,7 @@ export function GoalPreviewCard({
 
       <div className="mt-4">
         <div className="mb-1 flex items-center justify-between text-[11px] font-medium text-muted-foreground">
-          <span>Confidence</span>
+          <span>{t("hero.previewConfidence")}</span>
           <span className="tabular text-foreground">{pct}%</span>
         </div>
         <div className="h-2 w-full overflow-hidden rounded-full bg-muted">

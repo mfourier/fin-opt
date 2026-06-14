@@ -1,0 +1,26 @@
+{
+  "loadingJob": "Cargando estado del trabajo...",
+  "notFoundTitle": "Trabajo no encontrado",
+  "notFoundMessage": "No pudimos encontrar este resultado. Puede haber sido eliminado o el enlace estar incompleto.",
+  "titleOptimization": "Resultados de optimización",
+  "titleSimulation": "Resultados de simulación",
+  "backToScenarios": "Volver a Planes",
+  "status": {
+    "completed": "completado",
+    "running": "en ejecución",
+    "failed": "fallido",
+    "pending": "pendiente"
+  },
+  "initializing": "Inicializando...",
+  "progressHint": "Esto puede tardar unos minutos según la cantidad de simulaciones y la longitud del horizonte.",
+  "failedTitle": "La optimización falló",
+  "unknownError": "Ocurrió un error desconocido",
+  "adjustParams": "Prueba ajustar los parámetros de tu plan →",
+  "loadingPlan": "Cargando tu plan completo y los gráficos...",
+  "loadErrorTitle": "No pudimos cargar este plan",
+  "loadErrorMessage": "Algo salió mal al cargar el resultado.",
+  "unavailableTitle": "Datos del plan no disponibles",
+  "unavailableMessage": "El trabajo terminó, pero falta el escenario o los datos del resultado.",
+  "recalcReachFailed": "No se pudo contactar el servicio de cálculo",
+  "recalcFailed": "No se pudo recalcular"
+}

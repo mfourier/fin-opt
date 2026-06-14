@@ -1,0 +1,86 @@
+{
+  "steps": {
+    "basics": "Lo básico",
+    "goals": "Tus metas",
+    "review": "Revisar"
+  },
+  "stepper": {
+    "stepOf": "Paso {{current}} de {{total}}"
+  },
+  "nav": {
+    "cancel": "Cancelar",
+    "back": "Atrás",
+    "next": "Siguiente",
+    "calculate": "Calcular mi plan"
+  },
+  "remove": "Quitar",
+  "basics": {
+    "title": "Lo básico",
+    "subtitle": "Cuéntanos para qué situación es este plan y cómo quieres invertir.",
+    "situationLabel": "¿Para qué situación es este plan?",
+    "situationPlaceholder": "Elige una situación",
+    "nameLabel": "Nombre del plan",
+    "namePlaceholder": "ej. Pie del departamento",
+    "startDateLabel": "Fecha de inicio",
+    "descriptionLabel": "Descripción breve (opcional)",
+    "descriptionPlaceholder": "Algo útil que recordar sobre este plan.",
+    "styleTitle": "Estilo de inversión",
+    "styleSubtitle": "Elige cómo equilibramos crecimiento y diversificación entre tus cuentas.",
+    "styleAria": "Estilo de inversión"
+  },
+  "goals": {
+    "title": "Tus metas",
+    "subtitle": "Cuéntanos cuánto quieres alcanzar y qué tan seguro quieres estar.",
+    "goalN": "Meta {{n}}",
+    "removeGoal": "Quitar meta {{n}}",
+    "amountLabel": "¿Cuánto quieres?",
+    "accountLabel": "¿En qué cuenta?",
+    "accountPlaceholder": "Elige una cuenta",
+    "addGoal": "Agregar otra meta",
+    "amountShort": "Monto",
+    "accountShort": "Cuenta",
+    "dateShort": "Fecha"
+  },
+  "dated": {
+    "title": "Metas con fecha límite",
+    "subtitle": "Opcional · ej. un fondo de emergencia listo para cierta fecha.",
+    "empty": "Aún no hay metas con fecha. Son útiles cuando algo debe estar listo para una fecha específica.",
+    "goalN": "Meta con fecha {{n}}",
+    "byLabel": "Para",
+    "dateError": "La fecha debe ser posterior a la fecha de inicio del plan.",
+    "add": "Agregar meta con fecha"
+  },
+  "confidence": {
+    "question": "¿Qué tan seguro quieres estar?"
+  },
+  "withdrawals": {
+    "title": "Retiros planificados",
+    "subtitle": "Opcional · dinero que sacarás en el camino.",
+    "onetimeTitle": "Retiros únicos",
+    "onetimeSubtitle": "Un monto específico retirado en una fecha específica.",
+    "noteLabel": "Nota (opcional)",
+    "notePlaceholderScheduled": "ej. pago de matrícula",
+    "addOnetime": "Agregar un retiro único",
+    "variableTitle": "Retiros recurrentes o variables",
+    "variableSubtitle": "Avanzado · para gastos de vida que varían mes a mes.",
+    "baseAmount": "Monto base",
+    "sigma": "Variabilidad (sigma)",
+    "floor": "Piso (opcional)",
+    "cap": "Techo (opcional)",
+    "notePlaceholderVariable": "ej. gastos de vida",
+    "addVariable": "Agregar un retiro variable"
+  },
+  "review": {
+    "title": "Revisa tu plan",
+    "subtitle": "Encontraremos el menor tiempo para alcanzar tus metas.",
+    "situation": "Situación",
+    "planName": "Nombre del plan",
+    "startDate": "Fecha de inicio",
+    "style": "Estilo de inversión",
+    "goalsTitle": "Metas",
+    "reachLine": "Alcanzar <amount>{{amount}}</amount> en <acct>{{account}}</acct>",
+    "datedLine": "Para <date>{{date}}</date>: alcanzar <amount>{{amount}}</amount> en <acct>{{account}}</acct>",
+    "scheduledLine": "<amount>{{amount}}</amount> desde <acct>{{account}}</acct> el <date>{{date}}</date>",
+    "variableLine": "Cerca de <amount>{{amount}}</amount> desde <acct>{{account}}</acct> (variable)"
+  }
+}

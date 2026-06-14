@@ -1,0 +1,66 @@
+{
+  "monthsShort": ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+  "signOut": "Sign out",
+  "loading": "Loading…",
+  "closeNotification": "Close notification",
+  "perMonth": "/mo",
+  "profileRisk": {
+    "none": "No accounts",
+    "growth": "Growth oriented",
+    "balanced": "Balanced risk",
+    "lower": "Lower volatility"
+  },
+  "language": {
+    "label": "Language",
+    "es": "ES",
+    "en": "EN",
+    "switchTo": "Switch to {{lang}}"
+  },
+  "duration": {
+    "yearShort": "y",
+    "monthShort": "m",
+    "year_one": "{{count}} year",
+    "year_other": "{{count}} years",
+    "month_one": "{{count}} month",
+    "month_other": "{{count}} months",
+    "zero": "0 months"
+  },
+  "confidence": {
+    "describe": "{{n}} out of 10 scenarios meet the goal",
+    "reach_sooner": {
+      "label": "Reach sooner",
+      "blurb": "Aim for the earliest date. Less certain, but you get there faster."
+    },
+    "balanced": {
+      "label": "Balanced",
+      "blurb": "A sensible middle ground between speed and certainty."
+    },
+    "play_it_safe": {
+      "label": "Play it safe",
+      "blurb": "Aim for high certainty. The plan may take a little longer."
+    }
+  },
+  "objectives": {
+    "risky": {
+      "title": "Maximum growth",
+      "subtitle": "Higher swings, higher long-term return."
+    },
+    "proportional": {
+      "title": "Steady & even",
+      "subtitle": "A stable, even monthly split across your accounts.",
+      "tag": "Recommended"
+    },
+    "conservative": {
+      "title": "Conservative",
+      "subtitle": "Smaller ups and downs, slower growth.",
+      "tag": "Lower risk"
+    },
+    "balanced": {
+      "title": "Balanced",
+      "subtitle": "A steady blend of growth and stability."
+    },
+    "risky_turnover": {
+      "title": "Growth (stable)"
+    }
+  }
+}

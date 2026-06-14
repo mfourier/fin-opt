@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../lib/store'
 import { supabase } from '../lib/supabase'
 import { Button } from '@/components/ui/button'
@@ -20,6 +21,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
 
   const navigate = useNavigate()
+  const { t } = useTranslation('login')
   const { signIn, signUp, user } = useAuthStore()
 
   useEffect(() => {
@@ -36,13 +38,13 @@ export default function LoginPage() {
     try {
       if (isSignUp) {
         await signUp(email, password)
-        setNotice({ kind: 'success', message: 'Check your email for a confirmation link.' })
+        setNotice({ kind: 'success', message: t('notice.checkEmail') })
       } else {
         await signIn(email, password)
         navigate('/')
       }
     } catch (err) {
-      setNotice({ kind: 'error', message: err instanceof Error ? err.message : 'An error occurred' })
+      setNotice({ kind: 'error', message: err instanceof Error ? err.message : t('notice.genericError') })
     } finally {
       setLoading(false)
     }
@@ -50,7 +52,7 @@ export default function LoginPage() {
 
   const handleForgotPassword = async () => {
     if (!email) {
-      setNotice({ kind: 'error', message: 'Enter your email above, then click “Forgot password?”' })
+      setNotice({ kind: 'error', message: t('notice.enterEmailFirst') })
       return
     }
     setNotice(null)
@@ -59,9 +61,9 @@ export default function LoginPage() {
         redirectTo: window.location.origin,
       })
       if (error) throw error
-      setNotice({ kind: 'success', message: 'Password reset link sent. Check your email.' })
+      setNotice({ kind: 'success', message: t('notice.resetSent') })
     } catch (err) {
-      setNotice({ kind: 'error', message: err instanceof Error ? err.message : 'Could not send reset email' })
+      setNotice({ kind: 'error', message: err instanceof Error ? err.message : t('notice.resetError') })
     }
   }
 
@@ -87,12 +89,10 @@ export default function LoginPage() {
           <div className="rounded-2xl border border-border bg-card p-7 shadow-xl shadow-primary/5 sm:p-9">
             <div className="mb-7 text-center">
               <h2 className="text-2xl font-bold tracking-tight text-foreground">
-                {isSignUp ? 'Create your account' : 'Welcome back'}
+                {isSignUp ? t('title.signUp') : t('title.signIn')}
               </h2>
               <p className="mt-1.5 text-sm text-muted-foreground">
-                {isSignUp
-                  ? 'Start planning your financial goals.'
-                  : 'Continue to your financial planning workspace.'}
+                {isSignUp ? t('subtitle.signUp') : t('subtitle.signIn')}
               </p>
             </div>
 
@@ -116,7 +116,7 @@ export default function LoginPage() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email">{t('email')}</Label>
                 <Input
                   id="email"
                   type="email"
@@ -131,14 +131,14 @@ export default function LoginPage() {
 
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="password">Password</Label>
+                  <Label htmlFor="password">{t('password')}</Label>
                   {!isSignUp && (
                     <button
                       type="button"
                       onClick={handleForgotPassword}
                       className="text-xs font-medium text-primary transition-colors hover:text-primary/80"
                     >
-                      Forgot password?
+                      {t('forgotPassword')}
                     </button>
                   )}
                 </div>
@@ -161,12 +161,12 @@ export default function LoginPage() {
                 className="h-11 w-full rounded-xl text-sm font-semibold"
               >
                 {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-                {isSignUp ? 'Create account' : 'Sign in'}
+                {isSignUp ? t('submit.signUp') : t('submit.signIn')}
               </Button>
             </form>
 
             <p className="mt-6 text-center text-sm text-muted-foreground">
-              {isSignUp ? 'Already have an account?' : 'New to FinOpt?'}{' '}
+              {isSignUp ? t('switchPrompt.signUp') : t('switchPrompt.signIn')}{' '}
               <button
                 type="button"
                 onClick={() => {
@@ -175,13 +175,13 @@ export default function LoginPage() {
                 }}
                 className="font-semibold text-primary transition-colors hover:text-primary/80"
               >
-                {isSignUp ? 'Sign in' : 'Create an account'}
+                {isSignUp ? t('switchAction.signUp') : t('switchAction.signIn')}
               </button>
             </p>
           </div>
 
           <p className="mt-6 text-center text-xs text-muted-foreground">
-            For educational and research purposes. Not financial advice.
+            {t('disclaimer')}
           </p>
         </div>
       </div>

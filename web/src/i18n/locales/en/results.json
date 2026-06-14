@@ -1,0 +1,26 @@
+{
+  "loadingJob": "Loading job status...",
+  "notFoundTitle": "Job not found",
+  "notFoundMessage": "We could not find this result. It may have been removed or the link may be incomplete.",
+  "titleOptimization": "Optimization Results",
+  "titleSimulation": "Simulation Results",
+  "backToScenarios": "Back to Scenarios",
+  "status": {
+    "completed": "completed",
+    "running": "running",
+    "failed": "failed",
+    "pending": "pending"
+  },
+  "initializing": "Initializing...",
+  "progressHint": "This may take a few minutes depending on the number of simulations and horizon length.",
+  "failedTitle": "Optimization Failed",
+  "unknownError": "An unknown error occurred",
+  "adjustParams": "Try adjusting your scenario parameters →",
+  "loadingPlan": "Loading your completed plan and charts...",
+  "loadErrorTitle": "We couldn't load this plan",
+  "loadErrorMessage": "Something went wrong while loading the result.",
+  "unavailableTitle": "Plan data unavailable",
+  "unavailableMessage": "The job finished, but the scenario or result payload is missing.",
+  "recalcReachFailed": "Failed to reach the compute service",
+  "recalcFailed": "Failed to recalculate"
+}

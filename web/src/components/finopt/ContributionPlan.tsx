@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Area,
   CartesianGrid,
@@ -37,6 +38,7 @@ export function ContributionPlan({
   pinnedFocus = null,
   onTogglePin,
 }: Props) {
+  const { t } = useTranslation("plan");
   const [mode, setMode] = useState<"amount" | "percent">("amount");
   const accounts = cashFlow.contributions_by_account;
   const total = cashFlow.contributions_mean;
@@ -79,33 +81,33 @@ export function ContributionPlan({
     <div className="rounded-2xl border bg-card p-5 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-foreground">Month-by-month contributions</h2>
+          <h2 className="text-base font-semibold text-foreground">{t("contributions.title")}</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             {hasWithdrawals
-              ? "How much goes into each account each month, and when money is expected to come back out."
-              : "How much to put into each account, every month."}
+              ? t("contributions.subtitleWithdrawals")
+              : t("contributions.subtitle")}
           </p>
         </div>
         <SegmentedToggle
           value={mode}
           onChange={setMode}
           options={[
-            { value: "amount", label: "Amount" },
-            { value: "percent", label: "Percent" },
+            { value: "amount", label: t("contributions.modeAmount") },
+            { value: "percent", label: t("contributions.modePercent") },
           ]}
         />
       </div>
 
       <dl className={cn("mt-4 grid grid-cols-2 gap-3", hasWithdrawals ? "sm:grid-cols-4" : "sm:grid-cols-3")}>
-        <SummaryStat label="Avg per month" value={formatCLP(monthlyAvg)} />
-        <SummaryStat label="Total over plan" value={formatCLP(totalContrib)} />
+        <SummaryStat label={t("contributions.avgPerMonth")} value={formatCLP(monthlyAvg)} />
+        <SummaryStat label={t("contributions.totalOverPlan")} value={formatCLP(totalContrib)} />
         {hasWithdrawals ? (
           <>
-            <SummaryStat label="Total withdrawn" value={formatCLP(totalWithdrawn)} />
-            <SummaryStat label="Net cash flow" value={formatCLP(netFlowTotal)} />
+            <SummaryStat label={t("contributions.totalWithdrawn")} value={formatCLP(totalWithdrawn)} />
+            <SummaryStat label={t("contributions.netCashFlow")} value={formatCLP(netFlowTotal)} />
           </>
         ) : (
-          <SummaryStat label="Accounts in use" value={String(accounts.length)} />
+          <SummaryStat label={t("contributions.accountsInUse")} value={String(accounts.length)} />
         )}
       </dl>
 
@@ -125,7 +127,7 @@ export function ContributionPlan({
         {hasWithdrawals && (
           <LegendItem
             color="var(--color-danger)"
-            label="Withdrawals"
+            label={t("contributions.withdrawals")}
             dashed
             focus="withdrawal"
             activeFocus={activeFocus}
@@ -180,8 +182,8 @@ export function ContributionPlan({
               labelFormatter={(m) => monthLabel(Number(m), startDate)}
               formatter={(value: number, name: string) => {
                 const acc = accounts.find((a) => a.account === name);
-                if (name === "withdrawalsTotal") return [formatCLP(Number(value)), "Withdrawals"];
-                if (name === "netFlow") return [formatCLP(Number(value)), "Net cash flow"];
+                if (name === "withdrawalsTotal") return [formatCLP(Number(value)), t("contributions.withdrawals")];
+                if (name === "netFlow") return [formatCLP(Number(value)), t("contributions.netCashFlow")];
                 return [
                   mode === "amount" ? formatCLP(Number(value)) : `${(Number(value) * 100).toFixed(0)}%`,
                   acc?.display_name ?? name,
@@ -245,13 +247,13 @@ export function ContributionPlan({
         <table className="w-full text-sm">
           <thead className="bg-muted/40 text-muted-foreground">
             <tr className="text-left">
-              <th className="px-4 py-2 font-medium">Account</th>
-              <th className="px-4 py-2 text-right font-medium">First month</th>
-              <th className="px-4 py-2 text-right font-medium">Last month</th>
-              <th className="px-4 py-2 text-right font-medium">Avg / month</th>
-              <th className="px-4 py-2 text-right font-medium">Total</th>
-              {hasWithdrawals && <th className="px-4 py-2 text-right font-medium">Withdrawn</th>}
-              {hasWithdrawals && <th className="px-4 py-2 text-right font-medium">Net</th>}
+              <th className="px-4 py-2 font-medium">{t("contributions.table.account")}</th>
+              <th className="px-4 py-2 text-right font-medium">{t("contributions.table.firstMonth")}</th>
+              <th className="px-4 py-2 text-right font-medium">{t("contributions.table.lastMonth")}</th>
+              <th className="px-4 py-2 text-right font-medium">{t("contributions.table.avgMonth")}</th>
+              <th className="px-4 py-2 text-right font-medium">{t("contributions.table.total")}</th>
+              {hasWithdrawals && <th className="px-4 py-2 text-right font-medium">{t("contributions.table.withdrawn")}</th>}
+              {hasWithdrawals && <th className="px-4 py-2 text-right font-medium">{t("contributions.table.net")}</th>}
             </tr>
           </thead>
           <tbody>
@@ -284,7 +286,7 @@ export function ContributionPlan({
               );
             })}
             <tr className="border-t bg-muted/30">
-              <td className="px-4 py-2.5 font-medium">Total</td>
+              <td className="px-4 py-2.5 font-medium">{t("contributions.table.totalRow")}</td>
               <td className="tabular px-4 py-2.5 text-right">{formatCLP(total[0] ?? 0)}</td>
               <td className="tabular px-4 py-2.5 text-right">{formatCLP(total[total.length - 1] ?? 0)}</td>
               <td className="tabular px-4 py-2.5 text-right">{formatCLP(monthlyAvg)}</td>

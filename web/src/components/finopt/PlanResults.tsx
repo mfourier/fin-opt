@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { Download, RotateCw, Settings2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { Button } from "@/components/ui/button";
 import type { Profile, Scenario, Result, JobStatus } from "@/mocks/types";
 import { formatCLPCompact } from "@/lib/format";
@@ -40,6 +42,7 @@ export function PlanResults({
   isRecalculating,
   actionError,
 }: Props) {
+  const { t } = useTranslation("plan");
   const [hoverFocus, setHoverFocus] = useState<ExplainerFocus | null>(null);
   const [pinnedFocus, setPinnedFocus] = useState<ExplainerFocus | null>(null);
   const activeFocus = pinnedFocus ?? hoverFocus;
@@ -106,7 +109,7 @@ export function PlanResults({
     })),
   ];
 
-  const withdrawalMarkers: WithdrawalMarker[] = buildWithdrawalMarkers(scenario);
+  const withdrawalMarkers: WithdrawalMarker[] = buildWithdrawalMarkers(scenario, t);
 
   return (
     <div className="space-y-6">
@@ -136,12 +139,12 @@ export function PlanResults({
       <div className="rounded-xl border bg-card px-4 py-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-muted-foreground">
-            Update your situation or goals and recalculate to see a new plan.
+            {t("actions.hint")}
           </p>
           <div className="flex flex-wrap items-center gap-2">
             {onAdjustGoals && (
               <Button variant="ghost" size="sm" onClick={onAdjustGoals} disabled={isRecalculating}>
-                <Settings2 className="size-4" aria-hidden /> Adjust
+                <Settings2 className="size-4" aria-hidden /> {t("actions.adjust")}
               </Button>
             )}
             {onExportCSV && (
@@ -157,7 +160,7 @@ export function PlanResults({
             {onRecalculate && (
               <Button size="sm" onClick={onRecalculate} disabled={isRecalculating}>
                 <RotateCw className="size-4" aria-hidden />
-                {isRecalculating ? "Recalculating…" : "Recalculate"}
+                {isRecalculating ? t("actions.recalculating") : t("actions.recalculate")}
               </Button>
             )}
           </div>
@@ -206,7 +209,7 @@ export function PlanResults({
   );
 }
 
-function buildWithdrawalMarkers(scenario: Scenario): WithdrawalMarker[] {
+function buildWithdrawalMarkers(scenario: Scenario, t: TFunction): WithdrawalMarker[] {
   const start = parseIsoMonthStart(scenario.start_date);
   if (!start || !scenario.withdrawals) return [];
 
@@ -216,7 +219,7 @@ function buildWithdrawalMarkers(scenario: Scenario): WithdrawalMarker[] {
     if (month === null || month < 0) continue;
     markers.push({
       month,
-      label: `${displayWithdrawalLabel(withdrawal.description, withdrawal.account)} ${formatCLPCompact(withdrawal.amount)}`,
+      label: `${displayWithdrawalLabel(withdrawal.description, withdrawal.account, t)} ${formatCLPCompact(withdrawal.amount)}`,
     });
   }
 
@@ -232,7 +235,7 @@ function buildWithdrawalMarkers(scenario: Scenario): WithdrawalMarker[] {
     if (month === null || month < 0) continue;
     markers.push({
       month,
-      label: `${displayWithdrawalLabel(withdrawal.description, withdrawal.account)} ${formatCLPCompact(withdrawal.base_amount)}`,
+      label: `${displayWithdrawalLabel(withdrawal.description, withdrawal.account, t)} ${formatCLPCompact(withdrawal.base_amount)}`,
     });
   }
 
@@ -251,6 +254,6 @@ function monthDiff(start: Date, target: Date | null): number | null {
   return (target.getFullYear() - start.getFullYear()) * 12 + (target.getMonth() - start.getMonth());
 }
 
-function displayWithdrawalLabel(description: string | undefined, account: string): string {
-  return description?.trim() || `Withdrawal from ${account}`;
+function displayWithdrawalLabel(description: string | undefined, account: string, t: TFunction): string {
+  return description?.trim() || t("withdrawalFallback", { account });
 }

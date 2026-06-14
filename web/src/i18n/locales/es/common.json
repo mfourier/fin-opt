@@ -1,0 +1,66 @@
+{
+  "monthsShort": ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"],
+  "signOut": "Cerrar sesión",
+  "loading": "Cargando…",
+  "closeNotification": "Cerrar notificación",
+  "perMonth": "/mes",
+  "profileRisk": {
+    "none": "Sin cuentas",
+    "growth": "Orientado al crecimiento",
+    "balanced": "Riesgo balanceado",
+    "lower": "Menor volatilidad"
+  },
+  "language": {
+    "label": "Idioma",
+    "es": "ES",
+    "en": "EN",
+    "switchTo": "Cambiar a {{lang}}"
+  },
+  "duration": {
+    "yearShort": "a",
+    "monthShort": "m",
+    "year_one": "{{count}} año",
+    "year_other": "{{count}} años",
+    "month_one": "{{count}} mes",
+    "month_other": "{{count}} meses",
+    "zero": "0 meses"
+  },
+  "confidence": {
+    "describe": "{{n}} de cada 10 escenarios cumplen la meta",
+    "reach_sooner": {
+      "label": "Llegar antes",
+      "blurb": "Apunta a la fecha más temprana. Menos seguro, pero llegas más rápido."
+    },
+    "balanced": {
+      "label": "Equilibrado",
+      "blurb": "Un punto medio sensato entre rapidez y certeza."
+    },
+    "play_it_safe": {
+      "label": "Ir a lo seguro",
+      "blurb": "Apunta a alta certeza. El plan puede tardar un poco más."
+    }
+  },
+  "objectives": {
+    "risky": {
+      "title": "Máximo crecimiento",
+      "subtitle": "Más vaivenes, mayor retorno a largo plazo."
+    },
+    "proportional": {
+      "title": "Estable y parejo",
+      "subtitle": "Un reparto mensual estable y parejo entre tus cuentas.",
+      "tag": "Recomendado"
+    },
+    "conservative": {
+      "title": "Conservador",
+      "subtitle": "Subidas y bajadas más pequeñas, crecimiento más lento.",
+      "tag": "Menor riesgo"
+    },
+    "balanced": {
+      "title": "Balanceado",
+      "subtitle": "Una mezcla estable de crecimiento y estabilidad."
+    },
+    "risky_turnover": {
+      "title": "Crecimiento (estable)"
+    }
+  }
+}

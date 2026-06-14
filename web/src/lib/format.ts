@@ -1,8 +1,22 @@
 // FinOpt formatting helpers. Currency = Chilean pesos (CLP), no decimals.
 
-const clpFormatter = new Intl.NumberFormat("en-US", {
-  maximumFractionDigits: 0,
-});
+import i18n from "@/i18n/config";
+
+/** BCP-47 locale for Intl, derived from the active UI language. */
+function getLocale(): string {
+  return i18n.language === "en" ? "en-US" : "es-CL";
+}
+
+// Cache one NumberFormat per locale (constructing them is comparatively costly).
+const clpFormatters = new Map<string, Intl.NumberFormat>();
+function clpFormatterFor(locale: string): Intl.NumberFormat {
+  let fmt = clpFormatters.get(locale);
+  if (!fmt) {
+    fmt = new Intl.NumberFormat(locale, { maximumFractionDigits: 0 });
+    clpFormatters.set(locale, fmt);
+  }
+  return fmt;
+}
 
 function coerceDate(value: string | Date | null | undefined): Date | null {
   if (value instanceof Date) {
@@ -27,7 +41,7 @@ function coerceDate(value: string | Date | null | undefined): Date | null {
 export function formatCLP(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(value)) return "$0";
   const sign = value < 0 ? "-" : "";
-  return `${sign}$${clpFormatter.format(Math.abs(Math.round(value)))}`;
+  return `${sign}$${clpFormatterFor(getLocale()).format(Math.abs(Math.round(value)))}`;
 }
 
 /** Compact CLP for chart axes: $1.5M, $850K, -$1.5M. */
@@ -40,27 +54,29 @@ export function formatCLPCompact(value: number): string {
   return `${sign}$${Math.round(abs)}`;
 }
 
-/** months → "4y 2m" / "10m" / "3y". */
+/** months → compact, locale-aware: "4y 2m" (en) / "4a 2m" (es). */
 export function formatMonths(totalMonths: number | null | undefined): string {
   if (totalMonths === null || totalMonths === undefined) return "—";
   const m = Math.max(0, Math.round(totalMonths));
   const years = Math.floor(m / 12);
   const months = m % 12;
-  if (years === 0) return `${months}m`;
-  if (months === 0) return `${years}y`;
-  return `${years}y ${months}m`;
+  const y = i18n.t("common:duration.yearShort");
+  const mo = i18n.t("common:duration.monthShort");
+  if (years === 0) return `${months}${mo}`;
+  if (months === 0) return `${years}${y}`;
+  return `${years}${y} ${months}${mo}`;
 }
 
-/** Long form for the hero: "4 years 2 months". */
+/** Long form for the hero: "4 years 2 months" / "4 años 2 meses". */
 export function formatMonthsLong(totalMonths: number | null | undefined): string {
   if (totalMonths === null || totalMonths === undefined) return "—";
   const m = Math.max(0, Math.round(totalMonths));
   const years = Math.floor(m / 12);
   const months = m % 12;
   const parts: string[] = [];
-  if (years > 0) parts.push(`${years} ${years === 1 ? "year" : "years"}`);
-  if (months > 0) parts.push(`${months} ${months === 1 ? "month" : "months"}`);
-  if (parts.length === 0) return "0 months";
+  if (years > 0) parts.push(i18n.t("common:duration.year", { count: years }));
+  if (months > 0) parts.push(i18n.t("common:duration.month", { count: months }));
+  if (parts.length === 0) return i18n.t("common:duration.zero");
   return parts.join(" ");
 }
 
@@ -76,34 +92,20 @@ export function formatPercent(value: number, digits = 0): string {
  * / ~96% *measured* empirical success. We never show the CVaR level — only the
  * preset label here, and the measured empirical on the results page.
  */
+export type ConfidencePresetId = "reach_sooner" | "balanced" | "play_it_safe";
+
 export type ConfidencePreset = {
-  id: "reach_sooner" | "balanced" | "play_it_safe";
+  id: ConfidencePresetId;
   /** Hidden CVaR confidence level written to the goal's `confidence`. */
   value: number;
-  label: string;
-  /** One-line, hedged description of the trade-off (no hard promise). */
-  blurb: string;
 };
 
+// Human-readable label/blurb for each preset id live in the `common:confidence.<id>`
+// translation keys (resolved at render time), so only the model value lives here.
 export const CONFIDENCE_PRESETS: ConfidencePreset[] = [
-  {
-    id: "reach_sooner",
-    value: 0.1,
-    label: "Reach sooner",
-    blurb: "Aim for the earliest date. Less certain, but you get there faster.",
-  },
-  {
-    id: "balanced",
-    value: 0.6,
-    label: "Balanced",
-    blurb: "A sensible middle ground between speed and certainty.",
-  },
-  {
-    id: "play_it_safe",
-    value: 0.9,
-    label: "Play it safe",
-    blurb: "Aim for high certainty. The plan may take a little longer.",
-  },
+  { id: "reach_sooner", value: 0.1 },
+  { id: "balanced", value: 0.6 },
+  { id: "play_it_safe", value: 0.9 },
 ];
 
 export const DEFAULT_CONFIDENCE = CONFIDENCE_PRESETS[1].value; // Balanced (0.60)
@@ -123,7 +125,7 @@ export function presetForConfidence(confidence: number): ConfidencePreset {
  */
 export function describeConfidence(probability: number): string {
   const n = Math.round(probability * 10);
-  return `${n} out of 10 scenarios meet the goal`;
+  return i18n.t("common:confidence.describe", { n });
 }
 
 /**
@@ -148,21 +150,21 @@ export function isFloorGoal(empirical: number, requestedConfidence: number): boo
 export function monthLabel(monthsFromNow: number, start?: string | Date | null): string {
   const base = coerceDate(start) ?? new Date();
   const d = new Date(base.getFullYear(), base.getMonth() + monthsFromNow, 1);
-  return d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+  return d.toLocaleDateString(getLocale(), { month: "short", year: "numeric" });
 }
 
 export function formatMonthYear(value: string | Date | null | undefined): string {
   if (!value) return "—";
   const parsed = coerceDate(value);
   if (!parsed) return "—";
-  return parsed.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+  return parsed.toLocaleDateString(getLocale(), { month: "short", year: "numeric" });
 }
 
 export function formatDateShort(value: string | Date | null | undefined): string {
   if (!value) return "—";
   const parsed = coerceDate(value);
   if (!parsed) return "—";
-  return parsed.toLocaleDateString("en-US", {
+  return parsed.toLocaleDateString(getLocale(), {
     month: "short",
     day: "numeric",
     year: "numeric",

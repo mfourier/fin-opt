@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Area,
   CartesianGrid,
@@ -61,6 +62,7 @@ export function WealthFanChart({
   onFocusChange,
   onTogglePin,
 }: Props) {
+  const { t } = useTranslation("plan");
   const hasAccounts = accounts.length > 0;
   const [view, setView] = useState<View>(hasAccounts ? "accounts" : "total");
 
@@ -123,10 +125,10 @@ export function WealthFanChart({
 
   const subtitle =
     view === "total"
-      ? "Likely range of your total savings over time. Darker band = more likely."
+      ? t("wealth.subtitleTotal")
       : view === "accounts"
-        ? "Median line for each account with its likely range (P25–P75) shaded. Dashed lines show your goals."
-        : `Likely range for ${selected?.display_name ?? view}. Darker band = more likely.`;
+        ? t("wealth.subtitleAccounts")
+        : t("wealth.subtitleAccount", { account: selected?.display_name ?? view });
 
   const tooltipStyle = {
     background: "var(--color-popover)",
@@ -157,7 +159,7 @@ export function WealthFanChart({
     <div className="rounded-2xl border bg-card p-5 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-foreground">Projected wealth</h2>
+          <h2 className="text-base font-semibold text-foreground">{t("wealth.title")}</h2>
           <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
         </div>
         {hasAccounts && (
@@ -165,8 +167,8 @@ export function WealthFanChart({
             value={view}
             onChange={setView}
             options={[
-              { value: "accounts", label: "All accounts" },
-              { value: "total", label: "Total" },
+              { value: "accounts", label: t("wealth.viewAllAccounts") },
+              { value: "total", label: t("wealth.viewTotal") },
               ...accounts.map((a) => ({ value: a.account, label: a.display_name })),
             ]}
           />
@@ -351,9 +353,9 @@ export function WealthFanChart({
                 labelFormatter={(m) => monthLabel(Number(m), startDate)}
                 formatter={(value: number, name: string) => {
                   const labels: Record<string, string> = {
-                    p50: "Median (P50)",
-                    p10: "Pessimistic (P10)",
-                    p90: "Optimistic (P90)",
+                    p50: t("wealth.tooltip.p50"),
+                    p10: t("wealth.tooltip.p10"),
+                    p90: t("wealth.tooltip.p90"),
                     p25: "P25",
                     p75: "P75",
                   };
@@ -448,7 +450,7 @@ export function WealthFanChart({
                   strokeOpacity={highlightWithdrawals ? 0.35 : dimForFocus && !highlightGoals ? 0.45 : 1}
                   ifOverflow="extendDomain"
                   label={{
-                    value: `Goal: ${formatCLPCompact(g.threshold)}`,
+                    value: t("wealth.goalLabel", { amount: formatCLPCompact(g.threshold) }),
                     position: "insideTopRight",
                     fill: "var(--color-success)",
                     fontSize: 11,
@@ -505,13 +507,14 @@ function FanLegend({
   onFocusChange: (focus: ExplainerFocus | null) => void;
   onTogglePin: (focus: ExplainerFocus) => void;
 }) {
+  const { t } = useTranslation("plan");
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
-      <LegendItem color={color} label="Median" focus="median" activeFocus={activeFocus} pinnedFocus={pinnedFocus} onFocusChange={onFocusChange} onTogglePin={onTogglePin} />
-      <LegendItem color={color} opacity={0.3} label="Likely range (P25–P75)" focus="likely-band" activeFocus={activeFocus} pinnedFocus={pinnedFocus} onFocusChange={onFocusChange} onTogglePin={onTogglePin} />
-      <LegendItem color={color} opacity={0.15} label="Possible range (P10–P90)" focus="possible-band" activeFocus={activeFocus} pinnedFocus={pinnedFocus} onFocusChange={onFocusChange} onTogglePin={onTogglePin} />
-      {showGoal && <LegendItem color="var(--color-success)" label="Goal" dashed focus="goal-target" activeFocus={activeFocus} pinnedFocus={pinnedFocus} onFocusChange={onFocusChange} onTogglePin={onTogglePin} />}
-      {showWithdrawal && <LegendItem color="var(--color-danger)" label="Withdrawal" dashed focus="withdrawal" activeFocus={activeFocus} pinnedFocus={pinnedFocus} onFocusChange={onFocusChange} onTogglePin={onTogglePin} />}
+      <LegendItem color={color} label={t("wealth.legend.median")} focus="median" activeFocus={activeFocus} pinnedFocus={pinnedFocus} onFocusChange={onFocusChange} onTogglePin={onTogglePin} />
+      <LegendItem color={color} opacity={0.3} label={t("wealth.legend.likelyRange")} focus="likely-band" activeFocus={activeFocus} pinnedFocus={pinnedFocus} onFocusChange={onFocusChange} onTogglePin={onTogglePin} />
+      <LegendItem color={color} opacity={0.15} label={t("wealth.legend.possibleRange")} focus="possible-band" activeFocus={activeFocus} pinnedFocus={pinnedFocus} onFocusChange={onFocusChange} onTogglePin={onTogglePin} />
+      {showGoal && <LegendItem color="var(--color-success)" label={t("wealth.legend.goal")} dashed focus="goal-target" activeFocus={activeFocus} pinnedFocus={pinnedFocus} onFocusChange={onFocusChange} onTogglePin={onTogglePin} />}
+      {showWithdrawal && <LegendItem color="var(--color-danger)" label={t("wealth.legend.withdrawal")} dashed focus="withdrawal" activeFocus={activeFocus} pinnedFocus={pinnedFocus} onFocusChange={onFocusChange} onTogglePin={onTogglePin} />}
     </div>
   );
 }
@@ -535,14 +538,15 @@ function AccountsLegend({
   onFocusChange: (focus: ExplainerFocus | null) => void;
   onTogglePin: (focus: ExplainerFocus) => void;
 }) {
+  const { t } = useTranslation("plan");
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
       {accounts.map((a) => (
         <LegendItem key={a.account} color={colorOf(a.account)} label={a.display_name} focus="wealth" activeFocus={activeFocus} pinnedFocus={pinnedFocus} onFocusChange={onFocusChange} onTogglePin={onTogglePin} />
       ))}
-      <LegendItem color="var(--color-muted-foreground)" opacity={0.35} label="Likely range (P25–P75)" focus="likely-band" activeFocus={activeFocus} pinnedFocus={pinnedFocus} onFocusChange={onFocusChange} onTogglePin={onTogglePin} />
-      {showGoal && <LegendItem color="var(--color-muted-foreground)" label="Goal" dashed focus="goal-target" activeFocus={activeFocus} pinnedFocus={pinnedFocus} onFocusChange={onFocusChange} onTogglePin={onTogglePin} />}
-      {showWithdrawal && <LegendItem color="var(--color-danger)" label="Withdrawal" dashed focus="withdrawal" activeFocus={activeFocus} pinnedFocus={pinnedFocus} onFocusChange={onFocusChange} onTogglePin={onTogglePin} />}
+      <LegendItem color="var(--color-muted-foreground)" opacity={0.35} label={t("wealth.legend.likelyRange")} focus="likely-band" activeFocus={activeFocus} pinnedFocus={pinnedFocus} onFocusChange={onFocusChange} onTogglePin={onTogglePin} />
+      {showGoal && <LegendItem color="var(--color-muted-foreground)" label={t("wealth.legend.goal")} dashed focus="goal-target" activeFocus={activeFocus} pinnedFocus={pinnedFocus} onFocusChange={onFocusChange} onTogglePin={onTogglePin} />}
+      {showWithdrawal && <LegendItem color="var(--color-danger)" label={t("wealth.legend.withdrawal")} dashed focus="withdrawal" activeFocus={activeFocus} pinnedFocus={pinnedFocus} onFocusChange={onFocusChange} onTogglePin={onTogglePin} />}
     </div>
   );
 }

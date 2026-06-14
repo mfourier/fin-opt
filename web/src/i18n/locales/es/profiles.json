@@ -1,0 +1,73 @@
+{
+  "title": "Mi situación",
+  "subtitle": "Organiza lo que puedes invertir, los saldos y cuentas que alimentan cada plan que construyes en FinOpt.",
+  "newSituation": "Nueva situación",
+  "summary": {
+    "saved": "Situaciones guardadas",
+    "savedDetail": "Configuraciones financieras reutilizables para planes futuros.",
+    "savedEmpty": "Crea tu primera situación.",
+    "primaryBalance": "Saldo principal",
+    "primaryBalanceDetail": "De {{name}}.",
+    "primaryBalanceEmpty": "Agrega saldos de cuentas para construir una base.",
+    "investingPower": "Inversión mensual",
+    "investingPowerDetail": "Estimado a partir de {{name}}.",
+    "investingPowerEmpty": "Agrega cuánto puedes invertir para desbloquear mejores planes.",
+    "expectedReturn": "Retorno anual esperado",
+    "expectedReturnDetail": "Ponderado por los saldos en {{name}}.",
+    "expectedReturnEmpty": "Agrega cuentas para estimar el crecimiento del portafolio."
+  },
+  "primaryNote": "Las métricas principales de esta página se basan en tu situación principal, <name>{{name}}</name>.",
+  "close": "Cerrar",
+  "loading": "Cargando tus situaciones...",
+  "emptyTitle": "Aún no hay situaciones.",
+  "emptyBody": "Primero agrega cuánto puedes invertir y los saldos de tus cuentas, luego úsalos en todos los planes que quieras.",
+  "createFirst": "Crea tu primera situación",
+  "demo": "Demo",
+  "descriptionFallback": "Una configuración financiera reutilizable para planes futuros.",
+  "metrics": {
+    "startingBalance": "Saldo inicial",
+    "monthlyInvestment": "Inviertes al mes",
+    "linkedPlans": "Planes vinculados"
+  },
+  "funding": {
+    "title": "Cómo inviertes",
+    "subtitle": "Cómo se reparte lo que inviertes cada mes.",
+    "fixedIncome": "Inversión regular",
+    "variableIncome": "Inversión extra",
+    "expectedReturn": "Retorno esperado",
+    "incomeMix": "Composición",
+    "incomeMixValue": "{{pct}} regular"
+  },
+  "accountMix": {
+    "title": "Mezcla de cuentas",
+    "subtitle": "Las cuentas con mayor saldo dentro de esta situación.",
+    "returnVol": "{{ret}} retorno · {{vol}} vol",
+    "ofTotal": "{{pct}} del total"
+  },
+  "actions": {
+    "readOnly": "Ejemplo de solo lectura",
+    "viewDemoPlan": "Ver plan demo",
+    "createPlan": "Crear plan",
+    "edit": "Editar",
+    "delete": "Eliminar",
+    "confirmDelete": "¿Eliminar esta situación?"
+  },
+  "toast": {
+    "saved": "Situación guardada",
+    "savedDetail": "Tu situación ha sido creada.",
+    "saveFailed": "No se pudo guardar la situación",
+    "updated": "Situación actualizada",
+    "updatedDetail": "Tus cambios se han guardado.",
+    "updateFailed": "No se pudo actualizar la situación",
+    "deleted": "Situación eliminada",
+    "deletedDetail": "La situación ha sido eliminada.",
+    "deleteFailed": "No se pudo eliminar la situación",
+    "nameInUse": "Nombre ya en uso",
+    "alreadyExists": "La situación ya existe",
+    "duplicateDetail": "Elige un nombre de situación diferente o edita la existente."
+  },
+  "error": {
+    "duplicate": "Ya existe una situación con ese nombre en tu cuenta. Usa un nombre diferente o edita la existente.",
+    "unexpected": "Ocurrió un error inesperado al guardar tu situación."
+  }
+}

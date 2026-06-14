@@ -579,6 +579,22 @@ The redesigned UI is generated in **Lovable** (source repo `mfourier/lovable-fin
 - Cast values whose `database.ts` type widens a literal union to `string` (e.g. `objective`, `goal_status.type`) with `as unknown as` at the call site.
 - Generate one screen at a time as presentational components. Spec + prompts live in `web/DESIGN_BRIEF.md` and `web/LOVABLE_PROMPT*.md` (gitignored, kept locally).
 
+> **Note (2026-06):** Lovable is no longer used — the redesigned screens above were the final harvest. New/edited UI is authored directly in this repo.
+
+### Internationalization (i18n)
+
+The web app ships English + Spanish (**Spanish is the default**), toggled at runtime via the `LanguageToggle` in the header (mirrors `ThemeToggle`). Built on **react-i18next**.
+
+- **Setup:** `web/src/i18n/config.ts` initializes i18next. Resources are **auto-loaded** via `import.meta.glob('./locales/*/*.json')` — adding a namespace is just dropping `locales/<lang>/<namespace>.json` for every language; never edit `config.ts` for new strings. Default `es`, detection from `localStorage` only (key `finopt-lang`), so the default stays predictable; `<html lang>` is kept in sync.
+- **Namespaces** (per screen + shared): `common` (default NS: buttons, months, `duration`, `confidence` presets, `objectives`), `layout`, `login`, `situation`, `goals`. Add `plan`, `dashboard`, etc. as more screens are translated.
+- **Usage:** `const { t } = useTranslation('<ns>')`, then `t('key')`. Cross-namespace keys use the `ns:key` form (e.g. `t('common:objectives.proportional.title')`).
+- **Conventions (follow these):**
+  - **Data vs. display.** Constants that drive logic keep only ids/numbers (e.g. `RISK_PRESETS`, `OBJECTIVES`, `CONFIDENCE_PRESETS`); their labels live under `t(\`<ns>:....${id}.title\`)` resolved at render. Shared option text (objectives, confidence presets) lives in `common` so the wizard and the plan/scenario screens reuse one source.
+  - **Inline markup** (a bold amount inside a sentence): use `<Trans i18nKey=... components={{ amount: <span/> }}/>` with `<tag>{{var}}</tag>` placeholders — do not concatenate JSX fragments.
+  - **Locale-aware formatting** lives in `web/src/lib/format.ts`: it reads the active language off the i18n singleton (`getLocale()`), so currency/dates/durations follow the toggle. Don't hardcode `en-US` or English `y`/`month` suffixes in components — call the `format.ts` helpers.
+  - **New screens:** author with `t()` keys from the start; never commit literal user-facing English in JSX. Add the matching `es` + `en` keys together and run `npm run i18n:check`.
+- **Guardrail:** `npm run i18n:check` (script `web/scripts/check-i18n.mjs`) runs three gating checks: (1) **parity** — `es`/`en` key sets match per namespace; (2) **usage** — every literal `t('…')`/`i18nKey` referenced in code exists, scoped to the namespace(s) the file declares via `useTranslation(...)` (catches typos and wrong-namespace bindings that render the raw key at runtime — tsc/build never see these); (3) **dynamic** — template keys `t(`x.${id}.y`)` are registered in `DYNAMIC_KEY_FAMILIES` and every expansion is verified. When you add a new dynamic-key pattern in the UI, register it there. Run after touching locale files or `t()` calls; wire into CI before relying on it.
+
 ## References
 
 The mathematical framework is based on:

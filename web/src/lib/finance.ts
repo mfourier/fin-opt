@@ -27,12 +27,6 @@ export function getProfileStartingBalance(profile: Pick<Profile, 'accounts_confi
   return profile.accounts_config.reduce((sum, account) => sum + (account.initial_wealth ?? 0), 0)
 }
 
-export function getProfileMonthlyIncome(profile: Pick<Profile, 'income_config'>) {
-  const fixedIncome = profile.income_config.fixed?.base ?? 0
-  const variableIncome = profile.income_config.variable?.base ?? 0
-  return fixedIncome + variableIncome
-}
-
 export function getProfileMonthlyContributionCapacity(profile: Pick<Profile, 'income_config'>) {
   const fixedIncome = profile.income_config.fixed?.base ?? 0
   const variableIncome = profile.income_config.variable?.base ?? 0
@@ -63,8 +57,11 @@ export function getProfileWeightedVolatility(profile: Pick<Profile, 'accounts_co
 }
 
 export function getProfileIncomeMix(profile: Pick<Profile, 'income_config'>) {
-  const fixedIncome = profile.income_config.fixed?.base ?? 0
-  const variableIncome = profile.income_config.variable?.base ?? 0
+  // Rate-aware so the regular/extra split matches the monthly-investment
+  // metric (fixedIncome + variableIncome === monthly contribution capacity).
+  const { income_config } = profile
+  const fixedIncome = (income_config.fixed?.base ?? 0) * averageRate(income_config.contribution_rate_fixed)
+  const variableIncome = (income_config.variable?.base ?? 0) * averageRate(income_config.contribution_rate_variable)
   const totalIncome = fixedIncome + variableIncome
   return {
     fixedIncome,
@@ -74,12 +71,15 @@ export function getProfileIncomeMix(profile: Pick<Profile, 'income_config'>) {
   }
 }
 
-export function describeProfileRisk(profile: Pick<Profile, 'accounts_config'>) {
-  if (profile.accounts_config.length === 0) return 'No accounts'
+export type ProfileRiskLevel = 'none' | 'growth' | 'balanced' | 'lower'
+
+// Returns a stable id; the human-readable label lives in `common:profileRisk.<id>`.
+export function describeProfileRisk(profile: Pick<Profile, 'accounts_config'>): ProfileRiskLevel {
+  if (profile.accounts_config.length === 0) return 'none'
   const weightedVolatility = getProfileWeightedVolatility(profile)
-  if (weightedVolatility >= 0.14) return 'Growth oriented'
-  if (weightedVolatility >= 0.08) return 'Balanced risk'
-  return 'Lower volatility'
+  if (weightedVolatility >= 0.14) return 'growth'
+  if (weightedVolatility >= 0.08) return 'balanced'
+  return 'lower'
 }
 
 export function getProfileTopAccounts(profile: Pick<Profile, 'accounts_config'>, limit = 3) {

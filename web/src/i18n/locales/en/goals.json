@@ -1,0 +1,86 @@
+{
+  "steps": {
+    "basics": "Basics",
+    "goals": "Your goals",
+    "review": "Review"
+  },
+  "stepper": {
+    "stepOf": "Step {{current}} of {{total}}"
+  },
+  "nav": {
+    "cancel": "Cancel",
+    "back": "Back",
+    "next": "Next",
+    "calculate": "Calculate my plan"
+  },
+  "remove": "Remove",
+  "basics": {
+    "title": "The basics",
+    "subtitle": "Tell us which situation this plan is for and how you want to invest.",
+    "situationLabel": "Which situation is this plan for?",
+    "situationPlaceholder": "Pick a situation",
+    "nameLabel": "Plan name",
+    "namePlaceholder": "e.g. Apartment down payment",
+    "startDateLabel": "Start date",
+    "descriptionLabel": "Short description (optional)",
+    "descriptionPlaceholder": "Anything helpful to remember about this plan.",
+    "styleTitle": "Investment style",
+    "styleSubtitle": "Pick how we balance growth and diversification across your accounts.",
+    "styleAria": "Investment style"
+  },
+  "goals": {
+    "title": "Your goals",
+    "subtitle": "Tell us how much you want to reach and how sure you want to be.",
+    "goalN": "Goal {{n}}",
+    "removeGoal": "Remove goal {{n}}",
+    "amountLabel": "How much do you want?",
+    "accountLabel": "In which account?",
+    "accountPlaceholder": "Pick an account",
+    "addGoal": "Add another goal",
+    "amountShort": "Amount",
+    "accountShort": "Account",
+    "dateShort": "Date"
+  },
+  "dated": {
+    "title": "Goals with a deadline",
+    "subtitle": "Optional · e.g. an emergency fund ready by a certain date.",
+    "empty": "No dated goals yet. These are useful when something must be ready by a specific date.",
+    "goalN": "Dated goal {{n}}",
+    "byLabel": "By",
+    "dateError": "The date must be after the plan's start date.",
+    "add": "Add a dated goal"
+  },
+  "confidence": {
+    "question": "How sure do you want to be?"
+  },
+  "withdrawals": {
+    "title": "Planned withdrawals",
+    "subtitle": "Optional · money you'll take out along the way.",
+    "onetimeTitle": "One-time withdrawals",
+    "onetimeSubtitle": "A specific amount taken out on a specific date.",
+    "noteLabel": "Note (optional)",
+    "notePlaceholderScheduled": "e.g. tuition payment",
+    "addOnetime": "Add a one-time withdrawal",
+    "variableTitle": "Recurring or variable withdrawals",
+    "variableSubtitle": "Advanced · for living expenses that vary month to month.",
+    "baseAmount": "Base amount",
+    "sigma": "Variability (sigma)",
+    "floor": "Floor (optional)",
+    "cap": "Cap (optional)",
+    "notePlaceholderVariable": "e.g. living expenses",
+    "addVariable": "Add a variable withdrawal"
+  },
+  "review": {
+    "title": "Review your plan",
+    "subtitle": "We'll find the shortest time to reach your goals.",
+    "situation": "Situation",
+    "planName": "Plan name",
+    "startDate": "Start date",
+    "style": "Investment style",
+    "goalsTitle": "Goals",
+    "reachLine": "Reach <amount>{{amount}}</amount> in <acct>{{account}}</acct>",
+    "datedLine": "By <date>{{date}}</date>: reach <amount>{{amount}}</amount> in <acct>{{account}}</acct>",
+    "scheduledLine": "<amount>{{amount}}</amount> from <acct>{{account}}</acct> on <date>{{date}}</date>",
+    "variableLine": "About <amount>{{amount}}</amount> from <acct>{{account}}</acct> (variable)"
+  }
+}

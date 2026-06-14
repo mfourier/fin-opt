@@ -1,0 +1,107 @@
+{
+  "basics": {
+    "title": "Lo básico",
+    "subtitle": "Ponle un nombre a esta situación para reutilizarla en tus planes.",
+    "nameLabel": "Nombre",
+    "nameError": "Ponle un nombre",
+    "namePlaceholder": "ej. Mis finanzas",
+    "descriptionLabel": "Descripción breve (opcional)",
+    "descriptionPlaceholder": "Algo útil que recordar sobre esta situación."
+  },
+  "income": {
+    "title": "Lo que puedes invertir",
+    "subtitle": "Cuánto puedes destinar a invertir cada mes. No te pedimos tu sueldo.",
+    "monthlyLabel": "¿Cuánto inviertes al mes?",
+    "monthlyHint": "Es el monto que destinas a invertir.",
+    "monthlyError": "Ingresa cuánto puedes invertir.",
+    "varyTitle": "¿Varía mes a mes?",
+    "varySubtitle": "Opcional · ajusta cuánto inviertes en meses específicos.",
+    "varyEnable": "Activar variación mensual",
+    "varyClear": "Volver a un monto fijo",
+    "varyHint": "1.0 = tu monto típico. 0.5 = la mitad ese mes.",
+    "growthTitle": "¿Crece tu inversión?",
+    "growthSubtitle": "Opcional · cuánto aumentas lo que inviertes con el tiempo.",
+    "expectedRaiseLabel": "Crecimiento anual de tu inversión",
+    "variableTitle": "Inversiones extra o irregulares",
+    "variableSubtitle": "Opcional · aportes puntuales o que cambian mes a mes (ej. inviertes un bono).",
+    "addVariable": "Agregar inversión extra",
+    "typicalAmountLabel": "Monto típico",
+    "varyLabel": "¿Cuánto varía?",
+    "advanced": "Avanzado",
+    "floorLabel": "Mínimo por mes (piso)",
+    "capLabel": "Máximo por mes (techo)",
+    "removeVariable": "Quitar inversión extra"
+  },
+  "accounts": {
+    "title": "Dónde inviertes",
+    "subtitle": "Lista cada cuenta o portafolio en el que estás ahorrando.",
+    "add": "Agregar cuenta",
+    "duplicateError": "Los nombres de las cuentas deben ser únicos.",
+    "correlationTitle": "Cómo se mueven tus cuentas en conjunto",
+    "correlationSubtitle": "Opcional · avanzado. Déjalo así si no estás seguro.",
+    "accountN": "Cuenta {{n}}",
+    "removeAccount": "Quitar cuenta {{n}}",
+    "remove": "Quitar",
+    "nameLabel": "Nombre de la cuenta",
+    "namePlaceholder": "ej. Ahorro seguro",
+    "initialLabel": "¿Cuánto hay ya ahí?",
+    "riskLabel": "Riesgo",
+    "riskGroupLabel": "Preajuste de riesgo",
+    "returnLabel": "Retorno anual esperado",
+    "volatilityLabel": "Volatilidad (qué tan inestable)"
+  },
+  "risk": {
+    "recommendedTag": "Recomendado",
+    "savings": {
+      "title": "Ahorro y efectivo",
+      "subtitle": "Cuentas de ahorro, depósitos a plazo y fondos money-market. Casi no se mueve.",
+      "range": "~3–6% / año"
+    },
+    "conservative": {
+      "title": "Conservador",
+      "subtitle": "Fondos mutuos de renta fija / bonos. Pequeñas subidas y bajadas.",
+      "range": "~5–8% / año"
+    },
+    "balanced": {
+      "title": "Balanceado",
+      "subtitle": "Fondos mixtos — acciones y bonos juntos. Una mezcla estable.",
+      "range": "~8–12% / año"
+    },
+    "aggressive": {
+      "title": "Agresivo",
+      "subtitle": "Acciones y fondos o ETFs de renta variable global. Más vaivenes, más crecimiento.",
+      "range": "~12–16% / año"
+    },
+    "custom": {
+      "title": "Personalizado",
+      "subtitle": "Define tus propios números."
+    }
+  },
+  "variability": {
+    "label": "Variabilidad",
+    "low": { "title": "Baja", "subtitle": "Bastante estable" },
+    "medium": { "title": "Media", "subtitle": "Algunos vaivenes" },
+    "high": { "title": "Alta", "subtitle": "Grandes vaivenes" },
+    "custom": { "title": "Personalizada", "subtitle": "Define la tuya" }
+  },
+  "raises": {
+    "title": "Aumentos programados",
+    "dateLabel": "Fecha",
+    "increaseLabel": "Cuánto aumenta",
+    "add": "Agregar"
+  },
+  "seasonality": {
+    "title": "Patrón mensual",
+    "hint": "1.0 = mes típico. 1.5 = 50% más alto que lo típico.",
+    "clear": "Limpiar",
+    "enable": "Activar"
+  },
+  "correlation": {
+    "hint": "−1 = se mueven opuesto, 0 = independientes, +1 = se mueven juntos.",
+    "reset": "Volver a independientes"
+  },
+  "footer": {
+    "cancel": "Cancelar",
+    "save": "Guardar situación"
+  }
+}

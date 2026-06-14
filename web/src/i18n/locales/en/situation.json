@@ -1,0 +1,107 @@
+{
+  "basics": {
+    "title": "The basics",
+    "subtitle": "Give this situation a name so you can reuse it across plans.",
+    "nameLabel": "Name",
+    "nameError": "Give it a name",
+    "namePlaceholder": "e.g. My finances",
+    "descriptionLabel": "Short description (optional)",
+    "descriptionPlaceholder": "Anything helpful to remember about this situation."
+  },
+  "income": {
+    "title": "What you can invest",
+    "subtitle": "How much you can put toward investing each month. We don't ask for your salary.",
+    "monthlyLabel": "How much do you invest per month?",
+    "monthlyHint": "This is the amount you set aside to invest.",
+    "monthlyError": "Enter how much you can invest.",
+    "varyTitle": "Does it vary month to month?",
+    "varySubtitle": "Optional · adjust how much you invest in specific months.",
+    "varyEnable": "Enable monthly variation",
+    "varyClear": "Back to a fixed amount",
+    "varyHint": "1.0 = your typical amount. 0.5 = half that month.",
+    "growthTitle": "Does your investment grow?",
+    "growthSubtitle": "Optional · how much you increase what you invest over time.",
+    "expectedRaiseLabel": "Yearly growth of your investment",
+    "variableTitle": "Extra or irregular investments",
+    "variableSubtitle": "Optional · one-off or month-to-month contributions (e.g. you invest a bonus).",
+    "addVariable": "Add extra investment",
+    "typicalAmountLabel": "Typical amount",
+    "varyLabel": "How much does it vary?",
+    "advanced": "Advanced",
+    "floorLabel": "Minimum per month (floor)",
+    "capLabel": "Maximum per month (cap)",
+    "removeVariable": "Remove extra investment"
+  },
+  "accounts": {
+    "title": "Where you invest",
+    "subtitle": "List each account or portfolio you're saving into.",
+    "add": "Add account",
+    "duplicateError": "Account names must be unique.",
+    "correlationTitle": "How your accounts move together",
+    "correlationSubtitle": "Optional · advanced. Leave alone if unsure.",
+    "accountN": "Account {{n}}",
+    "removeAccount": "Remove account {{n}}",
+    "remove": "Remove",
+    "nameLabel": "Account name",
+    "namePlaceholder": "e.g. Safe savings",
+    "initialLabel": "How much is already there?",
+    "riskLabel": "Risk",
+    "riskGroupLabel": "Risk preset",
+    "returnLabel": "Expected annual return",
+    "volatilityLabel": "Volatility (how bumpy)"
+  },
+  "risk": {
+    "recommendedTag": "Recommended",
+    "savings": {
+      "title": "Savings & cash",
+      "subtitle": "Savings accounts, term deposits and money-market funds. Barely moves.",
+      "range": "~3–6% / yr"
+    },
+    "conservative": {
+      "title": "Conservative",
+      "subtitle": "Fixed-income / bond mutual funds. Small ups and downs.",
+      "range": "~5–8% / yr"
+    },
+    "balanced": {
+      "title": "Balanced",
+      "subtitle": "Mixed funds — stocks and bonds together. A steady mix.",
+      "range": "~8–12% / yr"
+    },
+    "aggressive": {
+      "title": "Aggressive",
+      "subtitle": "Stocks and global equity funds or ETFs. Bigger swings, more growth.",
+      "range": "~12–16% / yr"
+    },
+    "custom": {
+      "title": "Custom",
+      "subtitle": "Set your own numbers."
+    }
+  },
+  "variability": {
+    "label": "Variability",
+    "low": { "title": "Low", "subtitle": "Pretty steady" },
+    "medium": { "title": "Medium", "subtitle": "Some swings" },
+    "high": { "title": "High", "subtitle": "Big swings" },
+    "custom": { "title": "Custom", "subtitle": "Set your own" }
+  },
+  "raises": {
+    "title": "Scheduled increases",
+    "dateLabel": "Date",
+    "increaseLabel": "Increase amount",
+    "add": "Add"
+  },
+  "seasonality": {
+    "title": "Monthly pattern",
+    "hint": "1.0 = typical month. 1.5 = 50% higher than typical.",
+    "clear": "Clear",
+    "enable": "Enable"
+  },
+  "correlation": {
+    "hint": "−1 means they move opposite, 0 means independent, +1 means they move together.",
+    "reset": "Reset to independent"
+  },
+  "footer": {
+    "cancel": "Cancel",
+    "save": "Save situation"
+  }
+}

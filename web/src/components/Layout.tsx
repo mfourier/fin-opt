@@ -1,20 +1,23 @@
 import { Suspense } from 'react'
 import { Outlet, Link, useLocation } from 'react-router-dom'
 import { LogOut } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../lib/store'
 import { FinOptWordmark } from './finopt/FinOptWordmark'
 import { Button } from './ui/button'
 import { ThemeToggle } from './ThemeToggle'
+import { LanguageToggle } from './LanguageToggle'
 import RouteLoader from './RouteLoader'
 
 const navigation = [
-  { name: 'Dashboard', href: '/' },
-  { name: 'My situation', href: '/profiles' },
-  { name: 'Plans', href: '/scenarios' },
+  { key: 'nav.dashboard', href: '/' },
+  { key: 'nav.situation', href: '/profiles' },
+  { key: 'nav.plans', href: '/scenarios' },
 ]
 
 export default function Layout() {
   const location = useLocation()
+  const { t } = useTranslation(['layout', 'common'])
   const signOut = useAuthStore((state) => state.signOut)
   const user = useAuthStore((state) => state.user)
 
@@ -33,7 +36,7 @@ export default function Layout() {
                   const isActive = location.pathname === item.href
                   return (
                     <Link
-                      key={item.name}
+                      key={item.key}
                       to={item.href}
                       className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                         isActive
@@ -41,20 +44,21 @@ export default function Layout() {
                           : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                       }`}
                     >
-                      {item.name}
+                      {t(item.key)}
                     </Link>
                   )
                 })}
               </div>
             </div>
             <div className="flex items-center gap-3">
+              <LanguageToggle className="rounded-lg" />
               <ThemeToggle className="rounded-lg" />
               <span className="hidden max-w-[14rem] truncate text-sm text-muted-foreground md:inline">
                 {user?.email}
               </span>
               <Button variant="outline" size="sm" className="rounded-lg" onClick={signOut}>
                 <LogOut className="h-4 w-4" />
-                <span className="hidden sm:inline">Sign out</span>
+                <span className="hidden sm:inline">{t('common:signOut')}</span>
               </Button>
             </div>
           </div>
@@ -65,7 +69,7 @@ export default function Layout() {
               const isActive = location.pathname === item.href
               return (
                 <Link
-                  key={item.name}
+                  key={item.key}
                   to={item.href}
                   className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                     isActive
@@ -73,7 +77,7 @@ export default function Layout() {
                       : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                   }`}
                 >
-                  {item.name}
+                  {t(item.key)}
                 </Link>
               )
             })}
@@ -83,7 +87,7 @@ export default function Layout() {
 
       {/* Main content */}
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <Suspense fallback={<RouteLoader label="Loading section…" />}>
+        <Suspense fallback={<RouteLoader />}>
           <Outlet />
         </Suspense>
       </main>

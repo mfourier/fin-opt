@@ -1,5 +1,6 @@
 import * as React from "react";
 import { Check, ChevronLeft, ChevronRight, Plus, Trash2, Calculator } from "lucide-react";
+import { Trans, useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,23 +44,16 @@ type Props = {
 
 type Objective = ScenarioDraft["objective"];
 
-const OBJECTIVES: { id: Objective; title: string; subtitle: string; tag?: string }[] = [
-  { id: "risky", title: "Maximum growth", subtitle: "Higher swings, higher long-term return." },
-  {
-    id: "proportional",
-    title: "Steady & even",
-    subtitle: "A stable, even monthly split across your accounts.",
-    tag: "Recommended",
-  },
-  {
-    id: "conservative",
-    title: "Conservative",
-    subtitle: "Smaller ups and downs, slower growth.",
-    tag: "Lower risk",
-  },
+// Display strings (title/subtitle/tag) come from the `common:objectives.<id>` keys;
+// only the option ids (offered in the wizard) live here.
+const OBJECTIVES: { id: Objective }[] = [
+  { id: "risky" },
+  { id: "proportional" },
+  { id: "conservative" },
 ];
 
-const STEPS = ["Basics", "Your goals", "Review"] as const;
+// Step ids; labels are resolved from `goals:steps.<id>`.
+const STEPS = ["basics", "goals", "review"] as const;
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
@@ -79,6 +73,7 @@ function snapGoalConfidence<T extends { confidence: number }>(goal: T): T {
 }
 
 export function GoalsWizard({ profiles, initialDraft, onCalculate, onCancel }: Props) {
+  const { t } = useTranslation("goals");
   const defaultProfileId = initialDraft?.profile_id ?? profiles[0]?.id ?? "";
   const [step, setStep] = React.useState(0);
 
@@ -150,7 +145,7 @@ export function GoalsWizard({ profiles, initialDraft, onCalculate, onCancel }: P
         <div className="flex items-center gap-2">
           {onCancel && (
             <Button variant="ghost" size="sm" onClick={onCancel}>
-              Cancel
+              {t("nav.cancel")}
             </Button>
           )}
         </div>
@@ -161,15 +156,15 @@ export function GoalsWizard({ profiles, initialDraft, onCalculate, onCancel }: P
             onClick={() => setStep((s) => Math.max(0, s - 1))}
             disabled={step === 0}
           >
-            <ChevronLeft className="size-4" aria-hidden /> Back
+            <ChevronLeft className="size-4" aria-hidden /> {t("nav.back")}
           </Button>
           {step < STEPS.length - 1 ? (
             <Button size="sm" onClick={() => setStep((s) => s + 1)} disabled={!canNext}>
-              Next <ChevronRight className="size-4" aria-hidden />
+              {t("nav.next")} <ChevronRight className="size-4" aria-hidden />
             </Button>
           ) : (
             <Button size="sm" onClick={() => onCalculate(draft)}>
-              <Calculator className="size-4" aria-hidden /> Calculate my plan
+              <Calculator className="size-4" aria-hidden /> {t("nav.calculate")}
             </Button>
           )}
         </div>
@@ -181,13 +176,14 @@ export function GoalsWizard({ profiles, initialDraft, onCalculate, onCancel }: P
 /* ---------------- Stepper ---------------- */
 
 function Stepper({ step }: { step: number }) {
+  const { t } = useTranslation("goals");
   return (
     <ol className="flex items-center gap-3 rounded-2xl border bg-card p-4">
-      {STEPS.map((label, i) => {
+      {STEPS.map((stepId, i) => {
         const isDone = i < step;
         const isCurrent = i === step;
         return (
-          <li key={label} className="flex flex-1 items-center gap-3">
+          <li key={stepId} className="flex flex-1 items-center gap-3">
             <div
               className={cn(
                 "grid size-8 shrink-0 place-items-center rounded-full text-xs font-semibold ring-1",
@@ -201,7 +197,7 @@ function Stepper({ step }: { step: number }) {
             </div>
             <div className="min-w-0">
               <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                Step {i + 1} of {STEPS.length}
+                {t("stepper.stepOf", { current: i + 1, total: STEPS.length })}
               </p>
               <p
                 className={cn(
@@ -209,7 +205,7 @@ function Stepper({ step }: { step: number }) {
                   isCurrent || isDone ? "text-foreground" : "text-muted-foreground",
                 )}
               >
-                {label}
+                {t(`steps.${stepId}`)}
               </p>
             </div>
             {i < STEPS.length - 1 && (
@@ -239,23 +235,24 @@ function StepBasics({
   draft: ScenarioDraft;
   onChange: (p: Partial<ScenarioDraft>) => void;
 }) {
+  const { t } = useTranslation(["goals", "common"]);
   return (
     <section className="space-y-6 rounded-2xl border bg-card p-5 sm:p-6">
       <header>
-        <h2 className="text-base font-semibold text-foreground">The basics</h2>
+        <h2 className="text-base font-semibold text-foreground">{t("basics.title")}</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Tell us which situation this plan is for and how you want to invest.
+          {t("basics.subtitle")}
         </p>
       </header>
 
       <div className="grid gap-5 sm:grid-cols-2">
-        <Field label="Which situation is this plan for?">
+        <Field label={t("basics.situationLabel")}>
           <Select
             value={draft.profile_id}
             onValueChange={(v) => onChange({ profile_id: v, terminal_goals: [] })}
           >
             <SelectTrigger className="h-10">
-              <SelectValue placeholder="Pick a situation" />
+              <SelectValue placeholder={t("basics.situationPlaceholder")} />
             </SelectTrigger>
             <SelectContent>
               {profiles.map((p) => (
@@ -267,16 +264,16 @@ function StepBasics({
           </Select>
         </Field>
 
-        <Field label="Plan name">
+        <Field label={t("basics.nameLabel")}>
           <Input
             value={draft.name}
             onChange={(e) => onChange({ name: e.target.value })}
-            placeholder="e.g. Apartment down payment"
+            placeholder={t("basics.namePlaceholder")}
             className="h-10"
           />
         </Field>
 
-        <Field label="Start date">
+        <Field label={t("basics.startDateLabel")}>
           <Input
             type="date"
             value={draft.start_date}
@@ -285,28 +282,29 @@ function StepBasics({
           />
         </Field>
 
-        <Field label="Short description (optional)">
+        <Field label={t("basics.descriptionLabel")}>
           <Textarea
             value={draft.description}
             onChange={(e) => onChange({ description: e.target.value })}
-            placeholder="Anything helpful to remember about this plan."
+            placeholder={t("basics.descriptionPlaceholder")}
             rows={2}
           />
         </Field>
       </div>
 
       <div>
-        <p className="text-sm font-medium text-foreground">Investment style</p>
+        <p className="text-sm font-medium text-foreground">{t("basics.styleTitle")}</p>
         <p className="mt-1 text-sm text-muted-foreground">
-          Pick how we balance growth and diversification across your accounts.
+          {t("basics.styleSubtitle")}
         </p>
         <div
           role="radiogroup"
-          aria-label="Investment style"
+          aria-label={t("basics.styleAria")}
           className="mt-3 grid gap-3 sm:grid-cols-3"
         >
           {OBJECTIVES.map((o) => {
             const selected = draft.objective === o.id;
+            const tag = t(`common:objectives.${o.id}.tag`, { defaultValue: "" });
             return (
               <button
                 type="button"
@@ -323,8 +321,8 @@ function StepBasics({
                 )}
               >
                 <div className="flex items-start justify-between gap-2">
-                  <p className="font-medium text-foreground">{o.title}</p>
-                  {o.tag && (
+                  <p className="font-medium text-foreground">{t(`common:objectives.${o.id}.title`)}</p>
+                  {tag && (
                     <span
                       className={cn(
                         "rounded-full px-2 py-0.5 text-[10px] font-medium ring-1",
@@ -333,11 +331,11 @@ function StepBasics({
                           : "bg-secondary text-muted-foreground ring-border",
                       )}
                     >
-                      {o.tag}
+                      {tag}
                     </span>
                   )}
                 </div>
-                <p className="mt-1 text-sm text-muted-foreground">{o.subtitle}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{t(`common:objectives.${o.id}.subtitle`)}</p>
                 {selected && (
                   <span className="absolute right-3 top-3 grid size-5 place-items-center rounded-full bg-primary text-primary-foreground">
                     <Check className="size-3" aria-hidden />
@@ -363,6 +361,7 @@ function StepGoals({
   profile: Profile | undefined;
   onChange: (p: Partial<ScenarioDraft>) => void;
 }) {
+  const { t } = useTranslation("goals");
   const accounts = profile?.accounts_config ?? [];
   const firstAccount = accounts[0]?.name ?? "";
 
@@ -410,9 +409,9 @@ function StepGoals({
       <section className="rounded-2xl border bg-card p-5 sm:p-6">
         <header className="flex items-end justify-between gap-3">
           <div>
-            <h2 className="text-base font-semibold text-foreground">Your goals</h2>
+            <h2 className="text-base font-semibold text-foreground">{t("goals.title")}</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Tell us how much you want to reach and how sure you want to be.
+              {t("goals.subtitle")}
             </p>
           </div>
         </header>
@@ -424,32 +423,32 @@ function StepGoals({
               className="rounded-xl border bg-muted/30 p-4"
             >
               <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-medium text-foreground">Goal {i + 1}</p>
+                <p className="text-sm font-medium text-foreground">{t("goals.goalN", { n: i + 1 })}</p>
                 {draft.terminal_goals.length > 1 && (
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => removeTerminal(i)}
-                    aria-label={`Remove goal ${i + 1}`}
+                    aria-label={t("goals.removeGoal", { n: i + 1 })}
                   >
-                    <Trash2 className="size-4" aria-hidden /> Remove
+                    <Trash2 className="size-4" aria-hidden /> {t("remove")}
                   </Button>
                 )}
               </div>
               <div className="mt-3 grid gap-4 sm:grid-cols-2">
-                <Field label="How much do you want?">
+                <Field label={t("goals.amountLabel")}>
                   <MoneyInput
                     value={g.threshold}
                     onChange={(v) => updateTerminal(i, { threshold: v })}
                   />
                 </Field>
-                <Field label="In which account?">
+                <Field label={t("goals.accountLabel")}>
                   <Select
                     value={g.account}
                     onValueChange={(v) => updateTerminal(i, { account: v })}
                   >
                     <SelectTrigger className="h-10">
-                      <SelectValue placeholder="Pick an account" />
+                      <SelectValue placeholder={t("goals.accountPlaceholder")} />
                     </SelectTrigger>
                     <SelectContent>
                       {accounts.map((a) => (
@@ -472,7 +471,7 @@ function StepGoals({
         </ul>
 
         <Button variant="outline" size="sm" className="mt-4" onClick={addTerminal}>
-          <Plus className="size-4" aria-hidden /> Add another goal
+          <Plus className="size-4" aria-hidden /> {t("goals.addGoal")}
         </Button>
       </section>
 
@@ -481,42 +480,41 @@ function StepGoals({
           <AccordionItem value="dated" className="border-b last:border-b-0">
             <AccordionTrigger className="px-3">
               <div className="flex flex-col items-start text-left">
-                <span className="text-sm font-medium text-foreground">Goals with a deadline</span>
+                <span className="text-sm font-medium text-foreground">{t("dated.title")}</span>
                 <span className="text-xs text-muted-foreground">
-                  Optional · e.g. an emergency fund ready by a certain date.
+                  {t("dated.subtitle")}
                 </span>
               </div>
             </AccordionTrigger>
             <AccordionContent className="px-3 pb-4">
               {intermediates.length === 0 && (
                 <p className="text-sm text-muted-foreground">
-                  No dated goals yet. These are useful when something must be ready by a specific
-                  date.
+                  {t("dated.empty")}
                 </p>
               )}
               <ul className="space-y-4">
                 {intermediates.map((g, i) => (
                   <li key={i} className="rounded-xl border bg-muted/30 p-4">
                     <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm font-medium text-foreground">Dated goal {i + 1}</p>
+                      <p className="text-sm font-medium text-foreground">{t("dated.goalN", { n: i + 1 })}</p>
                       <Button variant="ghost" size="sm" onClick={() => removeInter(i)}>
-                        <Trash2 className="size-4" aria-hidden /> Remove
+                        <Trash2 className="size-4" aria-hidden /> {t("remove")}
                       </Button>
                     </div>
                     <div className="mt-3 grid gap-4 sm:grid-cols-3">
-                      <Field label="Amount">
+                      <Field label={t("goals.amountShort")}>
                         <MoneyInput
                           value={g.threshold}
                           onChange={(v) => updateInter(i, { threshold: v })}
                         />
                       </Field>
-                      <Field label="Account">
+                      <Field label={t("goals.accountShort")}>
                         <Select
                           value={g.account}
                           onValueChange={(v) => updateInter(i, { account: v })}
                         >
                           <SelectTrigger className="h-10">
-                            <SelectValue placeholder="Pick an account" />
+                            <SelectValue placeholder={t("goals.accountPlaceholder")} />
                           </SelectTrigger>
                           <SelectContent>
                             {accounts.map((a) => (
@@ -527,7 +525,7 @@ function StepGoals({
                           </SelectContent>
                         </Select>
                       </Field>
-                      <Field label="By">
+                      <Field label={t("dated.byLabel")}>
                         <Input
                           type="date"
                           value={g.date}
@@ -545,14 +543,14 @@ function StepGoals({
                     </div>
                     {g.date && g.date <= draft.start_date && (
                       <p className="mt-2 text-xs text-danger">
-                        The date must be after the plan's start date.
+                        {t("dated.dateError")}
                       </p>
                     )}
                   </li>
                 ))}
               </ul>
               <Button variant="outline" size="sm" className="mt-4" onClick={addInter}>
-                <Plus className="size-4" aria-hidden /> Add a dated goal
+                <Plus className="size-4" aria-hidden /> {t("dated.add")}
               </Button>
             </AccordionContent>
           </AccordionItem>
@@ -560,9 +558,9 @@ function StepGoals({
           <AccordionItem value="withdrawals" className="border-b-0">
             <AccordionTrigger className="px-3">
               <div className="flex flex-col items-start text-left">
-                <span className="text-sm font-medium text-foreground">Planned withdrawals</span>
+                <span className="text-sm font-medium text-foreground">{t("withdrawals.title")}</span>
                 <span className="text-xs text-muted-foreground">
-                  Optional · money you'll take out along the way.
+                  {t("withdrawals.subtitle")}
                 </span>
               </div>
             </AccordionTrigger>
@@ -588,13 +586,14 @@ function ConfidenceChooser({
   value: number;
   onChange: (v: number) => void;
 }) {
+  const { t } = useTranslation(["goals", "common"]);
   const selectedId = presetForConfidence(value).id;
   return (
     <div>
-      <Label className="text-sm">How sure do you want to be?</Label>
+      <Label className="text-sm">{t("confidence.question")}</Label>
       <div
         role="radiogroup"
-        aria-label="How sure do you want to be?"
+        aria-label={t("confidence.question")}
         className="mt-2 grid gap-2 sm:grid-cols-3"
       >
         {CONFIDENCE_PRESETS.map((p) => {
@@ -613,14 +612,14 @@ function ConfidenceChooser({
               )}
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="text-sm font-medium text-foreground">{p.label}</span>
+                <span className="text-sm font-medium text-foreground">{t(`common:confidence.${p.id}.label`)}</span>
                 {selected && (
                   <span className="grid size-4 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground">
                     <Check className="size-2.5" aria-hidden />
                   </span>
                 )}
               </div>
-              <p className="mt-1 text-xs text-muted-foreground">{p.blurb}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{t(`common:confidence.${p.id}.blurb`)}</p>
             </button>
           );
         })}
@@ -640,6 +639,7 @@ function WithdrawalsEditor({
   onChange: (p: Partial<{ scheduled: ScheduledWithdrawal[]; stochastic: StochasticWithdrawal[] }>) => void;
   startDate: string;
 }) {
+  const { t } = useTranslation("goals");
   const firstAccount = accounts[0]?.name ?? "";
   const addScheduled = () =>
     onChange({
@@ -672,21 +672,21 @@ function WithdrawalsEditor({
   return (
     <div className="space-y-6">
       <div>
-        <p className="text-sm font-medium text-foreground">One-time withdrawals</p>
+        <p className="text-sm font-medium text-foreground">{t("withdrawals.onetimeTitle")}</p>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          A specific amount taken out on a specific date.
+          {t("withdrawals.onetimeSubtitle")}
         </p>
         <ul className="mt-3 space-y-3">
           {value.scheduled.map((s, i) => (
             <li key={i} className="rounded-xl border bg-muted/30 p-4">
               <div className="grid gap-4 sm:grid-cols-4">
-                <Field label="Amount">
+                <Field label={t("goals.amountShort")}>
                   <MoneyInput
                     value={s.amount}
                     onChange={(v) => updateScheduled(i, { amount: v })}
                   />
                 </Field>
-                <Field label="Account">
+                <Field label={t("goals.accountShort")}>
                   <Select
                     value={s.account}
                     onValueChange={(v) => updateScheduled(i, { account: v })}
@@ -703,7 +703,7 @@ function WithdrawalsEditor({
                     </SelectContent>
                   </Select>
                 </Field>
-                <Field label="Date">
+                <Field label={t("goals.dateShort")}>
                   <Input
                     type="date"
                     value={s.date}
@@ -711,44 +711,44 @@ function WithdrawalsEditor({
                     className="h-10"
                   />
                 </Field>
-                <Field label="Note (optional)">
+                <Field label={t("withdrawals.noteLabel")}>
                   <Input
                     value={s.description ?? ""}
                     onChange={(e) => updateScheduled(i, { description: e.target.value })}
-                    placeholder="e.g. tuition payment"
+                    placeholder={t("withdrawals.notePlaceholderScheduled")}
                     className="h-10"
                   />
                 </Field>
               </div>
               <div className="mt-2 flex justify-end">
                 <Button variant="ghost" size="sm" onClick={() => removeScheduled(i)}>
-                  <Trash2 className="size-4" aria-hidden /> Remove
+                  <Trash2 className="size-4" aria-hidden /> {t("remove")}
                 </Button>
               </div>
             </li>
           ))}
         </ul>
         <Button variant="outline" size="sm" className="mt-3" onClick={addScheduled}>
-          <Plus className="size-4" aria-hidden /> Add a one-time withdrawal
+          <Plus className="size-4" aria-hidden /> {t("withdrawals.addOnetime")}
         </Button>
       </div>
 
       <div className="border-t pt-4">
-        <p className="text-sm font-medium text-foreground">Recurring or variable withdrawals</p>
+        <p className="text-sm font-medium text-foreground">{t("withdrawals.variableTitle")}</p>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          Advanced · for living expenses that vary month to month.
+          {t("withdrawals.variableSubtitle")}
         </p>
         <ul className="mt-3 space-y-3">
           {value.stochastic.map((s, i) => (
             <li key={i} className="rounded-xl border bg-muted/30 p-4">
               <div className="grid gap-4 sm:grid-cols-3">
-                <Field label="Base amount">
+                <Field label={t("withdrawals.baseAmount")}>
                   <MoneyInput
                     value={s.base_amount}
                     onChange={(v) => updateStochastic(i, { base_amount: v })}
                   />
                 </Field>
-                <Field label="Account">
+                <Field label={t("goals.accountShort")}>
                   <Select
                     value={s.account}
                     onValueChange={(v) => updateStochastic(i, { account: v })}
@@ -765,7 +765,7 @@ function WithdrawalsEditor({
                     </SelectContent>
                   </Select>
                 </Field>
-                <Field label="Date">
+                <Field label={t("goals.dateShort")}>
                   <Input
                     type="date"
                     value={s.date ?? ""}
@@ -774,7 +774,7 @@ function WithdrawalsEditor({
                     className="h-10"
                   />
                 </Field>
-                <Field label="Variability (sigma)">
+                <Field label={t("withdrawals.sigma")}>
                   <Input
                     type="number"
                     step={0.05}
@@ -784,37 +784,37 @@ function WithdrawalsEditor({
                     className="h-10"
                   />
                 </Field>
-                <Field label="Floor (optional)">
+                <Field label={t("withdrawals.floor")}>
                   <MoneyInput
                     value={s.floor ?? 0}
                     onChange={(v) => updateStochastic(i, { floor: v || undefined })}
                   />
                 </Field>
-                <Field label="Cap (optional)">
+                <Field label={t("withdrawals.cap")}>
                   <MoneyInput
                     value={s.cap ?? 0}
                     onChange={(v) => updateStochastic(i, { cap: v || undefined })}
                   />
                 </Field>
-                <Field label="Note (optional)">
+                <Field label={t("withdrawals.noteLabel")}>
                   <Input
                     value={s.description ?? ""}
                     onChange={(e) => updateStochastic(i, { description: e.target.value })}
-                    placeholder="e.g. living expenses"
+                    placeholder={t("withdrawals.notePlaceholderVariable")}
                     className="h-10"
                   />
                 </Field>
               </div>
               <div className="mt-2 flex justify-end">
                 <Button variant="ghost" size="sm" onClick={() => removeStochastic(i)}>
-                  <Trash2 className="size-4" aria-hidden /> Remove
+                  <Trash2 className="size-4" aria-hidden /> {t("remove")}
                 </Button>
               </div>
             </li>
           ))}
         </ul>
         <Button variant="outline" size="sm" className="mt-3" onClick={addStochastic}>
-          <Plus className="size-4" aria-hidden /> Add a variable withdrawal
+          <Plus className="size-4" aria-hidden /> {t("withdrawals.addVariable")}
         </Button>
       </div>
     </div>
@@ -830,40 +830,44 @@ function StepReview({
   draft: ScenarioDraft;
   profile: Profile | undefined;
 }) {
+  const { t } = useTranslation(["goals", "common"]);
   const accountName = (a: string) =>
     profile?.accounts_config.find((x) => x.name === a)?.display_name ?? a;
-  const styleLabel = OBJECTIVES.find((o) => o.id === draft.objective)?.title ?? draft.objective;
+  const styleLabel = t(`common:objectives.${draft.objective}.title`, { defaultValue: draft.objective });
+  const amountSpan = <span className="tabular font-medium text-foreground" />;
+  const strongSpan = <span className="font-medium text-foreground" />;
 
   return (
     <section className="space-y-5 rounded-2xl border bg-card p-5 sm:p-6">
       <header>
-        <h2 className="text-base font-semibold text-foreground">Review your plan</h2>
+        <h2 className="text-base font-semibold text-foreground">{t("review.title")}</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          We'll find the shortest time to reach your goals.
+          {t("review.subtitle")}
         </p>
       </header>
 
       <dl className="grid gap-4 sm:grid-cols-2">
-        <Summary label="Situation" value={profile?.name ?? "—"} />
-        <Summary label="Plan name" value={draft.name || "—"} />
-        <Summary label="Start date" value={draft.start_date} />
-        <Summary label="Investment style" value={styleLabel} />
+        <Summary label={t("review.situation")} value={profile?.name ?? "—"} />
+        <Summary label={t("review.planName")} value={draft.name || "—"} />
+        <Summary label={t("review.startDate")} value={draft.start_date} />
+        <Summary label={t("review.style")} value={styleLabel} />
       </dl>
 
       <div className="rounded-xl border bg-muted/30 p-4">
-        <p className="text-sm font-medium text-foreground">Goals</p>
+        <p className="text-sm font-medium text-foreground">{t("review.goalsTitle")}</p>
         <ul className="mt-2 space-y-2 text-sm">
           {draft.terminal_goals.map((g, i) => (
             <li key={i} className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-muted-foreground">
-                Reach{" "}
-                <span className="tabular font-medium text-foreground">
-                  {formatCLP(g.threshold)}
-                </span>{" "}
-                in <span className="font-medium text-foreground">{accountName(g.account)}</span>
+                <Trans
+                  i18nKey="review.reachLine"
+                  t={t}
+                  values={{ amount: formatCLP(g.threshold), account: accountName(g.account) }}
+                  components={{ amount: amountSpan, acct: strongSpan }}
+                />
               </span>
               <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                {presetForConfidence(g.confidence).label}
+                {t(`common:confidence.${presetForConfidence(g.confidence).id}.label`)}
               </span>
             </li>
           ))}
@@ -872,19 +876,24 @@ function StepReview({
 
       {draft.intermediate_goals.length > 0 && (
         <div className="rounded-xl border bg-muted/30 p-4">
-          <p className="text-sm font-medium text-foreground">Goals with a deadline</p>
+          <p className="text-sm font-medium text-foreground">{t("dated.title")}</p>
           <ul className="mt-2 space-y-2 text-sm">
             {draft.intermediate_goals.map((g, i) => (
               <li key={i} className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-muted-foreground">
-                  By <span className="font-medium text-foreground">{g.date}</span>: reach{" "}
-                  <span className="tabular font-medium text-foreground">
-                    {formatCLP(g.threshold)}
-                  </span>{" "}
-                  in <span className="font-medium text-foreground">{accountName(g.account)}</span>
+                  <Trans
+                    i18nKey="review.datedLine"
+                    t={t}
+                    values={{
+                      date: g.date,
+                      amount: formatCLP(g.threshold),
+                      account: accountName(g.account),
+                    }}
+                    components={{ date: strongSpan, amount: amountSpan, acct: strongSpan }}
+                  />
                 </span>
                 <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                  {presetForConfidence(g.confidence).label}
+                  {t(`common:confidence.${presetForConfidence(g.confidence).id}.label`)}
                 </span>
               </li>
             ))}
@@ -896,24 +905,27 @@ function StepReview({
         (draft.withdrawals?.stochastic?.length ?? 0) >
         0 && (
         <div className="rounded-xl border bg-muted/30 p-4">
-          <p className="text-sm font-medium text-foreground">Planned withdrawals</p>
+          <p className="text-sm font-medium text-foreground">{t("withdrawals.title")}</p>
           <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
             {draft.withdrawals?.scheduled.map((s, i) => (
               <li key={`s-${i}`}>
-                <span className="tabular font-medium text-foreground">{formatCLP(s.amount)}</span>{" "}
-                from <span className="font-medium text-foreground">{accountName(s.account)}</span>{" "}
-                on <span className="font-medium text-foreground">{s.date}</span>
+                <Trans
+                  i18nKey="review.scheduledLine"
+                  t={t}
+                  values={{ amount: formatCLP(s.amount), account: accountName(s.account), date: s.date }}
+                  components={{ amount: amountSpan, acct: strongSpan, date: strongSpan }}
+                />
                 {s.description ? ` — ${s.description}` : ""}
               </li>
             ))}
             {draft.withdrawals?.stochastic.map((s, i) => (
               <li key={`v-${i}`}>
-                About{" "}
-                <span className="tabular font-medium text-foreground">
-                  {formatCLP(s.base_amount)}
-                </span>{" "}
-                from <span className="font-medium text-foreground">{accountName(s.account)}</span>{" "}
-                (variable)
+                <Trans
+                  i18nKey="review.variableLine"
+                  t={t}
+                  values={{ amount: formatCLP(s.base_amount), account: accountName(s.account) }}
+                  components={{ amount: amountSpan, acct: strongSpan }}
+                />
                 {s.description ? ` — ${s.description}` : ""}
               </li>
             ))}

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
+import { Trans, useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { ArrowRight, BriefcaseBusiness, Plus, TrendingUp, Wallet } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
@@ -13,7 +15,6 @@ import {
   describeProfileRisk,
   getProfileIncomeMix,
   getProfileMonthlyContributionCapacity,
-  getProfileMonthlyIncome,
   getProfileStartingBalance,
   getProfileTopAccounts,
   getProfileWeightedReturn,
@@ -22,9 +23,11 @@ import type { Profile, ProfileInsert, Scenario } from '../types/database'
 import type { ProfileDraft } from '@/mocks/types'
 
 export default function ProfilesPage() {
+  const { t } = useTranslation(['profiles', 'common'])
   const queryClient = useQueryClient()
   const user = useAuthStore((state) => state.user)
   const toast = useToast()
+  const perMonth = (value: string) => `${value}${t('common:perMonth')}`
   const [showForm, setShowForm] = useState(false)
   const [editingProfile, setEditingProfile] = useState<Profile | null>(null)
 
@@ -61,10 +64,10 @@ export default function ProfilesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profiles'] })
       resetForm()
-      toast.success('Situation saved', 'Your situation has been created.')
+      toast.success(t('toast.saved'), t('toast.savedDetail'))
     },
     onError: (error: unknown) => {
-      toast.error('Failed to save situation', getProfileSaveErrorMessage(error))
+      toast.error(t('toast.saveFailed'), getProfileSaveErrorMessage(error, t))
     },
   })
 
@@ -82,10 +85,10 @@ export default function ProfilesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profiles'] })
       resetForm()
-      toast.success('Situation updated', 'Your changes have been saved.')
+      toast.success(t('toast.updated'), t('toast.updatedDetail'))
     },
     onError: (error: unknown) => {
-      toast.error('Failed to update situation', getProfileSaveErrorMessage(error))
+      toast.error(t('toast.updateFailed'), getProfileSaveErrorMessage(error, t))
     },
   })
 
@@ -96,10 +99,10 @@ export default function ProfilesPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profiles'] })
-      toast.success('Situation deleted', 'The situation has been removed.')
+      toast.success(t('toast.deleted'), t('toast.deletedDetail'))
     },
     onError: (error: Error) => {
-      toast.error('Failed to delete situation', error.message)
+      toast.error(t('toast.deleteFailed'), error.message)
     },
   })
 
@@ -131,8 +134,8 @@ export default function ProfilesPage() {
 
     if (duplicate) {
       toast.error(
-        editingProfile ? 'Name already in use' : 'Situation already exists',
-        'Choose a different situation name or edit the existing one.',
+        editingProfile ? t('toast.nameInUse') : t('toast.alreadyExists'),
+        t('toast.duplicateDetail'),
       )
       return
     }
@@ -166,27 +169,27 @@ export default function ProfilesPage() {
   const latestProfile = ownProfiles[0] ?? profiles?.[0] ?? null
   const summaryCards = [
     {
-      label: 'Saved situations',
+      label: t('summary.saved'),
       value: ownProfiles.length,
-      detail: ownProfiles.length > 0 ? 'Reusable financial setups for future plans.' : 'Create your first situation.',
+      detail: ownProfiles.length > 0 ? t('summary.savedDetail') : t('summary.savedEmpty'),
       icon: BriefcaseBusiness,
     },
     {
-      label: 'Primary balance',
+      label: t('summary.primaryBalance'),
       value: latestProfile ? formatCLP(getProfileStartingBalance(latestProfile)) : '—',
-      detail: latestProfile ? `From ${latestProfile.name}.` : 'Add account balances to build a baseline.',
+      detail: latestProfile ? t('summary.primaryBalanceDetail', { name: latestProfile.name }) : t('summary.primaryBalanceEmpty'),
       icon: Wallet,
     },
     {
-      label: 'Monthly investing power',
-      value: latestProfile ? `${formatCLP(getProfileMonthlyContributionCapacity(latestProfile))}/mo` : '—',
-      detail: latestProfile ? `Estimated from ${latestProfile.name}.` : 'Add income details to unlock better plans.',
+      label: t('summary.investingPower'),
+      value: latestProfile ? perMonth(formatCLP(getProfileMonthlyContributionCapacity(latestProfile))) : '—',
+      detail: latestProfile ? t('summary.investingPowerDetail', { name: latestProfile.name }) : t('summary.investingPowerEmpty'),
       icon: TrendingUp,
     },
     {
-      label: 'Expected annual return',
+      label: t('summary.expectedReturn'),
       value: latestProfile ? formatPercent(getProfileWeightedReturn(latestProfile), 1) : '—',
-      detail: latestProfile ? `Weighted by the balances in ${latestProfile.name}.` : 'Add accounts to estimate portfolio growth.',
+      detail: latestProfile ? t('summary.expectedReturnDetail', { name: latestProfile.name }) : t('summary.expectedReturnEmpty'),
       icon: TrendingUp,
     },
   ]
@@ -207,9 +210,9 @@ export default function ProfilesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">My situation</h1>
+          <h1 className="text-2xl font-bold text-foreground">{t('title')}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Organize the income, balances, and accounts that power every plan you build in FinOpt.
+            {t('subtitle')}
           </p>
         </div>
         <Button
@@ -221,7 +224,7 @@ export default function ProfilesPage() {
           className="rounded-xl"
         >
           <Plus className="h-4 w-4" />
-          New situation
+          {t('newSituation')}
         </Button>
       </div>
 
@@ -244,7 +247,12 @@ export default function ProfilesPage() {
 
       {latestProfile && (
         <div className="rounded-2xl border border-border/70 bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
-          Top-level metrics on this page are based on your primary situation, <span className="font-medium text-foreground">{latestProfile.name}</span>.
+          <Trans
+            i18nKey="primaryNote"
+            t={t}
+            values={{ name: latestProfile.name }}
+            components={{ name: <span className="font-medium text-foreground" /> }}
+          />
         </div>
       )}
 
@@ -257,7 +265,7 @@ export default function ProfilesPage() {
           <div className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-6">
             <div className="mb-2 flex justify-end">
               <Button variant="ghost" size="sm" onClick={resetForm}>
-                Close
+                {t('close')}
               </Button>
             </div>
             <SituationForm
@@ -272,12 +280,12 @@ export default function ProfilesPage() {
       {/* Situations list */}
       <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
         {isLoading ? (
-          <div className="p-6 text-center text-muted-foreground">Loading your situations...</div>
+          <div className="p-6 text-center text-muted-foreground">{t('loading')}</div>
         ) : profiles?.length === 0 ? (
           <div className="p-8 text-center">
-            <p className="text-base font-medium text-foreground">No situations yet.</p>
+            <p className="text-base font-medium text-foreground">{t('emptyTitle')}</p>
             <p className="mt-2 text-sm text-muted-foreground">
-              Add your income and account balances first, then use them across as many plans as you want.
+              {t('emptyBody')}
             </p>
             <Button
               type="button"
@@ -288,7 +296,7 @@ export default function ProfilesPage() {
               }}
             >
               <Plus className="h-4 w-4" />
-              Create your first situation
+              {t('createFirst')}
             </Button>
           </div>
         ) : (
@@ -303,59 +311,55 @@ export default function ProfilesPage() {
                     <h3 className="text-lg font-semibold text-foreground">{profile.name}</h3>
                     {profile.is_demo && (
                       <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                        Demo
+                        {t('demo')}
                       </span>
                     )}
                     {!profile.is_demo && (
                       <span className="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground">
-                        {describeProfileRisk(profile)}
+                        {t(`common:profileRisk.${describeProfileRisk(profile)}`)}
                       </span>
                     )}
                   </div>
                   <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-                    {profile.description || 'A reusable financial setup for future plans.'}
+                    {profile.description || t('descriptionFallback')}
                   </p>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                     <MetricPill
-                      label="Starting balance"
+                      label={t('metrics.startingBalance')}
                       value={formatCLP(getProfileStartingBalance(profile))}
                     />
                     <MetricPill
-                      label="Monthly income"
-                      value={`${formatCLP(getProfileMonthlyIncome(profile))}/mo`}
+                      label={t('metrics.monthlyInvestment')}
+                      value={perMonth(formatCLP(getProfileMonthlyContributionCapacity(profile)))}
                     />
                     <MetricPill
-                      label="Investing power"
-                      value={`${formatCLP(getProfileMonthlyContributionCapacity(profile))}/mo`}
-                    />
-                    <MetricPill
-                      label="Linked plans"
+                      label={t('metrics.linkedPlans')}
                       value={`${scenarioCountByProfileId[profile.id] ?? 0}`}
                     />
                   </div>
 
                   <div className="mt-4 grid gap-4 xl:grid-cols-[0.9fr,1.1fr]">
                     <div className="rounded-2xl bg-muted/50 p-4">
-                      <p className="text-sm font-medium text-foreground">Funding snapshot</p>
+                      <p className="text-sm font-medium text-foreground">{t('funding.title')}</p>
                       <p className="mt-1 text-sm text-muted-foreground">
-                        How this situation turns income into long-term savings.
+                        {t('funding.subtitle')}
                       </p>
                       <div className="mt-4 grid gap-3 sm:grid-cols-2">
                         <MetricPill
-                          label="Fixed income"
-                          value={`${formatCLP(getProfileIncomeMix(profile).fixedIncome)}/mo`}
+                          label={t('funding.fixedIncome')}
+                          value={perMonth(formatCLP(getProfileIncomeMix(profile).fixedIncome))}
                         />
                         <MetricPill
-                          label="Variable income"
-                          value={`${formatCLP(getProfileIncomeMix(profile).variableIncome)}/mo`}
+                          label={t('funding.variableIncome')}
+                          value={perMonth(formatCLP(getProfileIncomeMix(profile).variableIncome))}
                         />
                         <MetricPill
-                          label="Expected return"
+                          label={t('funding.expectedReturn')}
                           value={formatPercent(getProfileWeightedReturn(profile), 1)}
                         />
                         <MetricPill
-                          label="Income mix"
-                          value={`${formatPercent(getProfileIncomeMix(profile).fixedShare, 0)} fixed`}
+                          label={t('funding.incomeMix')}
+                          value={t('funding.incomeMixValue', { pct: formatPercent(getProfileIncomeMix(profile).fixedShare, 0) })}
                         />
                       </div>
                     </div>
@@ -363,13 +367,13 @@ export default function ProfilesPage() {
                     <div className="rounded-2xl bg-muted/50 p-4">
                       <div className="flex items-center justify-between gap-3">
                         <div>
-                          <p className="text-sm font-medium text-foreground">Account mix</p>
+                          <p className="text-sm font-medium text-foreground">{t('accountMix.title')}</p>
                           <p className="mt-1 text-sm text-muted-foreground">
-                            The highest-balance accounts inside this situation.
+                            {t('accountMix.subtitle')}
                           </p>
                         </div>
                         <span className="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground">
-                          {describeProfileRisk(profile)}
+                          {t(`common:profileRisk.${describeProfileRisk(profile)}`)}
                         </span>
                       </div>
                       <div className="mt-4 space-y-3">
@@ -379,12 +383,12 @@ export default function ProfilesPage() {
                               <div className="min-w-0">
                                 <p className="truncate text-sm font-medium text-foreground">{account.name}</p>
                                 <p className="text-xs text-muted-foreground">
-                                  {formatPercent(account.annualReturn, 1)} return · {formatPercent(account.annualVolatility, 1)} vol
+                                  {t('accountMix.returnVol', { ret: formatPercent(account.annualReturn, 1), vol: formatPercent(account.annualVolatility, 1) })}
                                 </p>
                               </div>
                               <div className="text-right">
                                 <p className="tabular text-sm font-semibold text-foreground">{formatCLP(account.balance)}</p>
-                                <p className="text-xs text-muted-foreground">{formatPercent(account.share, 0)} of total</p>
+                                <p className="text-xs text-muted-foreground">{t('accountMix.ofTotal', { pct: formatPercent(account.share, 0) })}</p>
                               </div>
                             </div>
                             <div className="mt-2 h-2 overflow-hidden rounded-full bg-background">
@@ -401,10 +405,10 @@ export default function ProfilesPage() {
                 </div>
                 {profile.is_demo ? (
                   <div className="flex flex-col items-start gap-2 lg:items-end">
-                    <span className="text-xs text-muted-foreground">Read-only example</span>
+                    <span className="text-xs text-muted-foreground">{t('actions.readOnly')}</span>
                     <Button asChild variant="outline" size="sm" className="rounded-xl">
                       <Link to="/scenarios">
-                        View demo plan
+                        {t('actions.viewDemoPlan')}
                         <ArrowRight className="h-3.5 w-3.5" />
                       </Link>
                     </Button>
@@ -413,12 +417,12 @@ export default function ProfilesPage() {
                   <div className="flex flex-wrap gap-2 lg:justify-end">
                     <Button asChild size="sm" className="rounded-xl">
                       <Link to="/scenarios">
-                        Create plan
+                        {t('actions.createPlan')}
                         <ArrowRight className="h-3.5 w-3.5" />
                       </Link>
                     </Button>
                     <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={() => handleEdit(profile)}>
-                      Edit
+                      {t('actions.edit')}
                     </Button>
                     <Button
                       type="button"
@@ -426,12 +430,12 @@ export default function ProfilesPage() {
                       size="sm"
                       className="rounded-xl border-danger/30 text-danger hover:bg-danger-soft hover:text-danger"
                       onClick={() => {
-                        if (confirm('Delete this situation?')) {
+                        if (confirm(t('actions.confirmDelete'))) {
                           deleteMutation.mutate(profile.id)
                         }
                       }}
                     >
-                      Delete
+                      {t('actions.delete')}
                     </Button>
                   </div>
                 )}
@@ -453,16 +457,16 @@ function MetricPill({ label, value }: { label: string; value: string }) {
   )
 }
 
-function getProfileSaveErrorMessage(error: unknown): string {
+function getProfileSaveErrorMessage(error: unknown, t: TFunction): string {
   if (isUniqueConstraintError(error)) {
-    return 'A situation with that name already exists in your account. Use a different name or edit the existing one.'
+    return t('error.duplicate')
   }
 
   if (error instanceof Error) {
     return error.message
   }
 
-  return 'An unexpected error occurred while saving your situation.'
+  return t('error.unexpected')
 }
 
 function isUniqueConstraintError(error: unknown): error is { code?: string; message?: string } {

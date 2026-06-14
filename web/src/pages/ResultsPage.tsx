@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { AlertCircle } from 'lucide-react'
 import { useJobProgress } from '../hooks/useJobProgress'
 import { supabase } from '../lib/supabase'
@@ -11,6 +12,7 @@ import { PlanResults } from '@/components/finopt/PlanResults'
 import { Button } from '@/components/ui/button'
 
 export default function ResultsPage() {
+  const { t } = useTranslation('results')
   const { jobId } = useParams<{ jobId: string }>()
   const navigate = useNavigate()
   const { job, loading: jobLoading, error: jobError } = useJobProgress(jobId ?? null)
@@ -58,7 +60,7 @@ export default function ResultsPage() {
       <div className="flex h-64 items-center justify-center">
         <div className="text-center">
           <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-          <p className="mt-4 text-sm text-muted-foreground">Loading job status...</p>
+          <p className="mt-4 text-sm text-muted-foreground">{t('loadingJob')}</p>
         </div>
       </div>
     )
@@ -67,8 +69,8 @@ export default function ResultsPage() {
   if (!job) {
     return (
       <EmptyState
-        title="Job not found"
-        message={jobError ?? 'We could not find this result. It may have been removed or the link may be incomplete.'}
+        title={t('notFoundTitle')}
+        message={jobError ?? t('notFoundMessage')}
       />
     )
   }
@@ -132,11 +134,11 @@ export default function ResultsPage() {
           .from('jobs')
           .update({
             status: 'failed',
-            error_message: e instanceof Error ? e.message : 'Failed to reach the compute service',
+            error_message: e instanceof Error ? e.message : t('recalcReachFailed'),
           })
           .eq('id', newJobId)
       }
-      setActionError(e instanceof Error ? e.message : 'Failed to recalculate')
+      setActionError(e instanceof Error ? e.message : t('recalcFailed'))
     } finally {
       setRecalculating(false)
     }
@@ -144,15 +146,15 @@ export default function ResultsPage() {
 
   if (job.status === 'completed' && (resultLoading || scenarioLoading)) {
     return (
-      <LoadingState message="Loading your completed plan and charts..." />
+      <LoadingState message={t('loadingPlan')} />
     )
   }
 
   if (job.status === 'completed' && (resultError || scenarioError)) {
     return (
       <EmptyState
-        title="We couldn't load this plan"
-        message={(resultError ?? scenarioError)?.message ?? 'Something went wrong while loading the result.'}
+        title={t('loadErrorTitle')}
+        message={(resultError ?? scenarioError)?.message ?? t('loadErrorMessage')}
       />
     )
   }
@@ -160,8 +162,8 @@ export default function ResultsPage() {
   if (job.status === 'completed' && (!result || !scenario)) {
     return (
       <EmptyState
-        title="Plan data unavailable"
-        message="The job finished, but the scenario or result payload is missing."
+        title={t('unavailableTitle')}
+        message={t('unavailableMessage')}
       />
     )
   }
@@ -172,14 +174,14 @@ export default function ResultsPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold text-foreground">
-            {job.job_type === 'optimization' ? 'Optimization' : 'Simulation'} Results
+            {job.job_type === 'optimization' ? t('titleOptimization') : t('titleSimulation')}
           </h1>
           <span className={`rounded-full px-3 py-1 text-sm font-medium ${getStatusColor(job.status)}`}>
-            {job.status}
+            {t(`status.${job.status}`, { defaultValue: job.status })}
           </span>
         </div>
         <Button asChild variant="outline">
-          <Link to="/scenarios">Back to Scenarios</Link>
+          <Link to="/scenarios">{t('backToScenarios')}</Link>
         </Button>
       </div>
 
@@ -190,7 +192,7 @@ export default function ResultsPage() {
             <div className="flex items-center gap-3">
               <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
               <span className="text-sm font-medium text-foreground">
-                {job.current_step || 'Initializing...'}
+                {job.current_step || t('initializing')}
               </span>
             </div>
             <span className="text-lg font-semibold text-primary">{job.progress}%</span>
@@ -202,7 +204,7 @@ export default function ResultsPage() {
             />
           </div>
           <p className="mt-3 text-xs text-muted-foreground">
-            This may take a few minutes depending on the number of simulations and horizon length.
+            {t('progressHint')}
           </p>
         </div>
       )}
@@ -213,14 +215,14 @@ export default function ResultsPage() {
           <div className="flex items-start gap-4">
             <AlertCircle className="h-6 w-6 text-danger" />
             <div>
-              <h3 className="font-medium text-danger">Optimization Failed</h3>
-              <p className="mt-2 text-sm text-danger">{job.error_message || 'An unknown error occurred'}</p>
+              <h3 className="font-medium text-danger">{t('failedTitle')}</h3>
+              <p className="mt-2 text-sm text-danger">{job.error_message || t('unknownError')}</p>
               <div className="mt-4">
                 <Link
                   to={`/scenarios`}
                   className="text-sm font-medium text-danger transition-opacity hover:opacity-80"
                 >
-                  Try adjusting your scenario parameters →
+                  {t('adjustParams')}
                 </Link>
               </div>
             </div>
@@ -264,6 +266,7 @@ function LoadingState({ message }: { message: string }) {
 }
 
 function EmptyState({ title, message }: { title: string; message: string }) {
+  const { t } = useTranslation('results')
   return (
     <div className="rounded-2xl border border-border bg-card p-8 text-center shadow-sm">
       <svg className="mx-auto h-12 w-12 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -273,7 +276,7 @@ function EmptyState({ title, message }: { title: string; message: string }) {
       <p className="mt-2 text-sm text-muted-foreground">{message}</p>
       <div className="mt-5">
         <Button asChild variant="outline">
-          <Link to="/scenarios">Back to Scenarios</Link>
+          <Link to="/scenarios">{t('backToScenarios')}</Link>
         </Button>
       </div>
     </div>

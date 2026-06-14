@@ -1,4 +1,5 @@
 import { CheckCircle2, AlertTriangle, ShieldCheck } from "lucide-react";
+import { Trans, useTranslation } from "react-i18next";
 import type { GoalStatus } from "@/mocks/types";
 import {
   formatCLP,
@@ -29,6 +30,7 @@ type Props = {
 };
 
 export function GoalStatusList({ goals, accountDisplayNames = {}, goalDetails = [] }: Props) {
+  const { t } = useTranslation("plan");
   // Plan-level collapse: every goal sits on its floor (reached in ~all scenarios
   // even at a relaxed setting). The certainty choice can't move such a plan, so we
   // say so up front instead of presenting near-identical numbers as a real choice.
@@ -39,9 +41,9 @@ export function GoalStatusList({ goals, accountDisplayNames = {}, goalDetails = 
     <div className="rounded-2xl border bg-card p-5 sm:p-6">
       <div className="flex items-end justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-foreground">Your goals</h2>
+          <h2 className="text-base font-semibold text-foreground">{t("goals.title")}</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            How likely each goal is to be reached, measured across thousands of simulated futures.
+            {t("goals.subtitle")}
           </p>
         </div>
       </div>
@@ -49,11 +51,7 @@ export function GoalStatusList({ goals, accountDisplayNames = {}, goalDetails = 
       {allFloor && (
         <div className="mt-4 flex items-start gap-2.5 rounded-xl bg-success-soft p-3 text-sm text-success ring-1 ring-success/30">
           <ShieldCheck className="mt-0.5 size-4 shrink-0" aria-hidden />
-          <p>
-            {goals.length === 1 ? "This goal is" : "These goals are"} comfortably within reach —
-            reached in nearly every scenario. Your certainty choice barely changes this plan; it
-            mainly affects timing.
-          </p>
+          <p>{t("goals.allFloor", { count: goals.length })}</p>
         </div>
       )}
 
@@ -80,12 +78,23 @@ export function GoalStatusList({ goals, accountDisplayNames = {}, goalDetails = 
                       may contain account slugs ("cuenta_vivienda at horizon T=27"). */}
                   <h3 className="font-medium text-foreground">{accName}</h3>
                   <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                    {g.type === "terminal" ? "By the end of the plan" : intermediateChip(detail?.targetDate)}
+                    {g.type === "terminal"
+                      ? t("goals.chipTerminal")
+                      : detail?.targetDate
+                        ? t("goals.chipBy", { date: formatMonthYear(detail.targetDate) })
+                        : t("goals.chipBySpecific")}
                   </span>
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Reach <span className="tabular font-medium text-foreground">{formatCLP(g.threshold)}</span>{" "}
-                  in <span className="font-medium text-foreground">{accName}</span>.
+                  <Trans
+                    i18nKey="goals.reachLine"
+                    t={t}
+                    values={{ amount: formatCLP(g.threshold), account: accName }}
+                    components={{
+                      amount: <span className="tabular font-medium text-foreground" />,
+                      acct: <span className="font-medium text-foreground" />,
+                    }}
+                  />
                 </p>
 
                 <div className="mt-3">
@@ -98,8 +107,7 @@ export function GoalStatusList({ goals, accountDisplayNames = {}, goalDetails = 
 
                 {onFloor && (
                   <p className="mt-2 text-xs text-muted-foreground">
-                    Reached in virtually every scenario — aiming for more certainty wouldn't
-                    change this goal.
+                    {t("goals.onFloor")}
                   </p>
                 )}
               </div>
@@ -111,7 +119,7 @@ export function GoalStatusList({ goals, accountDisplayNames = {}, goalDetails = 
                   ) : (
                     <AlertTriangle className="size-3.5" aria-hidden />
                   )}
-                  {g.satisfied ? "On track" : "Needs adjustment"}
+                  {g.satisfied ? t("goals.onTrack") : t("goals.needsAdjustment")}
                 </Pill>
               </div>
             </li>
@@ -127,10 +135,6 @@ function matchesGoal(detail: GoalDetail, goal: GoalStatus): boolean {
     && detail.account === goal.account
     && detail.threshold === goal.threshold
     && detail.requiredConfidence === goal.required_confidence;
-}
-
-function intermediateChip(targetDate?: string): string {
-  return targetDate ? `By ${formatMonthYear(targetDate)}` : "By a specific date";
 }
 
 function ProbabilityBar({

@@ -1,5 +1,6 @@
 import * as React from "react";
 import { Plus, Trash2, Save, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -45,41 +46,15 @@ function uniqueSlug(base: string, taken: Set<string>): string {
   return `${base}_${i}`;
 }
 
+// Display strings (title/subtitle/range/recommended tag) are resolved at render
+// time from the `situation:risk.<id>.*` translation keys; only the numeric model
+// data lives here.
 const RISK_PRESETS = [
-  {
-    id: "savings",
-    title: "Savings & cash",
-    subtitle: "Savings accounts, term deposits and money-market funds. Barely moves.",
-    range: "~3–6% / yr",
-    ret: 0.045,
-    vol: 0.01,
-  },
-  {
-    id: "conservative",
-    title: "Conservative",
-    subtitle: "Fixed-income / bond mutual funds. Small ups and downs.",
-    range: "~5–8% / yr",
-    ret: 0.065,
-    vol: 0.05,
-  },
-  {
-    id: "balanced",
-    title: "Balanced",
-    subtitle: "Mixed funds — stocks and bonds together. A steady mix.",
-    range: "~8–12% / yr",
-    ret: 0.1,
-    vol: 0.1,
-    tag: "Recommended",
-  },
-  {
-    id: "aggressive",
-    title: "Aggressive",
-    subtitle: "Stocks and global equity funds or ETFs. Bigger swings, more growth.",
-    range: "~12–16% / yr",
-    ret: 0.14,
-    vol: 0.17,
-  },
-  { id: "custom", title: "Custom", subtitle: "Set your own numbers." },
+  { id: "savings", ret: 0.045, vol: 0.01 },
+  { id: "conservative", ret: 0.065, vol: 0.05 },
+  { id: "balanced", ret: 0.1, vol: 0.1, recommended: true },
+  { id: "aggressive", ret: 0.14, vol: 0.17 },
+  { id: "custom" },
 ] as const;
 
 type RiskId = (typeof RISK_PRESETS)[number]["id"];
@@ -96,11 +71,12 @@ function detectRisk(a: AccountConfig): RiskId {
   return "custom";
 }
 
+// Display strings come from `situation:variability.<id>.*`; only sigma lives here.
 const VARIABILITY = [
-  { id: "low", title: "Low", subtitle: "Pretty steady", sigma: 0.1 },
-  { id: "medium", title: "Medium", subtitle: "Some swings", sigma: 0.2 },
-  { id: "high", title: "High", subtitle: "Big swings", sigma: 0.4 },
-  { id: "custom", title: "Custom", subtitle: "Set your own" },
+  { id: "low", sigma: 0.1 },
+  { id: "medium", sigma: 0.2 },
+  { id: "high", sigma: 0.4 },
+  { id: "custom" },
 ] as const;
 
 type VarId = (typeof VARIABILITY)[number]["id"];
@@ -124,19 +100,53 @@ function emptyAccount(taken: Set<string>): AccountConfig {
   };
 }
 
+// New "What you can invest" model: the user types the invested amount
+// directly, so the contribution rate is pinned to 1 (100%). Month-to-month
+// variation is expressed by turning `contribution_rate_fixed` into a 12-month
+// factor array (1.0 = the typical amount that month).
 const DEFAULT_INCOME: IncomeConfig = {
-  fixed: { base: 0, annual_growth: 0.03 },
-  contribution_rate_fixed: 0.3,
+  fixed: { base: 0, annual_growth: 0 },
+  contribution_rate_fixed: 1,
   contribution_rate_variable: 1,
 };
+
+// Map a stored income_config into the "what you can invest" interpretation.
+// Legacy profiles stored a salary in `fixed.base` plus a <1 contribution rate;
+// fold that rate into the base so the displayed amount equals what is actually
+// invested, then pin scalar rates to 1. Per-month factor arrays pass through
+// unchanged (they already are the month-to-month multipliers we use).
+function normalizeIncomeForInvest(income: IncomeConfig): IncomeConfig {
+  const next: IncomeConfig = { ...income };
+
+  const rf = income.contribution_rate_fixed;
+  if (income.fixed && !Array.isArray(rf) && Number(rf) !== 1) {
+    next.fixed = {
+      ...income.fixed,
+      base: Math.round((income.fixed.base ?? 0) * (Number(rf) || 0)),
+    };
+  }
+  if (!Array.isArray(rf)) next.contribution_rate_fixed = 1;
+
+  const rv = income.contribution_rate_variable;
+  if (income.variable && !Array.isArray(rv) && Number(rv) !== 1) {
+    next.variable = {
+      ...income.variable,
+      base: Math.round((income.variable.base ?? 0) * (Number(rv) || 0)),
+    };
+  }
+  if (!Array.isArray(rv)) next.contribution_rate_variable = 1;
+
+  return next;
+}
 
 /* ---------------- main ---------------- */
 
 export function SituationForm({ initialProfile, onSave, onCancel }: Props) {
+  const { t } = useTranslation("situation");
   const [name, setName] = React.useState(initialProfile?.name ?? "");
   const [description, setDescription] = React.useState(initialProfile?.description ?? "");
   const [income, setIncome] = React.useState<IncomeConfig>(
-    initialProfile?.income_config ?? DEFAULT_INCOME,
+    normalizeIncomeForInvest(initialProfile?.income_config ?? DEFAULT_INCOME),
   );
   const [accounts, setAccounts] = React.useState<AccountConfig[]>(
     initialProfile?.accounts_config ?? [emptyAccount(new Set())],
@@ -166,10 +176,11 @@ export function SituationForm({ initialProfile, onSave, onCancel }: Props) {
 
   /* ---- validation ---- */
   const nameValid = name.trim().length > 0;
-  const salary = income.fixed?.base ?? 0;
-  const salaryValid = salary >= 0;
-  const rateFixed = Number(income.contribution_rate_fixed) || 0;
-  const rateValid = rateFixed >= 0 && rateFixed <= 1;
+  const monthlyInvest = income.fixed?.base ?? 0;
+  const extraInvest = income.variable?.base ?? 0;
+  // A situation must fund some investment — a regular monthly amount or an
+  // extra/irregular stream. Zero on both yields an infeasible (empty) plan.
+  const investValid = monthlyInvest > 0 || extraInvest > 0;
   const duplicateNames = (() => {
     const seen = new Set<string>();
     for (const a of accounts) {
@@ -192,7 +203,7 @@ export function SituationForm({ initialProfile, onSave, onCancel }: Props) {
     ) &&
     !duplicateNames;
 
-  const canSave = nameValid && salaryValid && rateValid && accountsValid;
+  const canSave = nameValid && investValid && accountsValid;
 
   const handleSave = () => {
     // Normalize account slugs from display names (preserve existing slug if already set sensibly).
@@ -217,25 +228,28 @@ export function SituationForm({ initialProfile, onSave, onCancel }: Props) {
       {/* ---- Basics ---- */}
       <section className="rounded-2xl border bg-card p-5 sm:p-6">
         <header>
-          <h2 className="text-base font-semibold text-foreground">The basics</h2>
+          <h2 className="text-base font-semibold text-foreground">{t("basics.title")}</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Give this situation a name so you can reuse it across plans.
+            {t("basics.subtitle")}
           </p>
         </header>
         <div className="mt-5 grid gap-5 sm:grid-cols-2">
-          <Field label="Name" error={!nameValid && name.length > 0 ? "Give it a name" : undefined}>
+          <Field
+            label={t("basics.nameLabel")}
+            error={!nameValid && name.length > 0 ? t("basics.nameError") : undefined}
+          >
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. My finances"
+              placeholder={t("basics.namePlaceholder")}
               className="h-10"
             />
           </Field>
-          <Field label="Short description (optional)">
+          <Field label={t("basics.descriptionLabel")}>
             <Textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Anything helpful to remember about this situation."
+              placeholder={t("basics.descriptionPlaceholder")}
               rows={2}
             />
           </Field>
@@ -243,19 +257,23 @@ export function SituationForm({ initialProfile, onSave, onCancel }: Props) {
       </section>
 
       {/* ---- Income ---- */}
-      <IncomeSection income={income} onChange={updateIncome} />
+      <IncomeSection
+        income={income}
+        onChange={updateIncome}
+        showAmountError={nameValid && !investValid}
+      />
 
       {/* ---- Accounts ---- */}
       <section className="rounded-2xl border bg-card p-5 sm:p-6">
         <header className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2 className="text-base font-semibold text-foreground">Where you invest</h2>
+            <h2 className="text-base font-semibold text-foreground">{t("accounts.title")}</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              List each account or portfolio you're saving into.
+              {t("accounts.subtitle")}
             </p>
           </div>
           <Button variant="outline" size="sm" onClick={addAccount}>
-            <Plus className="size-4" aria-hidden /> Add account
+            <Plus className="size-4" aria-hidden /> {t("accounts.add")}
           </Button>
         </header>
 
@@ -272,7 +290,7 @@ export function SituationForm({ initialProfile, onSave, onCancel }: Props) {
           ))}
         </ul>
         {duplicateNames && (
-          <p className="mt-3 text-xs text-danger">Account names must be unique.</p>
+          <p className="mt-3 text-xs text-danger">{t("accounts.duplicateError")}</p>
         )}
 
         {accounts.length >= 2 && (
@@ -282,10 +300,10 @@ export function SituationForm({ initialProfile, onSave, onCancel }: Props) {
                 <AccordionTrigger className="px-4">
                   <div className="flex flex-col items-start text-left">
                     <span className="text-sm font-medium text-foreground">
-                      How your accounts move together
+                      {t("accounts.correlationTitle")}
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      Optional · advanced. Leave alone if unsure.
+                      {t("accounts.correlationSubtitle")}
                     </span>
                   </div>
                 </AccordionTrigger>
@@ -307,12 +325,12 @@ export function SituationForm({ initialProfile, onSave, onCancel }: Props) {
         <div>
           {onCancel && (
             <Button variant="ghost" size="sm" onClick={onCancel}>
-              <X className="size-4" aria-hidden /> Cancel
+              <X className="size-4" aria-hidden /> {t("footer.cancel")}
             </Button>
           )}
         </div>
         <Button size="sm" onClick={handleSave} disabled={!canSave}>
-          <Save className="size-4" aria-hidden /> Save situation
+          <Save className="size-4" aria-hidden /> {t("footer.save")}
         </Button>
       </div>
     </div>
@@ -324,22 +342,23 @@ export function SituationForm({ initialProfile, onSave, onCancel }: Props) {
 function IncomeSection({
   income,
   onChange,
+  showAmountError,
 }: {
   income: IncomeConfig;
   onChange: (p: Partial<IncomeConfig>) => void;
+  showAmountError: boolean;
 }) {
-  const salary = income.fixed?.base ?? 0;
-  const rateFixed = Number(income.contribution_rate_fixed) || 0;
-  const ratePct = Math.round(rateFixed * 100);
-  const monthlySaved = Math.round(salary * rateFixed);
+  const { t } = useTranslation("situation");
+  const monthly = income.fixed?.base ?? 0;
 
   const variable = income.variable;
   const variableEnabled = !!variable;
-  const rateVar = Number(income.contribution_rate_variable) || 0;
 
   const setFixed = (patch: Partial<NonNullable<IncomeConfig["fixed"]>>) => {
-    onChange({ fixed: { base: 0, annual_growth: 0.03, ...income.fixed, ...patch } });
+    onChange({ fixed: { base: 0, annual_growth: 0, ...income.fixed, ...patch } });
   };
+  // Extra/irregular investments are also entered as the amount actually
+  // invested, so the variable contribution rate stays pinned to 1.
   const setVariable = (patch: Partial<NonNullable<IncomeConfig["variable"]>> | null) => {
     if (patch === null) {
       onChange({ variable: undefined });
@@ -352,55 +371,51 @@ function IncomeSection({
         ...variable,
         ...patch,
       },
+      contribution_rate_variable: 1,
     });
   };
 
   return (
     <section className="rounded-2xl border bg-card p-5 sm:p-6">
       <header>
-        <h2 className="text-base font-semibold text-foreground">What you earn</h2>
+        <h2 className="text-base font-semibold text-foreground">{t("income.title")}</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Your monthly salary and what share of it you set aside to invest.
+          {t("income.subtitle")}
         </p>
       </header>
 
       <div className="mt-5 grid gap-5 sm:grid-cols-2">
-        <Field label="Monthly salary">
-          <MoneyInput value={salary} onChange={(v) => setFixed({ base: v })} />
+        <Field
+          label={t("income.monthlyLabel")}
+          error={showAmountError ? t("income.monthlyError") : undefined}
+        >
+          <MoneyInput value={monthly} onChange={(v) => setFixed({ base: v })} />
         </Field>
-        <div>
-          <div className="flex items-baseline justify-between">
-            <Label className="text-sm font-medium">How much of it do you invest?</Label>
-            <span className="tabular text-sm font-semibold text-foreground">{ratePct}%</span>
-          </div>
-          <Slider
-            value={[ratePct]}
-            min={0}
-            max={100}
-            step={1}
-            onValueChange={([v]) => onChange({ contribution_rate_fixed: v / 100 })}
-            className="mt-3"
-          />
-          <p className="mt-2 text-xs text-muted-foreground">
-            You invest {ratePct}% — about{" "}
-            <span className="tabular font-medium text-foreground">{formatCLP(monthlySaved)}</span>{" "}
-            per month.
-          </p>
-        </div>
+        <p className="self-end pb-1 text-xs text-muted-foreground">
+          {t("income.monthlyHint")}
+        </p>
+      </div>
+
+      <div className="mt-5">
+        <MonthlyInvestmentEditor
+          base={monthly}
+          value={income.contribution_rate_fixed}
+          onChange={(v) => onChange({ contribution_rate_fixed: v })}
+        />
       </div>
 
       <Accordion type="multiple" className="mt-5 w-full">
         <AccordionItem value="growth">
           <AccordionTrigger>
             <div className="flex flex-col items-start text-left">
-              <span className="text-sm font-medium text-foreground">Salary growth & raises</span>
+              <span className="text-sm font-medium text-foreground">{t("income.growthTitle")}</span>
               <span className="text-xs text-muted-foreground">
-                Optional · expected yearly raise and one-off bumps.
+                {t("income.growthSubtitle")}
               </span>
             </div>
           </AccordionTrigger>
           <AccordionContent className="space-y-5">
-            <Field label="Expected yearly raise">
+            <Field label={t("income.expectedRaiseLabel")}>
               <PercentInput
                 value={income.fixed?.annual_growth ?? 0}
                 onChange={(v) => setFixed({ annual_growth: v })}
@@ -417,10 +432,10 @@ function IncomeSection({
           <AccordionTrigger>
             <div className="flex flex-col items-start text-left">
               <span className="text-sm font-medium text-foreground">
-                Bonuses or commissions? (variable income)
+                {t("income.variableTitle")}
               </span>
               <span className="text-xs text-muted-foreground">
-                Optional · income that changes month-to-month.
+                {t("income.variableSubtitle")}
               </span>
             </div>
           </AccordionTrigger>
@@ -431,19 +446,19 @@ function IncomeSection({
                 size="sm"
                 onClick={() => setVariable({ base: 0, sigma: 0.2 })}
               >
-                <Plus className="size-4" aria-hidden /> Add variable income
+                <Plus className="size-4" aria-hidden /> {t("income.addVariable")}
               </Button>
             ) : (
               <>
                 <div className="grid gap-5 sm:grid-cols-2">
-                  <Field label="Typical amount">
+                  <Field label={t("income.typicalAmountLabel")}>
                     <MoneyInput
                       value={variable!.base}
                       onChange={(v) => setVariable({ base: v })}
                     />
                   </Field>
                   <div>
-                    <Label className="text-sm font-medium">How much does it vary?</Label>
+                    <Label className="text-sm font-medium">{t("income.varyLabel")}</Label>
                     <VariabilityPicker
                       value={variable!.sigma}
                       onChange={(v) => setVariable({ sigma: v })}
@@ -451,31 +466,12 @@ function IncomeSection({
                   </div>
                 </div>
 
-                <div>
-                  <div className="flex items-baseline justify-between">
-                    <Label className="text-sm font-medium">
-                      How much of bonuses do you invest?
-                    </Label>
-                    <span className="tabular text-sm font-semibold text-foreground">
-                      {Math.round(rateVar * 100)}%
-                    </span>
-                  </div>
-                  <Slider
-                    value={[Math.round(rateVar * 100)]}
-                    min={0}
-                    max={100}
-                    step={1}
-                    onValueChange={([v]) => onChange({ contribution_rate_variable: v / 100 })}
-                    className="mt-3"
-                  />
-                </div>
-
                 <Accordion type="single" collapsible>
                   <AccordionItem value="adv" className="border-b-0">
-                    <AccordionTrigger className="text-sm">Advanced</AccordionTrigger>
+                    <AccordionTrigger className="text-sm">{t("income.advanced")}</AccordionTrigger>
                     <AccordionContent className="space-y-5">
                       <div className="grid gap-5 sm:grid-cols-2">
-                        <Field label="Minimum per month (floor)">
+                        <Field label={t("income.floorLabel")}>
                           <MoneyInput
                             value={variable!.floor ?? 0}
                             onChange={(v) =>
@@ -483,7 +479,7 @@ function IncomeSection({
                             }
                           />
                         </Field>
-                        <Field label="Maximum per month (cap)">
+                        <Field label={t("income.capLabel")}>
                           <MoneyInput
                             value={variable!.cap ?? 0}
                             onChange={(v) => setVariable({ cap: v > 0 ? v : undefined })}
@@ -504,7 +500,7 @@ function IncomeSection({
                   onClick={() => setVariable(null)}
                   className="text-muted-foreground"
                 >
-                  <Trash2 className="size-4" aria-hidden /> Remove variable income
+                  <Trash2 className="size-4" aria-hidden /> {t("income.removeVariable")}
                 </Button>
               </>
             )}
@@ -512,6 +508,78 @@ function IncomeSection({
         </AccordionItem>
       </Accordion>
     </section>
+  );
+}
+
+/* ---------------- Monthly investment variation ---------------- */
+
+// Lets the user adjust how much they invest in specific calendar months.
+// Off → `contribution_rate_fixed` is the scalar 1 (the typed amount every
+// month). On → a 12-element factor array where 1.0 = the typical amount; the
+// effective amount shown per month is `base × factor`.
+function MonthlyInvestmentEditor({
+  base,
+  value,
+  onChange,
+}: {
+  base: number;
+  value: number | number[];
+  onChange: (v: number | number[]) => void;
+}) {
+  const { t } = useTranslation(["situation", "common"]);
+  const months = t("common:monthsShort", { returnObjects: true }) as string[];
+  const enabled = Array.isArray(value) && value.length === 12;
+  const arr = enabled ? (value as number[]) : Array(12).fill(1);
+
+  const setMonth = (i: number, v: number) => {
+    const next = arr.slice();
+    next[i] = v;
+    onChange(next);
+  };
+
+  return (
+    <div className="rounded-xl border bg-muted/30 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <Label className="text-sm font-medium">{t("income.varyTitle")}</Label>
+          <p className="text-xs text-muted-foreground">{t("income.varySubtitle")}</p>
+        </div>
+        {enabled ? (
+          <Button variant="ghost" size="sm" onClick={() => onChange(1)}>
+            <Trash2 className="size-4" aria-hidden /> {t("income.varyClear")}
+          </Button>
+        ) : (
+          <Button variant="outline" size="sm" onClick={() => onChange(Array(12).fill(1))}>
+            <Plus className="size-4" aria-hidden /> {t("income.varyEnable")}
+          </Button>
+        )}
+      </div>
+      {enabled && (
+        <>
+          <p className="mt-3 text-xs text-muted-foreground">{t("income.varyHint")}</p>
+          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {months.map((m, i) => (
+              <div key={m} className="rounded-md border bg-card p-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-muted-foreground">{m}</span>
+                  <span className="tabular text-xs font-medium">
+                    {formatCLP(Math.round(base * arr[i]))}
+                  </span>
+                </div>
+                <Slider
+                  value={[Math.round(arr[i] * 100)]}
+                  min={0}
+                  max={200}
+                  step={5}
+                  onValueChange={([v]) => setMonth(i, v / 100)}
+                  className="mt-2"
+                />
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -530,6 +598,7 @@ function AccountCard({
   onChange: (p: Partial<AccountConfig>) => void;
   onRemove: () => void;
 }) {
+  const { t } = useTranslation("situation");
   const risk = detectRisk(account);
 
   const pickRisk = (id: RiskId) => {
@@ -552,29 +621,29 @@ function AccountCard({
   return (
     <li className="rounded-xl border bg-muted/30 p-4">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-medium text-foreground">Account {index + 1}</p>
+        <p className="text-sm font-medium text-foreground">{t("accounts.accountN", { n: index + 1 })}</p>
         {canRemove && (
           <Button
             variant="ghost"
             size="sm"
             onClick={onRemove}
-            aria-label={`Remove account ${index + 1}`}
+            aria-label={t("accounts.removeAccount", { n: index + 1 })}
           >
-            <Trash2 className="size-4" aria-hidden /> Remove
+            <Trash2 className="size-4" aria-hidden /> {t("accounts.remove")}
           </Button>
         )}
       </div>
 
       <div className="mt-3 grid gap-4 sm:grid-cols-2">
-        <Field label="Account name">
+        <Field label={t("accounts.nameLabel")}>
           <Input
             value={account.display_name ?? ""}
             onChange={(e) => onChange({ display_name: e.target.value })}
-            placeholder="e.g. Safe savings"
+            placeholder={t("accounts.namePlaceholder")}
             className="h-10"
           />
         </Field>
-        <Field label="How much is already there?">
+        <Field label={t("accounts.initialLabel")}>
           <MoneyInput
             value={account.initial_wealth}
             onChange={(v) => onChange({ initial_wealth: v })}
@@ -583,10 +652,10 @@ function AccountCard({
       </div>
 
       <div className="mt-4">
-        <Label className="text-sm font-medium">Risk</Label>
+        <Label className="text-sm font-medium">{t("accounts.riskLabel")}</Label>
         <div
           role="radiogroup"
-          aria-label="Risk preset"
+          aria-label={t("accounts.riskGroupLabel")}
           className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3"
         >
           {RISK_PRESETS.map((p) => {
@@ -613,17 +682,17 @@ function AccountCard({
                 )}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-medium text-foreground">{p.title}</p>
-                  {"tag" in p && p.tag && (
+                  <p className="text-sm font-medium text-foreground">{t(`risk.${p.id}.title`)}</p>
+                  {"recommended" in p && p.recommended && (
                     <span className="rounded-full bg-success-soft px-1.5 py-0.5 text-[10px] font-medium text-success ring-1 ring-success/30">
-                      {p.tag}
+                      {t("risk.recommendedTag")}
                     </span>
                   )}
                 </div>
-                <p className="mt-0.5 text-xs text-muted-foreground">{p.subtitle}</p>
-                {"range" in p && p.range && (
+                <p className="mt-0.5 text-xs text-muted-foreground">{t(`risk.${p.id}.subtitle`)}</p>
+                {p.id !== "custom" && (
                   <span className="mt-1.5 inline-block rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium tabular-nums text-foreground/70">
-                    {p.range}
+                    {t(`risk.${p.id}.range`)}
                   </span>
                 )}
               </button>
@@ -633,13 +702,13 @@ function AccountCard({
 
         {showCustom && (
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <Field label="Expected annual return">
+            <Field label={t("accounts.returnLabel")}>
               <PercentInput
                 value={account.annual_return}
                 onChange={(v) => onChange({ annual_return: v })}
               />
             </Field>
-            <Field label="Volatility (how bumpy)">
+            <Field label={t("accounts.volatilityLabel")}>
               <PercentInput
                 value={account.annual_volatility}
                 onChange={(v) => onChange({ annual_volatility: v })}
@@ -662,6 +731,7 @@ function VariabilityPicker({
   value: number;
   onChange: (v: number) => void;
 }) {
+  const { t } = useTranslation("situation");
   const current = detectVariability(value);
   const [forceCustom, setForceCustom] = React.useState(false);
   const showCustom = current === "custom" || forceCustom;
@@ -694,15 +764,15 @@ function VariabilityPicker({
                 selected ? "border-primary ring-2 ring-primary/30" : "border-border",
               )}
             >
-              <p className="text-sm font-medium text-foreground">{v.title}</p>
-              <p className="text-xs text-muted-foreground">{v.subtitle}</p>
+              <p className="text-sm font-medium text-foreground">{t(`variability.${v.id}.title`)}</p>
+              <p className="text-xs text-muted-foreground">{t(`variability.${v.id}.subtitle`)}</p>
             </button>
           );
         })}
       </div>
       {showCustom && (
         <div className="mt-3">
-          <Field label="Variability">
+          <Field label={t("variability.label")}>
             <PercentInput value={value} onChange={onChange} min={0} />
           </Field>
         </div>
@@ -720,6 +790,7 @@ function RaisesEditor({
   raises: Record<string, number>;
   onChange: (r: Record<string, number>) => void;
 }) {
+  const { t } = useTranslation("situation");
   const entries = Object.entries(raises).sort(([a], [b]) => a.localeCompare(b));
   const [date, setDate] = React.useState("");
   const [amount, setAmount] = React.useState(0);
@@ -738,7 +809,7 @@ function RaisesEditor({
 
   return (
     <div>
-      <Label className="text-sm font-medium">Specific raises</Label>
+      <Label className="text-sm font-medium">{t("raises.title")}</Label>
       {entries.length > 0 && (
         <ul className="mt-2 space-y-2">
           {entries.map(([d, amt]) => (
@@ -758,7 +829,7 @@ function RaisesEditor({
         </ul>
       )}
       <div className="mt-3 grid items-end gap-3 sm:grid-cols-[1fr_1fr_auto]">
-        <Field label="Date">
+        <Field label={t("raises.dateLabel")}>
           <Input
             type="date"
             value={date}
@@ -766,11 +837,11 @@ function RaisesEditor({
             className="h-10"
           />
         </Field>
-        <Field label="New salary">
+        <Field label={t("raises.increaseLabel")}>
           <MoneyInput value={amount} onChange={setAmount} />
         </Field>
         <Button variant="outline" size="sm" onClick={add} disabled={!date || amount <= 0}>
-          <Plus className="size-4" aria-hidden /> Add
+          <Plus className="size-4" aria-hidden /> {t("raises.add")}
         </Button>
       </div>
     </div>
@@ -779,8 +850,6 @@ function RaisesEditor({
 
 /* ---------------- Seasonality editor ---------------- */
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
 function SeasonalityEditor({
   value,
   onChange,
@@ -788,6 +857,8 @@ function SeasonalityEditor({
   value: number[] | null;
   onChange: (v: number[] | null) => void;
 }) {
+  const { t } = useTranslation(["situation", "common"]);
+  const months = t("common:monthsShort", { returnObjects: true }) as string[];
   const enabled = !!value && value.length === 12;
   const arr = enabled ? value! : Array(12).fill(1);
 
@@ -801,24 +872,24 @@ function SeasonalityEditor({
     <div>
       <div className="flex items-center justify-between">
         <div>
-          <Label className="text-sm font-medium">Monthly pattern</Label>
+          <Label className="text-sm font-medium">{t("seasonality.title")}</Label>
           <p className="text-xs text-muted-foreground">
-            1.0 = typical month. 1.5 = 50% higher than typical.
+            {t("seasonality.hint")}
           </p>
         </div>
         {enabled ? (
           <Button variant="ghost" size="sm" onClick={() => onChange(null)}>
-            <Trash2 className="size-4" aria-hidden /> Clear
+            <Trash2 className="size-4" aria-hidden /> {t("seasonality.clear")}
           </Button>
         ) : (
           <Button variant="outline" size="sm" onClick={() => onChange(Array(12).fill(1))}>
-            <Plus className="size-4" aria-hidden /> Enable
+            <Plus className="size-4" aria-hidden /> {t("seasonality.enable")}
           </Button>
         )}
       </div>
       {enabled && (
         <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {MONTHS.map((m, i) => (
+          {months.map((m, i) => (
             <div key={m} className="rounded-md border bg-card p-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium text-muted-foreground">{m}</span>
@@ -851,6 +922,7 @@ function CorrelationEditor({
   value: number[][] | null;
   onChange: (v: number[][] | null) => void;
 }) {
+  const { t } = useTranslation("situation");
   const n = accounts.length;
   const matrix = React.useMemo(() => {
     if (value && value.length === n && value.every((r) => r.length === n)) return value;
@@ -874,7 +946,7 @@ function CorrelationEditor({
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">
-        −1 means they move opposite, 0 means independent, +1 means they move together.
+        {t("correlation.hint")}
       </p>
       <ul className="space-y-3">
         {pairs.map(([i, j]) => {
@@ -883,8 +955,8 @@ function CorrelationEditor({
             <li key={`${i}-${j}`} className="rounded-md border bg-card p-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-foreground">
-                  {accounts[i].display_name || `Account ${i + 1}`} ↔{" "}
-                  {accounts[j].display_name || `Account ${j + 1}`}
+                  {accounts[i].display_name || t("accounts.accountN", { n: i + 1 })} ↔{" "}
+                  {accounts[j].display_name || t("accounts.accountN", { n: j + 1 })}
                 </span>
                 <span className="tabular text-sm font-medium">{v.toFixed(2)}</span>
               </div>
@@ -902,7 +974,7 @@ function CorrelationEditor({
       </ul>
       {value && (
         <Button variant="ghost" size="sm" onClick={() => onChange(null)}>
-          Reset to independent
+          {t("correlation.reset")}
         </Button>
       )}
     </div>

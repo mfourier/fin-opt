@@ -1,0 +1,73 @@
+{
+  "title": "My situation",
+  "subtitle": "Organize what you can invest, your balances, and accounts that power every plan you build in FinOpt.",
+  "newSituation": "New situation",
+  "summary": {
+    "saved": "Saved situations",
+    "savedDetail": "Reusable financial setups for future plans.",
+    "savedEmpty": "Create your first situation.",
+    "primaryBalance": "Primary balance",
+    "primaryBalanceDetail": "From {{name}}.",
+    "primaryBalanceEmpty": "Add account balances to build a baseline.",
+    "investingPower": "Monthly investment",
+    "investingPowerDetail": "Estimated from {{name}}.",
+    "investingPowerEmpty": "Add how much you can invest to unlock better plans.",
+    "expectedReturn": "Expected annual return",
+    "expectedReturnDetail": "Weighted by the balances in {{name}}.",
+    "expectedReturnEmpty": "Add accounts to estimate portfolio growth."
+  },
+  "primaryNote": "Top-level metrics on this page are based on your primary situation, <name>{{name}}</name>.",
+  "close": "Close",
+  "loading": "Loading your situations...",
+  "emptyTitle": "No situations yet.",
+  "emptyBody": "Add what you can invest and your account balances first, then use them across as many plans as you want.",
+  "createFirst": "Create your first situation",
+  "demo": "Demo",
+  "descriptionFallback": "A reusable financial setup for future plans.",
+  "metrics": {
+    "startingBalance": "Starting balance",
+    "monthlyInvestment": "You invest monthly",
+    "linkedPlans": "Linked plans"
+  },
+  "funding": {
+    "title": "How you invest",
+    "subtitle": "How what you invest each month breaks down.",
+    "fixedIncome": "Regular investment",
+    "variableIncome": "Extra investment",
+    "expectedReturn": "Expected return",
+    "incomeMix": "Breakdown",
+    "incomeMixValue": "{{pct}} regular"
+  },
+  "accountMix": {
+    "title": "Account mix",
+    "subtitle": "The highest-balance accounts inside this situation.",
+    "returnVol": "{{ret}} return · {{vol}} vol",
+    "ofTotal": "{{pct}} of total"
+  },
+  "actions": {
+    "readOnly": "Read-only example",
+    "viewDemoPlan": "View demo plan",
+    "createPlan": "Create plan",
+    "edit": "Edit",
+    "delete": "Delete",
+    "confirmDelete": "Delete this situation?"
+  },
+  "toast": {
+    "saved": "Situation saved",
+    "savedDetail": "Your situation has been created.",
+    "saveFailed": "Failed to save situation",
+    "updated": "Situation updated",
+    "updatedDetail": "Your changes have been saved.",
+    "updateFailed": "Failed to update situation",
+    "deleted": "Situation deleted",
+    "deletedDetail": "The situation has been removed.",
+    "deleteFailed": "Failed to delete situation",
+    "nameInUse": "Name already in use",
+    "alreadyExists": "Situation already exists",
+    "duplicateDetail": "Choose a different situation name or edit the existing one."
+  },
+  "error": {
+    "duplicate": "A situation with that name already exists in your account. Use a different name or edit the existing one.",
+    "unexpected": "An unexpected error occurred while saving your situation."
+  }
+}

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { ArrowRight, BriefcaseBusiness, PlayCircle, Plus, Target, TrendingUp } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
@@ -14,14 +16,7 @@ import { type PlanHealth, getPlanHealth, summarizeGoalStatus } from '@/lib/finan
 import type { Job, Profile, Result, Scenario, ScenarioInsert } from '../types/database'
 import type { ScenarioDraft } from '@/mocks/types'
 
-// Plain-language labels for the optimization objective (no solver jargon).
-const OBJECTIVE_LABELS: Record<string, string> = {
-  risky: 'Maximum growth',
-  balanced: 'Balanced',
-  conservative: 'Conservative',
-  risky_turnover: 'Growth (stable)',
-  proportional: 'Steady & even',
-}
+// Plain-language objective labels live in `common:objectives.<id>.title`.
 
 // Hidden optimization defaults — the user never sets these. The bracketed
 // horizon search infers the horizon, so T_min/T_max are just a safe cap.
@@ -37,10 +32,16 @@ const HIDDEN_DEFAULTS = {
 } as const
 
 export default function ScenariosPage() {
+  const { t } = useTranslation(['scenarios', 'common'])
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const user = useAuthStore((state) => state.user)
   const toast = useToast()
+  const objectiveLabel = (objective: string) =>
+    t(`common:objectives.${objective}.title`, { defaultValue: objective })
+  const formatGoals = (terminal: number, dated: number) =>
+    t('metrics.goalsTerminal', { count: terminal }) +
+    (dated > 0 ? ` · ${t('metrics.goalsDated', { count: dated })}` : '')
   const [showForm, setShowForm] = useState(false)
   const [editingScenario, setEditingScenario] = useState<Scenario | null>(null)
 
@@ -122,7 +123,7 @@ export default function ScenariosPage() {
       queryClient.invalidateQueries({ queryKey: ['scenarios'] })
     },
     onError: (error: Error) => {
-      toast.error('Failed to create plan', error.message)
+      toast.error(t('toast.createFailed'), error.message)
     },
   })
 
@@ -141,7 +142,7 @@ export default function ScenariosPage() {
       queryClient.invalidateQueries({ queryKey: ['scenarios'] })
     },
     onError: (error: Error) => {
-      toast.error('Failed to update plan', error.message)
+      toast.error(t('toast.updateFailed'), error.message)
     },
   })
 
@@ -152,10 +153,10 @@ export default function ScenariosPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['scenarios'] })
-      toast.success('Plan deleted', 'The plan has been removed.')
+      toast.success(t('toast.deleted'), t('toast.deletedDetail'))
     },
     onError: (error: Error) => {
-      toast.error('Failed to delete plan', error.message)
+      toast.error(t('toast.deleteFailed'), error.message)
     },
   })
 
@@ -167,24 +168,24 @@ export default function ScenariosPage() {
       .single()
 
     if (jobError) {
-      toast.error('Failed to create job', jobError.message)
+      toast.error(t('toast.jobFailed'), jobError.message)
       return
     }
 
     try {
       await queueOptimization({ scenario_id: scenarioId, job_id: job.id })
       queryClient.invalidateQueries({ queryKey: ['recent-jobs'] })
-      toast.info('Calculating your plan', 'Redirecting to results…')
+      toast.info(t('toast.calculating'), t('toast.calculatingDetail'))
       navigate(`/results/${job.id}`)
     } catch (err) {
       await supabase
         .from('jobs')
         .update({
           status: 'failed',
-          error_message: err instanceof Error ? err.message : 'Failed to reach the compute service',
+          error_message: err instanceof Error ? err.message : t('toast.reachFailed'),
         })
         .eq('id', job.id)
-      toast.error('Failed to start calculation', err instanceof Error ? err.message : 'Unknown error')
+      toast.error(t('toast.startFailed'), err instanceof Error ? err.message : t('toast.unknownError'))
     }
   }
 
@@ -200,7 +201,7 @@ export default function ScenariosPage() {
       .limit(1)
       .maybeSingle()
     if (error || !data) {
-      toast.error('No results yet', 'This demo has no computed results.')
+      toast.error(t('toast.noResults'), t('toast.noResultsDetail'))
       return
     }
     navigate(`/results/${data.id}`)
@@ -313,27 +314,27 @@ export default function ScenariosPage() {
 
   const summaryCards = [
     {
-      label: 'On track',
+      label: t('summary.onTrack'),
       value: healthCounts.on_track,
-      detail: healthCounts.on_track > 0 ? 'Plans whose latest result currently meets every goal.' : 'No fully on-track plans yet.',
+      detail: healthCounts.on_track > 0 ? t('summary.onTrackDetail') : t('summary.onTrackEmpty'),
       icon: Target,
     },
     {
-      label: 'Need review',
+      label: t('summary.needReview'),
       value: healthCounts.tight + healthCounts.needs_changes + healthCounts.failed,
-      detail: 'Plans that are tight, infeasible, or had a failed run.',
+      detail: t('summary.needReviewDetail'),
       icon: TrendingUp,
     },
     {
-      label: 'Running now',
+      label: t('summary.runningNow'),
       value: healthCounts.running + healthCounts.queued,
-      detail: 'Calculations currently in progress.',
+      detail: t('summary.runningNowDetail'),
       icon: PlayCircle,
     },
     {
-      label: 'Need first run',
+      label: t('summary.needFirstRun'),
       value: healthCounts.draft,
-      detail: 'Plans that have been drafted but never calculated.',
+      detail: t('summary.needFirstRunDetail'),
       icon: BriefcaseBusiness,
     },
   ]
@@ -342,9 +343,9 @@ export default function ScenariosPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Plans</h1>
+          <h1 className="text-2xl font-bold text-foreground">{t('title')}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Turn your goals into concrete timelines, then run FinOpt to see the shortest path toward them.
+            {t('subtitle')}
           </p>
         </div>
         <Button
@@ -354,7 +355,7 @@ export default function ScenariosPage() {
           className="rounded-xl"
         >
           <Plus className="h-4 w-4" />
-          New Plan
+          {t('newPlan')}
         </Button>
       </div>
 
@@ -377,9 +378,9 @@ export default function ScenariosPage() {
 
       {!ownProfiles?.length && (
         <div className="rounded-xl border border-warning/30 bg-warning-soft p-4 text-sm text-warning">
-          Create a situation first before building a plan.
+          {t('needSituation')}
           <Button asChild variant="link" className="ml-2 h-auto px-0 text-warning">
-            <Link to="/profiles">Go to My situation</Link>
+            <Link to="/profiles">{t('goToSituation')}</Link>
           </Button>
         </div>
       )}
@@ -393,7 +394,7 @@ export default function ScenariosPage() {
           <div className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-6">
             <div className="mb-2 flex justify-end">
               <Button variant="ghost" size="sm" onClick={resetForm}>
-                Close
+                {t('close')}
               </Button>
             </div>
             <GoalsWizard
@@ -409,12 +410,12 @@ export default function ScenariosPage() {
       {/* Plans list */}
       <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
         {isLoading ? (
-          <div className="p-6 text-center text-muted-foreground">Loading your plans...</div>
+          <div className="p-6 text-center text-muted-foreground">{t('loading')}</div>
         ) : scenarioEntries.length === 0 ? (
           <div className="p-8 text-center">
-            <p className="text-base font-medium text-foreground">No plans yet.</p>
+            <p className="text-base font-medium text-foreground">{t('emptyTitle')}</p>
             <p className="mt-2 text-sm text-muted-foreground">
-              Start with a goal and FinOpt will estimate how long it may take to reach it.
+              {t('emptyBody')}
             </p>
             <Button
               type="button"
@@ -423,23 +424,23 @@ export default function ScenariosPage() {
               disabled={!ownProfiles?.length}
             >
               <Plus className="h-4 w-4" />
-              Create your first plan
+              {t('createFirst')}
             </Button>
           </div>
         ) : (
           <div>
             {ownScenarioEntries.length > 0 ? (
               <div className="border-b border-border px-6 py-4">
-                <h2 className="text-base font-semibold text-foreground">Your plans</h2>
+                <h2 className="text-base font-semibold text-foreground">{t('yourPlans')}</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Live plans connected to your own situations and results.
+                  {t('yourPlansSubtitle')}
                 </p>
               </div>
             ) : (
               <div className="border-b border-border px-6 py-4">
-                <h2 className="text-base font-semibold text-foreground">Your plans</h2>
+                <h2 className="text-base font-semibold text-foreground">{t('yourPlans')}</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Create your first plan to start tracking timeline, health, and progress here.
+                  {t('yourPlansEmptySubtitle')}
                 </p>
               </div>
             )}
@@ -455,32 +456,32 @@ export default function ScenariosPage() {
                     <h3 className="text-lg font-semibold text-foreground">{scenario.name}</h3>
                     {scenario.is_demo && (
                       <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                        Demo
+                        {t('demo')}
                       </span>
                     )}
                     <span className="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground">
-                      {OBJECTIVE_LABELS[scenario.objective] ?? scenario.objective}
+                      {objectiveLabel(scenario.objective)}
                     </span>
                     {!scenario.is_demo && (
                       <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${planStatusTone(health)}`}>
-                        {planStatusLabel(health)}
+                        {planStatusLabel(health, t)}
                       </span>
                     )}
                   </div>
                   <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-                    {scenario.description || `Built from ${scenario.profiles?.name ?? 'your saved situation'}.`}
+                    {scenario.description || t('descriptionFallback', { name: scenario.profiles?.name ?? t('savedSituation') })}
                   </p>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    <PlanMetricPill label="Situation" value={scenario.profiles?.name ?? 'Unknown'} />
+                    <PlanMetricPill label={t('metrics.situation')} value={scenario.profiles?.name ?? t('situationUnknown')} />
                     <PlanMetricPill
-                      label="Goals"
-                      value={`${scenario.terminal_goals?.length ?? 0} terminal${(scenario.intermediate_goals?.length ?? 0) > 0 ? ` · ${scenario.intermediate_goals.length} dated` : ''}`}
+                      label={t('metrics.goals')}
+                      value={formatGoals(scenario.terminal_goals?.length ?? 0, scenario.intermediate_goals?.length ?? 0)}
                     />
                     <PlanMetricPill
-                      label="Withdrawals"
+                      label={t('metrics.withdrawals')}
                       value={`${(scenario.withdrawals?.scheduled?.length ?? 0) + (scenario.withdrawals?.stochastic?.length ?? 0)}`}
                     />
-                    <PlanMetricPill label="Start date" value={formatMonthYear(scenario.start_date)} />
+                    <PlanMetricPill label={t('metrics.startDate')} value={formatMonthYear(scenario.start_date)} />
                   </div>
                 </div>
 
@@ -488,32 +489,32 @@ export default function ScenariosPage() {
                   <div className="w-full rounded-2xl bg-muted/50 px-4 py-3 lg:max-w-sm">
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                        Latest run
+                        {t('latestRun')}
                       </p>
                       {!scenario.is_demo && (
                         <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${planStatusTone(health)}`}>
-                          {planStatusLabel(health)}
+                          {planStatusLabel(health, t)}
                         </span>
                       )}
                     </div>
                     <p className="mt-1 font-medium text-foreground">
-                      {describeLatestRun(scenario, latestJob, latestResultsByJobId)}
+                      {describeLatestRun(scenario, latestJob, latestResultsByJobId, t)}
                     </p>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      {describeLatestRunDetail(scenario, latestJob, latestResultsByJobId)}
+                      {describeLatestRunDetail(scenario, latestJob, latestResultsByJobId, t)}
                     </p>
                     {!scenario.is_demo && (
                       <div className="mt-4 grid grid-cols-3 gap-2 rounded-xl border border-border/70 bg-card/70 p-3">
                         <PlanRunMetric
-                          label="Goals met"
+                          label={t('runMetrics.goalsMet')}
                           value={goals.total > 0 ? `${goals.met}/${goals.total}` : '—'}
                         />
                         <PlanRunMetric
-                          label="Horizon"
+                          label={t('runMetrics.horizon')}
                           value={latestResult?.optimal_horizon ? formatMonthsLong(latestResult.optimal_horizon) : '—'}
                         />
                         <PlanRunMetric
-                          label="Updated"
+                          label={t('runMetrics.updated')}
                           value={latestJob ? formatDateShort(latestJob.completed_at ?? latestJob.created_at) : '—'}
                         />
                       </div>
@@ -522,7 +523,7 @@ export default function ScenariosPage() {
 
                   {scenario.is_demo ? (
                     <Button type="button" size="sm" className="rounded-xl" onClick={() => viewResults(scenario.id)}>
-                      View demo result
+                      {t('actions.viewDemoResult')}
                       <ArrowRight className="h-3.5 w-3.5" />
                     </Button>
                   ) : (
@@ -530,7 +531,7 @@ export default function ScenariosPage() {
                       {latestJob && (
                         <Button asChild size="sm" className="rounded-xl">
                           <Link to={`/results/${latestJob.id}`}>
-                            {latestJob.status === 'completed' ? 'View latest result' : 'Open latest run'}
+                            {latestJob.status === 'completed' ? t('actions.viewLatestResult') : t('actions.openLatestRun')}
                             <ArrowRight className="h-3.5 w-3.5" />
                           </Link>
                         </Button>
@@ -542,7 +543,7 @@ export default function ScenariosPage() {
                         className="rounded-xl"
                         onClick={() => handleEdit(scenario)}
                       >
-                        Edit
+                        {t('actions.edit')}
                       </Button>
                       <Button
                         type="button"
@@ -550,7 +551,7 @@ export default function ScenariosPage() {
                         className="rounded-xl bg-success text-success-foreground hover:bg-success/90"
                         onClick={() => runOptimization(scenario.id)}
                       >
-                        Run
+                        {t('actions.run')}
                       </Button>
                       <Button
                         type="button"
@@ -558,12 +559,12 @@ export default function ScenariosPage() {
                         size="sm"
                         className="rounded-xl border-danger/30 text-danger hover:bg-danger-soft hover:text-danger"
                         onClick={() => {
-                          if (confirm('Delete this plan?')) {
+                          if (confirm(t('actions.confirmDelete'))) {
                             deleteMutation.mutate(scenario.id)
                           }
                         }}
                       >
-                        Delete
+                        {t('actions.delete')}
                       </Button>
                     </div>
                   )}
@@ -575,9 +576,9 @@ export default function ScenariosPage() {
             {demoScenarioEntries.length > 0 && (
               <>
                 <div className="border-y border-border bg-muted/20 px-6 py-4">
-                  <h2 className="text-base font-semibold text-foreground">Examples</h2>
+                  <h2 className="text-base font-semibold text-foreground">{t('examples')}</h2>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Demo plans you can explore without affecting your own data.
+                    {t('examplesSubtitle')}
                   </p>
                 </div>
                 <div className="divide-y divide-border">
@@ -590,44 +591,44 @@ export default function ScenariosPage() {
                         <div className="flex flex-wrap items-center gap-2">
                           <h3 className="text-lg font-semibold text-foreground">{scenario.name}</h3>
                           <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                            Demo
+                            {t('demo')}
                           </span>
                           <span className="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground">
-                            {OBJECTIVE_LABELS[scenario.objective] ?? scenario.objective}
+                            {objectiveLabel(scenario.objective)}
                           </span>
                         </div>
                         <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-                          {scenario.description || `Built from ${scenario.profiles?.name ?? 'a demo situation'}.`}
+                          {scenario.description || t('descriptionFallback', { name: scenario.profiles?.name ?? t('demoSituation') })}
                         </p>
                         <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                          <PlanMetricPill label="Situation" value={scenario.profiles?.name ?? 'Demo situation'} />
+                          <PlanMetricPill label={t('metrics.situation')} value={scenario.profiles?.name ?? t('demoSituationName')} />
                           <PlanMetricPill
-                            label="Goals"
-                            value={`${scenario.terminal_goals?.length ?? 0} terminal${(scenario.intermediate_goals?.length ?? 0) > 0 ? ` · ${scenario.intermediate_goals.length} dated` : ''}`}
+                            label={t('metrics.goals')}
+                            value={formatGoals(scenario.terminal_goals?.length ?? 0, scenario.intermediate_goals?.length ?? 0)}
                           />
                           <PlanMetricPill
-                            label="Withdrawals"
+                            label={t('metrics.withdrawals')}
                             value={`${(scenario.withdrawals?.scheduled?.length ?? 0) + (scenario.withdrawals?.stochastic?.length ?? 0)}`}
                           />
-                          <PlanMetricPill label="Start date" value={formatMonthYear(scenario.start_date)} />
+                          <PlanMetricPill label={t('metrics.startDate')} value={formatMonthYear(scenario.start_date)} />
                         </div>
                       </div>
 
                       <div className="flex w-full max-w-md flex-col gap-3 lg:items-end">
                         <div className="w-full rounded-2xl bg-muted/40 px-4 py-3 lg:max-w-sm">
                           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                            Latest run
+                            {t('latestRun')}
                           </p>
                           <p className="mt-1 font-medium text-foreground">
-                            {describeLatestRun(scenario, latestJob, latestResultsByJobId)}
+                            {describeLatestRun(scenario, latestJob, latestResultsByJobId, t)}
                           </p>
                           <p className="mt-1 text-sm text-muted-foreground">
-                            {describeLatestRunDetail(scenario, latestJob, latestResultsByJobId)}
+                            {describeLatestRunDetail(scenario, latestJob, latestResultsByJobId, t)}
                           </p>
                         </div>
 
                         <Button type="button" size="sm" className="rounded-xl" onClick={() => viewResults(scenario.id)}>
-                          View demo result
+                          {t('actions.viewDemoResult')}
                           <ArrowRight className="h-3.5 w-3.5" />
                         </Button>
                       </div>
@@ -675,24 +676,24 @@ function planPriority(health: PlanHealth) {
   return priorities[health]
 }
 
-function planStatusLabel(health: PlanHealth) {
+function planStatusLabel(health: PlanHealth, t: TFunction) {
   switch (health) {
     case 'needs_changes':
-      return 'Needs changes'
+      return t('status.needsChanges')
     case 'tight':
-      return 'Tight plan'
+      return t('status.tight')
     case 'failed':
-      return 'Failed'
+      return t('status.failed')
     case 'running':
-      return 'Calculating'
+      return t('status.calculating')
     case 'queued':
-      return 'Queued'
+      return t('status.queued')
     case 'completed':
-      return 'Completed'
+      return t('status.completed')
     case 'on_track':
-      return 'On track'
+      return t('status.onTrack')
     default:
-      return 'Needs run'
+      return t('status.needsRun')
   }
 }
 
@@ -719,46 +720,48 @@ function describeLatestRun(
   scenario: Pick<Scenario, 'is_demo'>,
   job: Pick<Job, 'id' | 'status'> | undefined,
   resultsByJobId: Record<string, Pick<Result, 'job_id' | 'feasible' | 'optimal_horizon' | 'goal_status'>>,
+  t: TFunction,
 ) {
-  if (scenario.is_demo) return 'Precomputed example available.'
-  if (!job) return 'No runs yet.'
+  if (scenario.is_demo) return t('latest.demoAvailable')
+  if (!job) return t('latest.noRuns')
 
   if (job.status === 'completed') {
     const result = resultsByJobId[job.id]
-    if (!result) return 'Latest run completed.'
-    if (result?.feasible === false) return 'Latest result needs changes.'
-    if (result?.optimal_horizon) return `Latest result: ${formatMonthsLong(result.optimal_horizon)}`
-    return 'Latest result is ready.'
+    if (!result) return t('latest.completed')
+    if (result?.feasible === false) return t('latest.needsChanges')
+    if (result?.optimal_horizon) return t('latest.result', { horizon: formatMonthsLong(result.optimal_horizon) })
+    return t('latest.ready')
   }
 
-  if (job.status === 'failed') return 'Latest run failed.'
-  if (job.status === 'running') return 'FinOpt is calculating this plan.'
-  return 'Run queued.'
+  if (job.status === 'failed') return t('latest.failed')
+  if (job.status === 'running') return t('latest.running')
+  return t('latest.queued')
 }
 
 function describeLatestRunDetail(
   scenario: Pick<Scenario, 'is_demo'>,
   job: Pick<Job, 'id' | 'status' | 'created_at' | 'completed_at'> | undefined,
   resultsByJobId: Record<string, Pick<Result, 'job_id' | 'feasible' | 'optimal_horizon' | 'goal_status'>>,
+  t: TFunction,
 ) {
-  if (scenario.is_demo) return 'Open the saved result to explore how a complete example looks.'
-  if (!job) return 'Run the optimizer to estimate the path toward your goals.'
+  if (scenario.is_demo) return t('latestDetail.demo')
+  if (!job) return t('latestDetail.noRuns')
 
   if (job.status === 'completed') {
     const result = resultsByJobId[job.id]
     const completedLabel = job.completed_at ? formatDateShort(job.completed_at) : formatDateShort(job.created_at)
-    if (!result) return `Completed ${completedLabel}. The saved result summary is not available yet.`
-    if (result?.feasible === false) return `Completed ${completedLabel}. Review the result and adjust your inputs.`
-    return `Completed ${completedLabel}. Open the result to review the allocation path.`
+    if (!result) return t('latestDetail.completedNoSummary', { date: completedLabel })
+    if (result?.feasible === false) return t('latestDetail.completedNeedsChanges', { date: completedLabel })
+    return t('latestDetail.completedReady', { date: completedLabel })
   }
 
   if (job.status === 'failed') {
-    return `Last attempt was on ${formatDateShort(job.created_at)}. Update the plan and try again.`
+    return t('latestDetail.failed', { date: formatDateShort(job.created_at) })
   }
 
   if (job.status === 'running') {
-    return `Started ${formatDateShort(job.created_at)}. You can open the run to follow progress.`
+    return t('latestDetail.running', { date: formatDateShort(job.created_at) })
   }
 
-  return `Queued ${formatDateShort(job.created_at)}.`
+  return t('latestDetail.queued', { date: formatDateShort(job.created_at) })
 }

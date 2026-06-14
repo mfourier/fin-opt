@@ -1,0 +1,163 @@
+{
+  "hero": {
+    "minHorizon": "Your minimum horizon",
+    "horizonHint": "That's the shortest time to reach your goals at the confidence you chose.",
+    "status": {
+      "feasible": { "label": "Achievable", "description": "Your plan reaches every goal on time." },
+      "tight": { "label": "Tight", "description": "Reachable, but with little margin. Consider raising your savings rate." },
+      "infeasible": { "label": "Out of reach", "description": "Your goals can't be met with the current plan. Adjust them and recalculate." }
+    },
+    "stats": {
+      "goalsAchieved": "Goals achieved",
+      "planStatus": "Plan status",
+      "computeTime": "Time to compute",
+      "updated": "Updated"
+    }
+  },
+  "actions": {
+    "hint": "Update your situation or goals and recalculate to see a new plan.",
+    "adjust": "Adjust",
+    "recalculate": "Recalculate",
+    "recalculating": "Recalculating…"
+  },
+  "job": {
+    "queuedTitle": "Your plan is queued",
+    "queuedBody": "We're getting ready to calculate. This usually starts in a few seconds.",
+    "runningTitle": "Calculating your plan…",
+    "runningBody": "We're testing thousands of futures to find the shortest path to your goals.",
+    "failedTitle": "We couldn't compute your plan",
+    "failedBody": "Your goals may be out of reach with the current savings rate. Try lowering a target, extending a date, or raising how much you save each month.",
+    "adjustGoals": "Adjust my goals",
+    "tryAgain": "Try again"
+  },
+  "withdrawalFallback": "Withdrawal from {{account}}",
+  "goals": {
+    "title": "Your goals",
+    "subtitle": "How likely each goal is to be reached, measured across thousands of simulated futures.",
+    "allFloor_one": "This goal is comfortably within reach — reached in nearly every scenario. Your certainty choice barely changes this plan; it mainly affects timing.",
+    "allFloor_other": "These goals are comfortably within reach — reached in nearly every scenario. Your certainty choice barely changes this plan; it mainly affects timing.",
+    "chipTerminal": "By the end of the plan",
+    "chipBy": "By {{date}}",
+    "chipBySpecific": "By a specific date",
+    "reachLine": "Reach <amount>{{amount}}</amount> in <acct>{{account}}</acct>.",
+    "onFloor": "Reached in virtually every scenario — aiming for more certainty wouldn't change this goal.",
+    "onTrack": "On track",
+    "needsAdjustment": "Needs adjustment"
+  },
+  "contributions": {
+    "title": "Month-by-month contributions",
+    "subtitleWithdrawals": "How much goes into each account each month, and when money is expected to come back out.",
+    "subtitle": "How much to put into each account, every month.",
+    "modeAmount": "Amount",
+    "modePercent": "Percent",
+    "avgPerMonth": "Avg per month",
+    "totalOverPlan": "Total over plan",
+    "totalWithdrawn": "Total withdrawn",
+    "netCashFlow": "Net cash flow",
+    "accountsInUse": "Accounts in use",
+    "withdrawals": "Withdrawals",
+    "table": {
+      "account": "Account",
+      "firstMonth": "First month",
+      "lastMonth": "Last month",
+      "avgMonth": "Avg / month",
+      "total": "Total",
+      "withdrawn": "Withdrawn",
+      "net": "Net",
+      "totalRow": "Total"
+    }
+  },
+  "wealth": {
+    "title": "Projected wealth",
+    "subtitleTotal": "Likely range of your total savings over time. Darker band = more likely.",
+    "subtitleAccounts": "Median line for each account with its likely range (P25–P75) shaded. Dashed lines show your goals.",
+    "subtitleAccount": "Likely range for {{account}}. Darker band = more likely.",
+    "viewAllAccounts": "All accounts",
+    "viewTotal": "Total",
+    "legend": {
+      "median": "Median",
+      "likelyRange": "Likely range (P25–P75)",
+      "possibleRange": "Possible range (P10–P90)",
+      "goal": "Goal",
+      "withdrawal": "Withdrawal"
+    },
+    "goalLabel": "Goal: {{amount}}",
+    "tooltip": {
+      "p50": "Median (P50)",
+      "p10": "Pessimistic (P10)",
+      "p90": "Optimistic (P90)"
+    }
+  },
+  "explainer": {
+    "title": "How this plan works",
+    "subtitle": "The math is here if you want it, but each section translates the equation into plain language first.",
+    "hint": "Hover or focus a symbol to highlight the matching part of the charts below. Click to pin it.",
+    "linkedConcept": "Linked concept: {{label}}",
+    "linkedConceptEmpty": "Linked concept: hover a formula or chart element",
+    "spotlightWealth": "{{label}} is active in the wealth equation and cash-flow visuals.",
+    "spotlightBands": "{{label}} is active in the projected wealth distribution.",
+    "spotlightGoals": "{{label}} is active in the goal logic for this plan.",
+    "clearPin": "Clear pin",
+    "miniStats": { "accounts": "Accounts", "goals": "Goals", "withdrawals": "Withdrawals" },
+    "withdrawalsIncluded": "Included",
+    "withdrawalsNone": "None",
+    "concepts": {
+      "wealth": "Wealth path",
+      "contribution": "Monthly contributions",
+      "allocation": "Allocation split",
+      "withdrawal": "Withdrawals",
+      "return": "Investment return",
+      "median": "Median path",
+      "likely-band": "Likely range",
+      "possible-band": "Possible range",
+      "goal-probability": "Goal probability",
+      "goal-target": "Goal target",
+      "horizon": "Minimum horizon"
+    },
+    "sections": {
+      "wealth": {
+        "title": "Wealth evolution equation",
+        "intro": "Each month, every account starts from its current balance, adds the planned contribution, subtracts any withdrawal, and then grows by that month's investment return.",
+        "var": {
+          "wealth": "wealth in account m at month t",
+          "contribution": "money available to invest in month t",
+          "allocation": "share of that month's contribution sent to account m",
+          "withdrawalActive": "withdrawal taken from account m in month t",
+          "withdrawalZero": "withdrawal term; zero in this scenario",
+          "return": "return earned by account m during month t"
+        },
+        "calloutPre": "In this plan, the optimizer is choosing the monthly split ",
+        "calloutPost": " across {{count}} accounts while respecting your goals, withdrawals, and time horizon."
+      },
+      "bands": {
+        "title": "Confidence bands and uncertainty",
+        "intro": "The projected wealth chart is not one future. It summarizes many simulated futures and shows where the middle of the distribution sits and how wide the range becomes over time.",
+        "formula": {
+          "median": "median path of simulated wealth",
+          "likely": "likely middle range",
+          "possible": "wider possible range"
+        },
+        "var": {
+          "median": "half of simulated outcomes are above it and half are below it",
+          "likely": "the darker band; a tighter middle slice of outcomes",
+          "possible": "the lighter band; a broader uncertainty envelope"
+        },
+        "callout": "Wider bands usually mean more uncertainty from returns, irregular investments, or withdrawals. Narrower bands mean outcomes are clustering more tightly."
+      },
+      "goals": {
+        "title": "Goal probability and minimum horizon",
+        "intro": "FinOpt searches for the shortest horizon where your goals become achievable with the confidence levels you selected.",
+        "formula": {
+          "probability": ">= your chosen certainty",
+          "horizon": "smallest month count that satisfies all goals together"
+        },
+        "var": {
+          "probability": "probability measured across simulated futures",
+          "target": "the threshold attached to a goal",
+          "horizon": "the minimum feasible horizon; current result = {{horizon}} months"
+        },
+        "callout": "The goal list below shows each goal's likelihood, measured across the simulated futures. If one goal forces the plan to wait longer, it can determine the minimum horizon for the full plan."
+      }
+    }
+  }
+}

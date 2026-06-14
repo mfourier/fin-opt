@@ -1,4 +1,5 @@
 import { CheckCircle2, AlertTriangle, XCircle } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { formatDateShort, formatMonthsLong } from "@/lib/format";
 
@@ -15,25 +16,11 @@ type Props = {
   updatedAt?: string | null;
 };
 
+// Icon + tone per status; label/description come from `plan:hero.status.<id>`.
 const STATUS = {
-  feasible: {
-    label: "Achievable",
-    description: "Your plan reaches every goal on time.",
-    icon: CheckCircle2,
-    tone: "success",
-  },
-  tight: {
-    label: "Tight",
-    description: "Reachable, but with little margin. Consider raising your savings rate.",
-    icon: AlertTriangle,
-    tone: "warning",
-  },
-  infeasible: {
-    label: "Out of reach",
-    description: "Your goals can't be met with the current plan. Adjust them and recalculate.",
-    icon: XCircle,
-    tone: "danger",
-  },
+  feasible: { icon: CheckCircle2, tone: "success" },
+  tight: { icon: AlertTriangle, tone: "warning" },
+  infeasible: { icon: XCircle, tone: "danger" },
 } as const;
 
 export function PlanHero({
@@ -46,8 +33,11 @@ export function PlanHero({
   goalsTotal,
   updatedAt,
 }: Props) {
+  const { t } = useTranslation("plan");
   const s = STATUS[feasibility];
   const Icon = s.icon;
+  const statusLabel = t(`hero.status.${feasibility}.label`);
+  const statusDescription = t(`hero.status.${feasibility}.description`);
 
   return (
     <section
@@ -72,30 +62,30 @@ export function PlanHero({
             id="plan-hero-title"
             className="mt-3 text-sm font-medium uppercase tracking-wider text-muted-foreground"
           >
-            Your minimum horizon
+            {t("hero.minHorizon")}
           </h1>
           <p className="tabular mt-1 text-5xl font-semibold leading-none text-foreground sm:text-6xl md:text-7xl">
             {formatMonthsLong(optimalHorizonMonths)}
           </p>
           <p className="mt-3 max-w-prose text-sm text-muted-foreground">
-            That's the shortest time to reach your goals at the confidence you chose.
+            {t("hero.horizonHint")}
           </p>
         </div>
 
         <div className="flex flex-col items-start gap-3 sm:items-end">
           <StatusBadge tone={s.tone}>
             <Icon className="size-4" aria-hidden />
-            {s.label}
+            {statusLabel}
           </StatusBadge>
-          <p className="max-w-xs text-sm text-muted-foreground sm:text-right">{s.description}</p>
+          <p className="max-w-xs text-sm text-muted-foreground sm:text-right">{statusDescription}</p>
         </div>
       </div>
 
       <dl className="relative z-10 mt-8 grid grid-cols-2 gap-4 border-t pt-6 sm:grid-cols-4">
-        <Stat label="Goals achieved" value={`${goalsAchieved} / ${goalsTotal}`} />
-        <Stat label="Plan status" value={s.label} />
-        <Stat label="Time to compute" value={solveTimeSeconds ? `${solveTimeSeconds.toFixed(2)}s` : "—"} />
-        <Stat label="Updated" value={formatDateShort(updatedAt)} />
+        <Stat label={t("hero.stats.goalsAchieved")} value={`${goalsAchieved} / ${goalsTotal}`} />
+        <Stat label={t("hero.stats.planStatus")} value={statusLabel} />
+        <Stat label={t("hero.stats.computeTime")} value={solveTimeSeconds ? `${solveTimeSeconds.toFixed(2)}s` : "—"} />
+        <Stat label={t("hero.stats.updated")} value={formatDateShort(updatedAt)} />
       </dl>
     </section>
   );

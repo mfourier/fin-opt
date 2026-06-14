@@ -1,5 +1,6 @@
 import { useEffect, useState, createContext, useContext, useCallback, ReactNode } from 'react'
 import { AlertCircle, CheckCircle2, Info, TriangleAlert, X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 // ============================================================================
 // Types
@@ -104,6 +105,7 @@ function ToastContainer({ toasts, removeToast }: { toasts: Toast[]; removeToast:
 // ============================================================================
 
 function ToastItem({ toast, onClose }: { toast: Toast; onClose: () => void }) {
+  const { t } = useTranslation('common')
   const [isVisible, setIsVisible] = useState(false)
 
   useEffect(() => {
@@ -159,7 +161,7 @@ function ToastItem({ toast, onClose }: { toast: Toast; onClose: () => void }) {
           <button
             onClick={onClose}
             className="ml-4 inline-flex rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            aria-label="Close notification"
+            aria-label={t('closeNotification')}
           >
             <X className="h-4 w-4" />
           </button>
