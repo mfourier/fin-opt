@@ -10,7 +10,7 @@
   },
   "income": {
     "title": "Lo que puedes invertir",
-    "subtitle": "Cuánto puedes destinar a invertir cada mes. No te pedimos tu sueldo.",
+    "subtitle": "Cuánto puedes destinar a invertir cada mes.",
     "monthlyLabel": "¿Cuánto inviertes al mes?",
     "monthlyHint": "Es el monto que destinas a invertir.",
     "monthlyError": "Ingresa cuánto puedes invertir.",

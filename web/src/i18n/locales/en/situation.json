@@ -10,7 +10,7 @@
   },
   "income": {
     "title": "What you can invest",
-    "subtitle": "How much you can put toward investing each month. We don't ask for your salary.",
+    "subtitle": "How much you can put toward investing each month.",
     "monthlyLabel": "How much do you invest per month?",
     "monthlyHint": "This is the amount you set aside to invest.",
     "monthlyError": "Enter how much you can invest.",
