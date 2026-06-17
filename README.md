@@ -117,7 +117,7 @@ The `objective` parameter controls the inner optimization program:
 
 | Value | Formulation | Use case |
 |-------|-------------|----------|
-| `"proportional"` | $-\sum_{t,m}(x_{t,m} - 1/M)^2$ | Even, stable monthly split - keeps every account funded (default) |
+| `"proportional"` | $-\sum_{t,m}(x_{t,m} - \frac{1}{M})^2$ | Even, stable monthly split - keeps every account funded (default) |
 | `"balanced"` | $-\sum_{t,m}(\Delta x_{t,m})^2$ | Stable allocations (turnover penalty only) |
 | `"risky"` | $\mathbb{E}[\sum_m W_T^m]$ | Maximum wealth accumulation |
 | `"conservative"` | $\mathbb{E}[W_T] - \lambda \mathrm{Std}(W_T)$ | Risk-averse mean-variance |
