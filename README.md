@@ -73,8 +73,6 @@ pip install -e ".[cli]"
 # Library + FastAPI compute service
 pip install -e ".[web]"
 
-# Everything used for local development
-pip install -e ".[dev,web,cli,notebook]"
 ```
 
 If you prefer the Conda environment defined in the repo:
@@ -109,18 +107,6 @@ print(f"Minimum horizon: T* = {result.T} months")
 model.plot("wealth", result=result, show_trajectories=True)
 ```
 
-### Command-line interface
-
-Installing `finopt[cli]` exposes a `finopt` console script for config-driven runs:
-
-```bash
-finopt simulate --config examples/basic_config.json
-finopt optimize --config examples/basic_config.json --goals examples/basic_goals.json --horizon 36
-finopt config validate examples/basic_config.json
-finopt report --result results/simulation_result.json
-finopt info
-```
-
 Run `finopt COMMAND --help` for command-specific options.
 
 Important: the CLI currently supports fixed-horizon optimization via `--horizon`. The minimum-horizon goal-seeking flow is available in the Python API and the app/backend, but is not fully wired into the CLI yet.
@@ -131,13 +117,11 @@ The `objective` parameter controls the inner optimization program:
 
 | Value | Formulation | Use case |
 |-------|-------------|----------|
-| `"proportional"` | $-\sum_{t,m}(x_{t,m} - w_m)^2$ | Even, stable monthly split - keeps every account funded (default) |
+| `"proportional"` | $-\sum_{t,m}(x_{t,m} - 1/M)^2$ | Even, stable monthly split - keeps every account funded (default) |
 | `"balanced"` | $-\sum_{t,m}(\Delta x_{t,m})^2$ | Stable allocations (turnover penalty only) |
 | `"risky"` | $\mathbb{E}[\sum_m W_T^m]$ | Maximum wealth accumulation |
 | `"conservative"` | $\mathbb{E}[W_T] - \lambda \mathrm{Std}(W_T)$ | Risk-averse mean-variance |
 | `"risky_turnover"` | $\mathbb{E}[W_T] - \lambda\sum(\Delta x)^2$ | Wealth + stability tradeoff |
-
-`"proportional"` anchors each month's split toward target weights $w$ (default uniform $1/M$). It is a single strictly-convex quadratic, so it acts as a tie-breaker among optimal-horizon policies without changing $T^\star$.
 
 ---
 
@@ -157,38 +141,6 @@ fin-opt/
 ├── render.yaml          # Render deployment blueprint
 └── pyproject.toml       # Python package + tool configuration
 ```
-
----
-
-## Development
-
-```bash
-# Local test setup (mirrors CI)
-pip install -e ".[dev,web]"
-export SUPABASE_URL=https://test.supabase.co
-export SUPABASE_ANON_KEY=test-anon-key
-export SUPABASE_SERVICE_KEY=test-service-key
-export ENVIRONMENT=development
-pytest
-
-# Lint Python code
-ruff check src/ api/ tests/
-
-# Frontend dev server only
-cd web
-npm run dev
-```
-
-Use Python 3.11 for local verification when possible. It matches `environment.yml` and the GitHub Actions workflow.
-
-CI runs on every push and pull request via [`.github/workflows/test.yml`](.github/workflows/test.yml).
-
-For deployment planning and infrastructure notes, see:
-
-- [docs/deployment/web-app-plan.md](docs/deployment/web-app-plan.md)
-- [docs/deployment/mvp-go-live-checklist.md](docs/deployment/mvp-go-live-checklist.md)
-- [docker-compose.yml](docker-compose.yml)
-- [render.yaml](render.yaml)
 
 ---
 
