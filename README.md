@@ -115,13 +115,47 @@ Important: the CLI currently supports fixed-horizon optimization via `--horizon`
 
 The `objective` parameter controls the inner optimization program:
 
-| Value | Formulation | Use case |
-|-------|-------------|----------|
-| `"proportional"` | $-\sum_{t,m}(x_{t,m} - \frac{1}{M})^2$ | Even, stable monthly split - keeps every account funded (default) |
-| `"balanced"` | $-\sum_{t,m}(\Delta x_{t,m})^2$ | Stable allocations (turnover penalty only) |
-| `"risky"` | $\mathbb{E}[\sum_m W_T^m]$ | Maximum wealth accumulation |
-| `"conservative"` | $\mathbb{E}[W_T] - \lambda \mathrm{Std}(W_T)$ | Risk-averse mean-variance |
-| `"risky_turnover"` | $\mathbb{E}[W_T] - \lambda\sum(\Delta x)^2$ | Wealth + stability tradeoff |
+<table>
+  <colgroup>
+    <col width="24%" />
+    <col width="44%" />
+    <col width="32%" />
+  </colgroup>
+  <thead>
+    <tr>
+      <th width="24%">Value</th>
+      <th width="44%">Formulation</th>
+      <th width="32%">Use case</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>"proportional"</code></td>
+      <td>$-\sum_{t,m}(x_{t,m} - \frac{1}{M})^2$</td>
+      <td>Even, stable monthly split - keeps every account funded (default)</td>
+    </tr>
+    <tr>
+      <td><code>"balanced"</code></td>
+      <td>$-\sum_{t,m}(\Delta x_{t,m})^2$</td>
+      <td>Stable allocations (turnover penalty only)</td>
+    </tr>
+    <tr>
+      <td><code>"risky"</code></td>
+      <td>$\mathbb{E}[\sum_m W_T^m]$</td>
+      <td>Maximum wealth accumulation</td>
+    </tr>
+    <tr>
+      <td><code>"conservative"</code></td>
+      <td>$\mathbb{E}[W_T] - \lambda \mathrm{Std}(W_T)$</td>
+      <td>Risk-averse mean-variance</td>
+    </tr>
+    <tr>
+      <td><code>"risky_turnover"</code></td>
+      <td>$\mathbb{E}[W_T] - \lambda\sum(\Delta x)^2$</td>
+      <td>Wealth + stability tradeoff</td>
+    </tr>
+  </tbody>
+</table>
 
 ---
 
